@@ -1,42 +1,18 @@
 rm(list=ls())
-#library(lme4)
-setwd('/home1/02413/sbellan/SDPSimulations/') # setwd
-source('PlotFunctions.r')                    # load functions to collect & plot results
+library(stats4) #library(lme4)
+#setwd('/home1/02413/sbellan/Rakai/SDPSimulations/') # setwd
+source('PlotFunctions.R')                    # load functions to collect & plot results
+load('results/Uganda-46900-321.Rdata')
+#save.image('results/Uganda-46900-321.Rdata')
 source('SimulationFunctions.R')                   # load simulation functions
-library(abind)                          # array binding
-load('data files/ds.nm.all.Rdata')        # country names
-load('data files/dframe.s.Rdata')        # SDP by survey
-load("data files/pars.arr.ac.Rdata")
-dir.results <- 'results/RakAcute/'
-
-fs <- list.files(pattern = '.Rdata', path = file.path(dir.results), recursive = T, full.names = T)
-fs <- fs[!grepl('blocks',fs) & !grepl('cfs',fs)]
-cfs <- coll(fs, nc = min(length(fs),12), give.ev = F)
-cfs$cframe <- cfs$cframe[order(cfs$cframe$job),] # order by jobs
-cfs$t.arr <- cfs$t.arr[,,order(cfs$cframe$job)]          # ditto
-attach(cfs)
-
-load(fs[3])
-
-pars.arr <- out.arr[,,which(in.arr[,1,2]==25),] # median and credible intervals for transmission coefficient estimates for this acute relative hazard
-hazs <- c("bmb","bfb","bme","bfe","bmp","bfp") # six gender-route specific transmission coefficients (*b*efore-, *e*xtra-, from-*p*artner-) for *m*ale & *f*emale
-spars <- pars.arr[hazs,2,which(ds.nm=='Uganda')]*1200              # get transmission coefficients from base country
-
-
-load(file.path(dir.results,'tstest.Rdata'))
-
-## Build Rakai cohort
-
-load("results/RakAcute/Acute50/Uganda/Uganda-18760-1121.Rdata")
-load('results/RakAcute/Acute7/Uganda/Uganda-46900-321.Rdata')
-
+##source('/home1/02413/sbellan/SDPSimulations/SimulationFunctions.R')                   # load old simulation functions
 
 interv <- 10
 max.vis <- floor(40/interv) + 1
 
 #ltf.prob <- NA
 rak.coh <- rak.coh.fxn(ts=output$ts, dat = output$evout, interv=interv, max.vis=max.vis, 
-                       ltf.prob = .01, rr.ltf.ff = 4.3, rr.ltf.mm = 2, rr.ltf.hh = 1, rr.ltf.d = 0,
+                       ltf.prob = 0, rr.ltf.ff = 4.3, rr.ltf.mm = 2, rr.ltf.hh = 1, rr.ltf.d = 0,
                        start.rak=start.rak,end.rak=end.rak,browse = F)
 nrow(rak.coh$dat)
 
@@ -49,38 +25,53 @@ xtabs(pm.trunc ~ phase + inf.trunc + excl.by.err, rkt)
 
 dpars <- c(acute.sc = 7, late.sc = 1, aids.sc = 1, bp = sqrt(prod(spars[5:6])),
              dur.ac = 2, dur.lt = 9, dur.aids = 10)
+ldpars <- log(dpars)
 
-holl.lik(rkt, dpars, excl.by.err = F, verbose = T, browse = F)
+holl.lik(ldpars, rakll = rkt, excl.by.err = F, verbose = T, browse = F)
 
 system.time(
-            for(ac in seq(6,8,by=.5)) {
+            for(ac in seq(1,8,by=.5)) {
               print(ac)
               dpars.t <- dpars
               dpars.t[1] <- ac
-              print(holl.lik(rkt, dpars.t, excl.by.err = F, verbose = F, browse = F))
+              ldpars.t <- log(dpars.t)
+              print(holl.lik(ldpars.t, rkt, excl.by.err = F, verbose = F, browse = F))
             }
             )
 
-
-nn <- 200
+nn <- 1000
 sim <- holl.mod(nn,nn,nn,dpars=dpars, verbose=F)
-dpars['late.sc'] <- 10
-dpars['aids.sc'] <- 0
+## dpars['late.sc'] <- 10
+## dpars['aids.sc'] <- 0
 xtabs(~inf + kk + phase, sim)
+xtabs(~inf + kk + phase, rkt)
 
 ####################################################################################################
 ## left off here, having problems calculating likelihood for simulated data
-holl.lik(sim, dpars, excl.by.err = F, verbose = F, browse = F)
-lt.kkinf <- xtabs(~kk + kkt + inf, data = sim, subset = phase=='late')
+holl.lik(log(dpars), sim, excl.by.err = F, verbose = F, browse = F)
 
-pdf('test.pdf')
-for(kk in 2:4) {
-  test <- function(x) Vectorize(cp.lt.k,'td')
-  xx <- seq(0,10,l=100)
-  plot(xx, test()(xx,kk=2,dpars=dpars), ylim = c(0,1))
-}
-dev.off()
+ldpars2 <- jitter(ldpars, a = 2)
+opt <- optim(par = ldpars2, fn = holl.lik, method='SANN', rakll = sim, verbose=F, control=list(maxit=100, trace=5))
+opt <- optim(par = opt$par, fn = holl.lik, method='Nelder-Mead', rakll = sim, verbose=F, control=list(maxit=400, trace=3))
+opt$conv
+exp(opt$par)
+dpars
+arr(ldpars)
+arr(opt$par)
 
+opt <- optim(par = ldpars, fn = holl.lik, method='SANN', rakll = sim, verbose=F, control=list(maxit=200, trace=5))
+
+pfit <- c('acute.sc','dur.ac','bp')
+to.fit <- names(dpars) %in% pfit
+
+
+mlo <- mle(minuslogl = holl.lik.mle, start = as.list(ldpars[to.fit]),
+           fixed = append(as.list(ldpars[!to.fit]), list(rakll = sim, excl.by.err = F, verbose = F, browse = F)),
+           method = 'Nelder-Mead', control=list(maxit=300, trace=3))
+summary(mlo)
+exp(coef(mlo)[pfit])
+
+cis <- confint(mlo)
   
 
 

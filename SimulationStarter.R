@@ -15,7 +15,7 @@
 #################################################################################################### 
 rm(list=ls())                           # clear workspace
 
-setwd('/home1/02413/sbellan/SDPSimulations/')     # setwd
+#setwd('/home1/02413/sbellan/SDPSimulations/')     # setwd
 args=(commandArgs(TRUE))                # load arguments from R CMD BATCH 
 if(length(args)>0)  {## Then cycle through each element of the list and evaluate the expressions.
     for(i in 1:length(args)) {

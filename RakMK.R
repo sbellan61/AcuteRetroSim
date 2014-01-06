@@ -3,10 +3,10 @@
 ## to run on a cluster.
 ####################################################################################################
 #rm(list=ls())                                  # clear workspace
-setwd('/home1/02413/sbellan/SDPSimulations/')     # setwd
+#setwd('/home1/02413/sbellan/SDPSimulations/')     # setwd
 load("data files/ds.nm.all.Rdata") # country names
 load('data files/pars.arr.ac.Rdata')    # load acute phase relative hazards used to fit (in.arr[,,2])
-load('data files/CFJobsToDo.Rdata') ## for finishing up jobs from last run that didn't get finished due to cluster problems.
+#load('data files/CFJobsToDo.Rdata') ## for finishing up jobs from last run that didn't get finished due to cluster problems.
 hazs <- c('bmb','bfb','bme','bfe','bmp','bfp') #  transmission coefficient names, for convenience
 nc <- 12                                       # core per simulation
 ## source('RakMK.R')
