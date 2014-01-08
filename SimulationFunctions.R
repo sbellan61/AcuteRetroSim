@@ -20,7 +20,7 @@ event.fn <- function(pars, dat, browse = F, # transmission coefficients to use f
                      death = T, # have aids death in model?
                      acute.sc = 26, # Acute to chronic phase relative hazard (2 months after infection)
                      late.sc = 1, # Late to chronic phase relative hazard (20-11 months before death)
-                     aids.sc = 1, # AIDS to chronic phase relative hazard (2 months after infection) (10-0 months before death)
+                     aids.sc = 0, # AIDS to chronic phase relative hazard (2 months after infection) (10-0 months before death)
                      ##  route-specific heterogeneity
                      het.b = F, het.b.sd = 0, het.b.cor = 0, # pre-couple
                      het.e = F, het.e.sd = 0, het.e.cor = 0, # extra-couple
@@ -30,6 +30,9 @@ event.fn <- function(pars, dat, browse = F, # transmission coefficients to use f
                      het.gen = F,     # do it?                                                                           
                      het.gen.sd = 1,  # standard deviation of genetic heterogeneity                                     
                      het.gen.cor = 0, # inter-partner correlation of individual risk deviate for genetic heterogeneity
+                     ## individual suscepbitility constant through life is either HIGH or LOW risk,
+                     ## proportion high risk (phigh) are at rrhigh times higher risk
+                     hilo = F, phigh.m = .2, phigh.f = .2, rrhigh.m = 10, rrhigh.f = 10,
                      ## next 3 are same as previous 3, but for behavioral heterogeneity (risk
                      ## deviate amplifies only pre- and extra-couple transmission susceptibility)
                      het.beh = F, het.beh.sd = 1, het.beh.cor = 0, 
@@ -39,6 +42,7 @@ event.fn <- function(pars, dat, browse = F, # transmission coefficients to use f
                      nc = 12,        # number of cores
                      vfreq = 200)    # how often to show progress
   {
+    if(hilo & (het.gen | het.b | het.e | het.p | het.beh)) stop("Can't have both continuous and discrete heterogeneity")
     K <- nrow(dat)
     mser <- rep(0, nrow(dat))    ## serostatus at end
     fser <- rep(0, nrow(dat))
@@ -81,11 +85,21 @@ event.fn <- function(pars, dat, browse = F, # transmission coefficients to use f
           assign(paste('f.het.',het.t,sep=''), rep(1, K))          
         }
       } # end heterogeneity risk deviate assignment loop
+    ## Discrete (binary) heterogeneity: High risk & low risk groups
+    m.het.hilo <- rep(1,K)
+    f.het.hilo <- rep(1,K)
+    if(hilo) {
+      m.high <- rbinom(K, 1, phigh.m)
+      f.high <- rbinom(K, 1, phigh.f)
+      m.het.hilo[m.high] <- rrhigh.m
+      f.het.hilo[f.high] <- rrhigh.f      
+    }
     ## make data frame for storing output
     dat <- data.frame(dat, mser, fser, mdoi, fdoi, mdod, fdod, mcoi, fcoi, m.het.gen, f.het.gen, m.het.beh, f.het.beh,
                       m.het.b, f.het.b, # pre-couple   
                       m.het.e, f.het.e, # extra-couple 
-                      m.het.p, f.het.p) # within-couple
+                      m.het.p, f.het.p, # within-couple
+                      m.het.hilo, f.het.hilo) # genetic, binary (hi vs lo)
     ## track if infections from partner were due to acute phase infectiousness
     dat$mcoi.phase <- NA
     dat$fcoi.phase <- NA
@@ -172,7 +186,7 @@ event.fn <- function(pars, dat, browse = F, # transmission coefficients to use f
 ## couple loop for event.fn (to allow parallelization
 ## batch ii does couples in the range breaks[ii,1:2]
 ######################################################################
-cloop <- function(batch, dat, pars, breaks, vfreq, browse = F, death, acute.sc, late.sc, aids.sc)
+cloop <- function(batch, dat, pars, breaks, vfreq, browse = F, death, acute.sc, late.sc, aids.sc = 0)
   {                                     
     set.seed(batch)                     # in case doing nonparametric inflation, we want each inflated couple to have different trajectories
     if(browse) browser()
@@ -200,7 +214,7 @@ cloop <- function(batch, dat, pars, breaks, vfreq, browse = F, death, acute.sc, 
             ## male before marriage: get bernoulli probability of infection in each month of sexual
             ## activity before marriage
             m.inf.bef <- rbinom(dat$tmar[ii] - dat$tms[ii],1, # hets: b,beh,gen
-                                prob = 1 - exp(-bmb*dat$m.het.b[ii]*dat$m.het.beh[ii]*dat$m.het.gen[ii]*epicf[dat$tms[ii]:(dat$tmar[ii]-1), epic.ind.temp]))
+                                prob = 1 - exp(-bmb*dat$m.het.hilo[ii]*dat$m.het.b[ii]*dat$m.het.beh[ii]*dat$m.het.gen[ii]*epicf[dat$tms[ii]:(dat$tmar[ii]-1), epic.ind.temp]))
             if(sum(m.inf.bef)>0)            ## if he gets infected in 1 or more months
               {
                 ## change serostatus to HIV+ & use earliest infection as date of infection. Then
@@ -229,7 +243,7 @@ cloop <- function(batch, dat, pars, breaks, vfreq, browse = F, death, acute.sc, 
             ## infection in each month of sexual activity before
             ## marriage
             f.inf.bef <- rbinom(dat$tmar[ii] - dat$tfs[ii],1, # hets: b,beh,gen
-                                prob = 1 - exp(-bfb*dat$f.het.b[ii]*dat$f.het.gen[ii]*dat$f.het.beh[ii]*epicm[dat$tfs[ii]:(dat$tmar[ii]-1), epic.ind.temp]))
+                                prob = 1 - exp(-bfb*dat$f.het.hilo[ii]*dat$f.het.b[ii]*dat$f.het.gen[ii]*dat$f.het.beh[ii]*epicm[dat$tfs[ii]:(dat$tmar[ii]-1), epic.ind.temp]))
             if(sum(f.inf.bef)>0) { ## if she gets infected in 1 or more months
               ## change serostatus to HIV+ & use earliest infection as date of infection. Then
               ## figure out date of death from age-at-seroconversion dependent Weibull survival
@@ -297,7 +311,8 @@ cloop <- function(batch, dat, pars, breaks, vfreq, browse = F, death, acute.sc, 
                     f.aids.sc <- 1
                   }
                 ## Bernoulli within-couple transmission probabilities in current month; hets: p, gen
-                temp.prob <- 1 - exp(-c(f.ac.sc*f.lt.sc*f.aids.sc*bmp*dat$m.het.p[ii]*dat$m.het.gen[ii], m.ac.sc*m.lt.sc*m.aids.sc*bfp*dat$f.het.p[ii]*dat$f.het.gen[ii]))
+                temp.prob <- 1 - exp(-c(f.ac.sc*f.lt.sc*f.aids.sc*bmp*dat$m.het.hilo[ii]*dat$m.het.p[ii]*dat$m.het.gen[ii],
+                                        m.ac.sc*m.lt.sc*m.aids.sc*bfp*dat$f.het.hilo[ii]*dat$f.het.p[ii]*dat$f.het.gen[ii]))
                 from.part <- rbinom(2, 1, temp.prob)                   # Bernoulli random variables
                 from.part <- from.part * c(dat$fser[ii], dat$mser[ii]) # only counts if partner is infected
                 ## if new male infection from partner
@@ -345,8 +360,8 @@ cloop <- function(batch, dat, pars, breaks, vfreq, browse = F, death, acute.sc, 
                                         ## calculations of within-couple hazards for Rakai analysis. Previously we were slightly underestimating
                                         ## estimating hazards because some 'p' infections got replaced by 'e' infections.  extra-couple infections
                                         ## c(m,f); temporary transmission probability; hets: e, gen, beh
-                  exc <- rbinom(2, 1, prob = c(1 - exp(-bme*dat$m.het.e[ii]*dat$m.het.gen[ii]*dat$m.het.beh[ii]*epicf[tt, epic.ind.temp]),
-                                        1 - exp(-bfe*dat$f.het.e[ii]*dat$f.het.gen[ii]*dat$f.het.beh[ii]*epicm[tt, epic.ind.temp])))
+                  exc <- rbinom(2, 1, prob = c(1 - exp(-bme*dat$m.het.hilo[ii]*dat$m.het.e[ii]*dat$m.het.gen[ii]*dat$m.het.beh[ii]*epicf[tt, epic.ind.temp]),
+                                               1 - exp(-bfe*dat$f.het.hilo[ii]*dat$f.het.e[ii]*dat$f.het.gen[ii]*dat$f.het.beh[ii]*epicm[tt, epic.ind.temp])))
                   ## if new m inf from extracouple
                   if(dat$mser[ii]==0 & exc[1] == 1) {
                     dat$mser[ii] <- 1
@@ -792,6 +807,9 @@ psrun <- function(country, s.demog = NA, # country to simulate;  country whose r
                   het.p = F, het.p.sd = 0, het.p.cor = 0, #  within-couple
                   het.gen = F, het.gen.sd = 0, het.gen.cor = 0, # same for genetic heterogeneity ( same lognormal risk deviate for all three routes)
                   het.beh = F, het.beh.sd = 0, het.beh.cor = 0, # same for behavioral heterogeneity ( same lognormal risk deviate for pre- & extra-couple routes)
+                  ## individual suscepbitility constant through life is either HIGH or LOW risk,
+                  ## proportion high risk (phigh) are at rrhigh times higher risk
+                  hilo = F, phigh.m = .2, phigh.f = .2, rrhigh.m = 10, rrhigh.f = 10,
                   scale.by.sd = T, # adjust beta means to keep geometric mean constant with increasing heterogeneity
                   scale.adj = 1,   # adjust betas arbitrarily
                   one.couple = F, # for debugging, repeat one couple married in 1990, 100,000 times
@@ -921,6 +939,7 @@ psrun <- function(country, s.demog = NA, # country to simulate;  country whose r
                       het.p = het.p, het.p.sd = het.p.sd, het.p.cor = het.p.cor, 
                       het.gen = het.gen, het.gen.sd = het.gen.sd, het.gen.cor = het.gen.cor,
                       het.beh = het.beh, het.beh.sd = het.beh.sd, het.beh.cor = het.beh.cor,
+                      hilo = hilo, phigh.m = phigh.m, phigh.f = phigh.f, rrhigh.m = rrhigh.m, rrhigh.f = rrhigh.f,
                       scale.by.sd = scale.by.sd, scale.adj = scale.adj,
                       browse=F)
     ts <- NA # so there's something to return if not keeping it in next line
@@ -944,6 +963,7 @@ psrun <- function(country, s.demog = NA, # country to simulate;  country whose r
                      het.p = het.p, het.p.sd = het.p.sd, het.p.cor = het.p.cor, 
                      het.gen = het.gen, het.gen.sd = het.gen.sd, het.gen.cor = het.gen.cor,
                      het.beh = het.beh, het.beh.sd = het.beh.sd, het.beh.cor = het.beh.cor,
+                     hilo = hilo, phigh.m = phigh.m, phigh.f = phigh.f, rrhigh.m = rrhigh.m, rrhigh.f = rrhigh.f,
                      group.ind = group.ind, infl.fac = infl.fac, maxN = maxN,
                      psNonPar = psNonPar, last.int = F, sample.tmar = sample.tmar, tint = tint,
                      hours = hours),

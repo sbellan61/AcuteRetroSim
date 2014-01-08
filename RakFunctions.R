@@ -1,39 +1,7 @@
-## Replaced by empir.arh
-## ## Rakai-style retrospective cohort estimate of acute to chronic phase relative hazard. Still need
-## ## to add code looking at late and AIDS phases.
-## rak.fxn <- function(ev, ts, start = 1994, end = 1994 + 40/12, browse = F)
-##     {
-##         if(browse) browser()
-##         ## find all couples for which they were serodiscordant for at least one month in the [start, end) interval
-##         sttmon <- (start-1900)*12       # start month
-##         endmon <- (end-1900)*12         # end month
-##         sel <- apply(ts, 2, function(x) {sum(x[sttmon:(endmon -1)] %in% c('mm','ff')) > 0 }) # couples that were serodiscordant during this time period.
-##         ## reduce to these couples for both time series & line list
-##         ts <- ts[,sel]
-##         ev <- ev[sel,]
-##         ## which are incident infections: ss couples at least once after the start month (meaning they were seen turn serodiscordant)
-##         inc.inf <- apply(ts, 2, function(x) {sum(x[sttmon:(endmon -1)]=='ss', na.rm = T) > 0 })
-##         prev.inf <- !inc.inf # all others were never 'ss' during the study period
-##         ## calculate person-months at risk in acute phase (only 2 months after seroconversion)
-##         ii.pms <- apply(ts[,inc.inf], 2, function(x) {sum(x[sttmon:(endmon -1)] %in% c('mm','ff'))})
-##         ii.pms[ii.pms > 2] <- 2             # truncate at 2 months of observation as serodiscordant (in acute phase)
-##         ii.pm <- sum(ii.pms)
-##         ## total person-years at risk in prevalent infections
-##         pi.pm <- sum(apply(ts[,prev.inf], 2, function(x) {sum(x[sttmon:(endmon -1)] %in% c('mm','ff'))}))
-##         ## date of index infection
-##         idoi <- apply(ts[,inc.inf], 2, function(x) {min(which(x %in% c('mm','ff')))})
-##         # how many couples became concordant positive in the 2 months following? & were infected BY THEIR PARTNER
-##         ii.n <- sum(grepl('hh', ts[cbind(idoi+2,which(inc.inf))]) & (ev$mcoi[inc.inf]=='p' | ev$fcoi[inc.inf]=='p')) 
-##         pi.n <- sum(grepl('hh', ts[endmon,prev.inf])  & (ev$mcoi[prev.inf]=='p' | ev$fcoi[prev.inf]=='p') )
-##         ## rates
-##         ihaz <- ii.n / ii.pm
-##         ihaz <- -log(1-ihaz)             ## convert risks to proper hazards
-##         phaz <- pi.n / pi.pm
-##         phaz <- -log(1-phaz)             ## convert risks to proper hazards
-##         ## rr
-##         rr <- ihaz/phaz
-##         return(rr)
-##     }
+## These functions take the output of couples simulations and create a retrospective cohort of
+## couples that were observed as serodiscordant to simulate the analyses of Wawer et al. 2005 and
+## Hollingsworth et al. 2008 performed to estimate the relative infectivity of the acute phase to
+## the chronic phase.
 
 ## Calculate hazard ratios for acute, chronic, late & aids phases from data
 empir.arh <- function(dat, ts, start.rak = 1994, end.rak = 1999, browse = F)
@@ -408,7 +376,7 @@ b.inc <- function(tt, dpars)  {
 b.lt.uv <- function(td,dpars) {
   for(nm in names(dpars))      assign(nm, dpars[nm])
   if(td < dur.aids) { ## if within dur.aids of death, no transmission
-    bet <- bp * aids.sc
+    bet <- 0
   }else{ ## if td is in (dur.aids+dur.lt) to dur.aids, it's late phase
     if(td <= (dur.aids + dur.lt)) {
       bet <- bp * late.sc
@@ -468,14 +436,14 @@ cp.lt.1 <- function(td, dpars) {
   for(nm in names(dpars))      assign(nm, dpars[nm]) ## loading 'bp'
   if(interv - td > dur.lt + dur.aids) { ## interval before death also includes some chronic infectivity
     dur.ch <- interv - td - dur.lt - dur.aids
-    cp <- 1 - exp(-bp*dur.ch - bp*late.sc*dur.lt - bp*aids.sc*dur.aids)
+    cp <- 1 - exp(-bp*dur.ch - bp*late.sc*dur.lt - bp*0*dur.aids)
   }else{
     if(interv - td > dur.aids) { ## interval before death includes some but not all late phase infectivity
       dur.lt.temp <- interv - td - dur.aids
-      cp <- 1 - exp(-bp*late.sc*dur.lt.temp - bp*aids.sc*dur.aids)
+      cp <- 1 - exp(-bp*late.sc*dur.lt.temp - bp*0*dur.aids)
     }else{ ## interval before death only includes AIDS phase infectivity
       dur.aids.temp <- interv - td
-      cp <- 1 - exp(-bp*aids.sc*dur.aids.temp)
+      cp <- 1 - exp(-bp*0*dur.aids.temp)
     } }
   return(cp)
 }
@@ -496,7 +464,7 @@ cp.lt.k <- function(td,kk,dpars) {
       dur.aids.temp <- min(dur.aids - (interv*(kk-1) - td),interv)
       dur.lt.temp <- min(interv - dur.aids.temp, dur.lt,interv)
       dur.ch <- max(0, interv - dur.aids.temp - dur.lt.temp)
-      cp <- 1 - exp(-bp*dur.ch - bp*late.sc*dur.lt.temp - bp*aids.sc*dur.aids.temp)
+      cp <- 1 - exp(-bp*dur.ch - bp*late.sc*dur.lt.temp - bp*0*dur.aids.temp)
     } }
 #  if(abs(cp-cpi)>10^-10) browser() #stop('analytic integral error')
 return(cp)
@@ -512,65 +480,6 @@ return(cp)
 ##############################
 ## Need to integrate the conditional probability of 2ndary seroconversion (or not) in each interval
 ## over all possible timing of index partner seroconversion in the first interval.
-
-## ## The analytic integral for the interval of index partner seroconversion is the sum of two
-## ## integrals due to the step-transmission function. The first integral is used if the index
-## ## infection happens earlier than interv-dur.ac in the interval such that the entire dur.ac of the
-## ## acute phase is experienced by the second partner. The second interval is used if only part of
-## ## dur.ac is experienced by the partner (i.e. index infection occurs after interv-dur.ac during
-## ## first interval).
-## anint.cp.inc1 <- function(tt1,tt2,dpars) {
-##   for(nm in names(dpars))      assign(nm, dpars[nm]) ## loading 'bp'
-##   if(tt1<=(interv-dur.ac)) { ## then integrating over the full acute phase plus some chronic phase
-##     ## http://integrals.wolfram.com/index.jsp?expr=1+-+E%5E%28-%28d*a+%2B+%28k+-+d+-+x%29*c%29%29&random=false
-##     temp <- function(tt,dpars) {
-##       for(nm in names(dpars))      assign(nm, dpars[nm]) ## loading 'bp'
-##       tt - exp(-dur.ac*bp*acute.sc + bp*dur.ac - bp*interv + bp*tt)/bp
-##     }
-##     ret <- temp(tt2,dpars)-temp(tt1,dpars)
-##   }
-##   if(tt2>(interv-dur.ac)) { ## then only integrating over part of the acute phase
-##     ## http://integrals.wolfram.com/index.jsp?expr=1-E%5E%28-%28k-x%29*a%29&random=false
-##     temp <- function(tt,dpars) {
-##       for(nm in names(dpars))      assign(nm, dpars[nm]) ## loading 'bp'
-##       tt - exp(bp*acute.sc*(tt-interv)) / (bp*acute.sc)
-##     }
-##     ret <- temp(tt2,dpars)-temp(tt1,dpars)
-##   }
-##   return(as.numeric(ret))
-## }
-## ## ## make sure analytic integrals are working
-## ## anint.cp.inc1(0,8,dpars)
-## ## integrate(Vectorize(cp.inc.1,'tt'), lower=0, upper=8, dpars = dpars)
-## ## anint.cp.inc1(8,interv,dpars)
-## ## integrate(Vectorize(cp.inc.1,'tt'), lower=8, upper=interv, dpars = dpars)$val
-## ## anint.cp.inc1(0,interv,dpars)
-## ## integrate(Vectorize(cp.inc.1,'tt'), lower=0, upper=interv, dpars = dpars)$val
-
-## ####################################################################################################
-## ## Analytic integrals for incident couples with secondary partners that weren't infected in first interval
-## anint.cp.inc.k <- function(tt1,tt2,kk,dpars) {
-##   for(nm in names(dpars))      assign(nm, dpars[nm]) ## loading 'bp'
-##   if(interv*(kk-1) - tt1 >= dur.ac) { ## then this whole interval is in the chronic phase and the calculation is trivial:            
-##     ret <- 1-exp(-bp*(tt2-tt1))
-##                                         #        print('a')
-##   }
-##   if(interv*(kk-1) - tt1 < dur.ac) { ## then part of the second interval includes the acute phase
-##     ## http://integrals.wolfram.com/index.jsp?expr=1+-+E%5E%28-%28a*%28d%2Bx-k%29+%2B+c*%282*k-d-x%29%29%29&random=false
-##     temp <- function(tt,dpars) {        ## integrand
-##       for(nm in names(dpars))      assign(nm, dpars[nm])
-##       ret <- tt - exp(-(bp*acute.sc*dur.ac) + bp*dur.ac + bp*acute.sc*interv - 2*bp*interv + (-bp*acute.sc + bp)*tt) / (bp-bp*acute.sc)
-##       return(ret)
-##     }
-##     ret <- temp(tt2,dpars)-temp(tt1,dpars)
-##   }
-##   return(as.numeric(ret))
-## }
-## ## make sure analytic integrals are working
-## ## anint.cp.inc.k(0,8,2,dpars) + anint.cp.inc.k(8,10,2,dpars)
-## ## anint.cp.inc.k(0,8,2,dpars)
-## ## integrate(Vectorize(cp.inc.k,'tt'), lower=0, upper=8, kk=2, dpars = dpars)$val/8
-## ## integrate(Vectorize(cp.inc.k,'tt'), lower=0, upper=10, kk=2, dpars = dpars)$val/10
 
 ####################################################################################################
 ## Incident Couples: k = interval since -- (1st, 2nd, 3rd, 4th, etc..)
@@ -597,46 +506,6 @@ ucp.inc <- function(kk,inf,dpars) {
 ## ucp.inc(3,1,dpars) + ucp.inc(3,0,dpars) - ucp.inc(2,0,dpars)  ## should be 0 (w/ rounding error,dpars)
 ## ucp.inc(4,1,dpars) + ucp.inc(4,0,dpars) - ucp.inc(3,0,dpars)  ## should be 0 (w/ rounding error)
 
-
-## ####################################################################################################
-## ## Incident Couples: k = interval since -- (1st, 2nd, 3rd, 4th, etc..)
-## ucp.incA <- function(kk,inf,dpars) {    ## **ANALYTICAL VERSION*************
-##   for(nm in names(dpars))      assign(nm, dpars[nm]) ## loading 'bp'
-##   ## if k = 1, then it's the same as the conditional probability
-##   ucpA <- 1/interv * (anint.cp.inc1(0, interv-dur.ac, dpars) + anint.cp.inc1(interv-dur.ac, interv, dpars)) ## analytic integral
-##   ucpNA <- 1-ucpA
-##   ## numerical integrals (to check calculus)
-##   ucpS <- integrate(Vectorize(cp.inc.1,'tt'), lower=0, upper=interv, dpars = dpars)$val / interv ## 
-##   ucpNS <- 1-ucpS
-##   if(kk >1) { ## otherwise, if k = 2,3,...
-##     for(jj in 2:kk) {
-##       ## if there's no way for the acute phase to still be around in this interval, we're in chronic
-##       if(interv*(jj-1) >= interv + dur.ac)         newP <- 1-exp(-bp*interv)
-##       if(interv*(jj-1) < interv + dur.ac) {
-##         newP <- anint.cp.inc.k(0, interv-dur.ac, jj, dpars) + anint.cp.inc.k(interv-dur.ac, interv, jj, dpars)
-##       }
-##       ucpA <- ucpNA * newP            
-##       ucpNA <- ucpNA * (1-newP)
-##       ## numerical integrals
-##       ucpS <- ucpNS * integrate(Vectorize(cp.inc.k,'tt'), lower=0, upper=interv, kk=jj, dpars = dpars)$val / interv
-##       ucpNS <- ucpNS * (1- integrate(Vectorize(cp.inc.k,'tt'), lower=0, upper=interv, kk=jj, dpars = dpars)$val / interv)
-##     }
-##   }
-##   if(is.na(log(ucpA))) browser()
-##   if(is.na(log(ucpNA))) browser()  
-##   if(inf==1) return(as.numeric(ucpA)) #list(ucpA,ucpS))
-##   if(inf==0) return(as.numeric(ucpNA)) #list(ucpNA,ucpNS))
-## }
-## ## Test code to make sure function is working right
-## ## ucp.inc(1,0,dpars) + ucp.inc(1,1,dpars)                ## should be 1
-## ## ucp.inc(2,1,dpars) + ucp.inc(2,0,dpars) - ucp.inc(1,0,dpars)  ## should be 0 (w/ rounding error,dpars)
-## ## ucp.inc(3,1,dpars) + ucp.inc(3,0,dpars) - ucp.inc(2,0,dpars)  ## should be 0 (w/ rounding error,dpars)
-## ## ucp.inc(4,1,dpars) + ucp.inc(4,0,dpars) - ucp.inc(3,0,dpars)  ## should be 0 (w/ rounding error)
-## ## ucp.inc(5,1,dpars)
-## ## ucp.incA(5,1,dpars)
-## ## ucp.inc(5,0,dpars)
-## ## ucp.incA(5,0,dpars)
-
 ####################################################################################################
 ##############################
 ## Prevalent Couples (assumed to be the same in all intervals)
@@ -658,38 +527,91 @@ ucp.prev <- function(kk,inf,dpars) {  ## probability of seroconversion in interv
 ## intervals, **when observed for a total of kkt intervals before death**
 
 ucp.lt <- function(kk, kkt=NA, inf,dpars) {
-  if(inf==1) {
-    if(kk>kkt) stop('error: kk>kkt')
-    ## if kkt = 1, then it's the same as the conditional probability in the last month
-    if(kkt==1) {
-      ucp <- integrate(Vectorize(cp.lt.1,'td'), lower=0, upper=interv, dpars=dpars)$val / interv
-    }
-    if(kkt >1) { ## otherwise, if observed more than one interval before death
-      if(kk==kkt) { ## if infected in first interval of observation
-        ucp <- integrate(Vectorize(cp.lt.k,'td'), lower=0, upper=interv, kk=kk, dpars=dpars)$val / interv
-      }else{ ## if not infected in at least one interval before infected (kk<kkt)
-        ucp <- 1 ## initialize ucp for below loop
-        for(jj in kkt:(kk+1)) { ## calculate probability of not being infected between
-          ## visits kkt to (kk+1) before death (where 1 = visit at dath)
-          ucp <- ucp * (1 - integrate(Vectorize(cp.lt.k,'td'), lower=0, upper=interv, kk=jj, dpars=dpars)$val /interv)
+    if(inf==1) {
+        if(kk>kkt) stop('error: kk>kkt')
+        ## if kkt = 1, then it's the same as the conditional probability in the last month
+        if(kkt==1) { ## only need to integrate up until (interv-dur.aids) because if dying more than
+            ## dur.aids before last interval, there's no transmission in this interval
+            max.int <- max(0,(interv-dpars['dur.aids']))
+            ucp <- try(integrate(Vectorize(cp.lt.1,'td'), lower=0, upper=max.int, dpars=dpars)$val / interv,
+                       silent = T)
+            w.step <- 0
+            while(inherits(ucp ,'try-error')){ ## if there's a divergent integral, then integrate over a
+                ## little smaller of an interval to avoid the problematic area
+                if(w.step>30) ucp <- 0 # give up on this integral eventually & just reject this proposal
+                max.int <- max.int *.98
+                ucp <- try(integrate(Vectorize(cp.lt.1,'td'), lower=0, upper=max.int, dpars=dpars)$val / interv,
+                           silent = T)
+                w.step <- w.step + 1
+            }
         }
-        ## times the probability of being infected in the kk-th interval
-        ucp <- ucp * integrate(Vectorize(cp.lt.k,'td'), lower=0, upper=interv, kk=kk, dpars=dpars)$val / interv
-      }
+        if(kkt >1) { ## otherwise, if observed more than one interval before death
+            if(kk==kkt) { ## if infected in first interval of observation
+                ## min/max trickery is to avoid divergent integrals occurring when most of the function takes the value of 0 (due to aids phase)
+                max.int <- min(10,max(0,(interv*kk-dpars['dur.aids'])))
+                ucp <- try(integrate(Vectorize(cp.lt.k,'td'), lower=0, upper=max.int, kk=kk, dpars=dpars)$val / interv, silent = T)
+                w.step <- 0
+                while(inherits(ucp ,'try-error')){ ## if there's a divergent integral, then integrate over smaller region
+                    if(w.step>30) ucp <- 0 # give up on this integral eventually & just reject this proposal
+                    max.int <- max.int*.98
+                    ucp <- try(integrate(Vectorize(cp.lt.k,'td'), lower=0, upper=max.int, kk=kk, dpars=dpars)$val / interv, silent = T)
+                    w.step <- w.step + 1
+                }              
+            }else{ ## if not infected in at least one interval before infected (kk<kkt)
+                ucp <- 1 ## initialize ucp for below loop
+                for(jj in kkt:(kk+1)) { ## calculate probability of not being infected between
+                    ## visits kkt to (kk+1) before death (where 1 = visit at dath)
+                    max.int <- min(10,max(0,(interv*jj-dpars['dur.aids'])))
+                    ucp <- try(ucp * (1 - integrate(Vectorize(cp.lt.k,'td'), lower=0, upper=max.int, kk=jj, dpars=dpars)$val /interv), silent = T)
+                    w.step <- 0
+                    while(inherits(ucp, 'try-error')){
+                        if(w.step>30) ucp <- 0 # give up on this integral eventually & just reject this proposal
+                        max.int <- max.int*.98
+                        ucp <- try(ucp * (1 - integrate(Vectorize(cp.lt.k,'td'), lower=0, upper=max.int, kk=jj, dpars=dpars)$val /interv), silent = T)
+                        w.step <- w.step + 1
+                    }
+                }
+                ## times the probability of being infected in the kk-th interval
+                max.int <- max.int*.98
+                ucp <- try(ucp * integrate(Vectorize(cp.lt.k,'td'), lower=0, upper=max.int, kk=kk, dpars=dpars)$val / interv, silent = T)
+                w.step <- 0
+                while(inherits(ucp, 'try-error')){
+                    if(w.step>30) ucp <- 0 # give up on this integral eventually & just reject this proposal
+                    max.int <- max.int*.98
+                    ucp <- try(ucp * integrate(Vectorize(cp.lt.k,'td'), lower=0, upper=max.int, kk=kk, dpars=dpars)$val / interv, silent = T)
+                    w.step <- w.step + 1
+                }                
+            }
+        }
+        return(as.numeric(ucp))
     }
-    return(as.numeric(ucp))
-  }
-  if(inf==0) {
-    ucpN <- 1 - integrate(Vectorize(cp.lt.1,'td'), lower=0, upper=interv, dpars=dpars)$val / interv
-    if(kk >1) { ## otherwise, if observed more than one interval before death               
-      ucpN <- 1 ## initialize ucp for below loop
-      for(jj in kk:1) { ## calculate probability of not being infected between
-        ## intervals kk to last before death (last is interval 1 before dath)
-        ucpN <- ucpN * (1 - integrate(Vectorize(cp.lt.k,'td'), lower=10^-6, upper=interv, kk=jj, dpars=dpars)$val / interv)
-      }                 
+    if(inf==0) {
+        max.int <- max(0,(interv-dpars['dur.aids']))
+        ucpN <- try(1 - integrate(Vectorize(cp.lt.1,'td'), lower=0, upper=max.int, dpars=dpars)$val / interv, silent = T)
+        w.step <- 0
+        while(inherits(ucpN ,'try-error')){ ## if there's a divergent integral, then integrate over a
+            if(w.step>30) ucpN <- 0 # give up on this integral eventually & just reject this proposal
+            ## little smaller of an interval to avoid the problematic area
+            max.int <- max.int*.98
+            ucpN <- try(1 - integrate(Vectorize(cp.lt.1,'td'), lower=0, upper=max.int, dpars=dpars)$val / interv, silent = T)
+            w.step <- w.step+1
+        }
+        if(kk >1) { ## otherwise, if observed more than one interval before death, multiply this by not being observed any of the other kk-2 intervals before death
+            for(jj in kk:2) { ## calculate probability of not being infected between
+                ## intervals kk to last before death (last is interval 1 before death)
+                max.int <- min(10,max(0,(interv*jj-dpars['dur.aids'])))
+                ucpN <- try(ucpN * (1 - integrate(Vectorize(cp.lt.k,'td'), lower=0, upper=max.int, kk=jj, dpars=dpars)$val / interv), silent=T)
+                w.step <- 0
+                while(inherits(ucpN, 'try-error')){
+                    if(w.step>30) ucpN <- 0 # give up on this integral eventually & just reject this proposal
+                    max.int <- max.int*.98
+                    ucpN <- try(ucpN * (1 - integrate(Vectorize(cp.lt.k,'td'), lower=0, upper=max.int, kk=jj, dpars=dpars)$val / interv), silent=T)
+                    w.step <- w.step+1
+                }
+            }
+        }
+        return(as.numeric(ucpN))        
     }
-    return(as.numeric(ucpN))
-  }
 }
 
 ####################################################################################################
@@ -700,10 +622,10 @@ ucp.lt <- function(kk, kkt=NA, inf,dpars) {
 ## ucp.lt(3,3,1,dpars) + ucp.lt(2,3,1,dpars) + ucp.lt(1,3,1,dpars) + ucp.lt(3,NA,0,dpars) ## similarly, all possible options for 3 intervals...
  
 ## wrapper for mle()
-holl.lik.mle <-  function(acute.sc, late.sc, aids.sc, bp, dur.ac, dur.lt, dur.aids,
+holl.lik.mle <-  function(acute.sc, late.sc, bp, dur.ac, dur.lt, dur.aids,
                           rakll, excl.by.err, verbose = T, browse = F)
   {
-    ldpars <- c(acute.sc = acute.sc, late.sc = late.sc, aids.sc = aids.sc, bp = bp,
+    ldpars <- c(acute.sc = acute.sc, late.sc = late.sc, bp = bp,
                 dur.ac = dur.ac, dur.lt = dur.lt, dur.aids = dur.aids)
     nll <- holl.lik(ldpars = ldpars, rakll = rakll, excl.by.err = excl.by.err, verbose = verbose, browse = browse)
     return(nll)
@@ -762,8 +684,8 @@ holl.lik <- function(ldpars, rakll, # dpars has disease progression/infectiousne
         kkt.temp <- as.numeric(colnames(lt.kkinf)[jj])
         if(! kk.temp > kkt.temp ) { ## if !kk>kkt
           lt.nll <- lt.nll - lt.kkinf[ii,jj,'1'] * log(ucp.lt(kk = kk.temp, kkt=kkt.temp, inf = 1, dpars=dpars))
-          if(is.na(lt.nll)) browser()
-          if(lt.nll==Inf) browser()
+          ## if(is.na(lt.nll))  print('lt.nll=NA'); browser()
+          ## if(lt.nll==Inf) print('lt.nll=Inf'); browser()
           if(verbose) print(lt.nll)
         }
       }
@@ -841,4 +763,166 @@ holl.mod <- function(i.n = 50, p.n = 50, l.n = 50, interv = 10,  max.vis = 4, dp
 }        
 
 ## Fit Hollingsworth model with MCMC
+## MCMC SAMPLER
+hollsampler <- function(sd.props, inits,
+                        rakdat, excl.by.err,
+                        fixed = NULL, 
+                        multiv = F, covar = NULL, # if multiv, sample from multivariate distribution (calculated during adaptive phase)
+                        verbose = T, verbose2 = F, tell = 100, seed = 1, 
+                        niter = 6*1000, nthin = 5, nburn = 1000, browse=F)
+  {
+    if(browse)  browser()
+    set.seed(seed)
+    pars <- inits
+    parnames <- names(pars)
+    if(length(fixed)>0) {
+      for(iii in 1:length(fixed))       pars[names(fixed)[iii]] <- fixed[iii]
+      to.fit <- !names(pars) %in% names(fixed)
+    }else{
+      to.fit <- names(pars)
+    }
+    vv <- 2
+    accept <- 0                  #track each parameters acceptance individually
+    lprob.cur <- holl.lik(pars, rakdat, excl.by.err = excl.by.err, verbose = F, browse = F)
+    out <- as.data.frame(c(pars, nll =lprob.cur))
+    last.it <- 0
+    start <- Sys.time()
+    while(vv < niter + 1) {
+        if(verbose & vv%%tell+1==1) print(paste("on iteration",vv,"of",last.it + niter + 1))
+        pars.prop <- pars              #initialize proposal parameterr vector
+        ## propose new parameter vector
+        if(multiv) {
+            if(!vv%%5==0) { ## block sample
+                pars.prop[to.fit] <- pars.prop[to.fit] + rmnorm(1, mean = 0, varcov = covar)
+                pars.prop[to.fit] <- as.vector(pars.prop[to.fit]) #otherwise is a matrix
+               names(pars.prop) <- parnames
+            }else{ ## every 5 iterations just sample dur.aids since it appears to get stuck in weird
+                   ## places during block sampling
+                pars.prop['dur.aids'] <- pars.prop['dur.aids'] + rnorm(1, mean = 0, sd = covar[6,6])
+                names(pars.prop) <- parnames
+            }
+        }else{
+          pars.prop[to.fit] <- pars.prop[to.fit] + rnorm(length(pars[to.fit]), mean = 0, sd = sd.props[to.fit])
+        }
+        ## trace = T if in non-thinned iteration, or the previous one (in case of rejection)
+        ## calculate proposal par log probability
+        if(verbose2)    print(vv)
+        if(vv==3311) browser()
+        lprob.prop <- holl.lik(pars.prop, rakdat, excl.by.err = excl.by.err, verbose = F, browse = F)
+        if(verbose2) print(lprob.prop)
+        ## holl.lik gives -log(L), so negative of that gives the log probability (assuming flat improper priors)
+        lmh <- -lprob.prop + lprob.cur       # log Metropolis-Hastings ratio
+        if(verbose2) print(lmh)
+        ## if MHR >= 1 or a uniform random # in [0,1] is <= MHR, accept otherwise reject
+        if(lmh >= 0 | runif(1,0,1) <= exp(lmh)) {
+          pars <- pars.prop
+          if(vv>nburn) accept <- accept + 1 #only track acceptance after burn-in
+          lprob.cur <- lprob.prop
+        }
+        if(vv%%nthin + 1 ==1)   {
+          out <- cbind(out, as.data.frame(c(pars, nll =lprob.cur))) ## if not thinning, then record it
+          vv <- vv+1
+        }
+      }
+    colnames(out) <- 1:ncol(out)
+    rownames(out) <- c(names(pars),'nll')
+    if(verbose) print(paste("took", difftime(Sys.time(),start, units = "mins"),"mins"))
+    aratio <- accept/((vv-nburn))    
+    return(list(out = out[,1:ncol(out)>(nburn+1)/nthin], aratio = aratio, inits = inits))
+  }
 
+holl.init.fxn <- function(seed = 1) {
+  set.seed(seed)
+    ldpars <- c(acute.sc = runif(1, log(1), log(50)),
+                late.sc = runif(1, log(1), log(50)),
+                bp = runif(1, -6, -3),
+                dur.ac = runif(1, log(1), log(6)),
+                dur.lt = runif(1, log(3), log(12)),
+                dur.aids = runif(1, log(3), log(12)))
+    ldpars
+  }
+
+holl.wrp <- function(seed=1, sd.props, rakdat, excl.by.err, force.inits=NULL,
+                multiv=F, covar=NULL, 
+                verbose = T, verbose2 = F, tell = 50, browse = F,
+                niter, nthin, nburn)
+  { ## new version of wrp needs to save progress for long chains (WA)
+    if(length(seed)>1) browse <- F ## can't browse within mclapply
+    if(length(force.inits)==0) {
+        inits.temp <- holl.init.fxn(seed = seed) # initial conditions different for each seed
+    }else{
+        inits.temp <- jitter(force.inits, a = .5)
+    }
+    hollsampler(sd.props = sd.props, inits = inits.temp, rakdat = sim, excl.by.err = F,
+                multiv = multiv, covar = covar, 
+                verbose = verbose, verbose2 = verbose2, tell = tell, seed = seed, 
+                niter = niter, nthin = nthin, nburn = nburn, browse=browse)
+  }
+
+
+
+## Plot posterior pairwise-correlations & histograms
+hollsbpairs <- function(posts, truepars = NULL, file.nm, width = 10, height = 10, show.lines = T,
+                        cex = 1, col = "black", nrpoints = 200, do.pdf = F, do.jpeg = T, ranges = NULL,
+                        cex.axis = 1.5, cex.nm = 2.5, greek = T, show.cis = T, browse = F)
+  {
+    if(browse) browser()
+    if(do.pdf) pdf(paste(file.nm, ".pdf", sep=""), width = width, height = height)
+    if(do.jpeg) jpeg(paste(file.nm, ".jpeg", sep=""), width = width*100, height = height*100)
+    if(length(ranges)==0)   ranges <- apply(rbind(posts,truepars), 2, range)
+    cis <- apply(rbind(posts,truepars), 2, function(x) quantile(x, c(.025, .975)))
+    par(mar=rep(3,4),oma=rep(2,4),mfrow=rep(ncol(posts),2))
+    parnames <- colnames(posts)
+    for(ii in 1:ncol(posts))
+      {
+        for(jj in 1:ncol(posts))
+          {
+            if(ii==jj)
+              {
+                hist(posts[,ii], breaks = 40, col = "black", main = "", xlab = "", ylab = "",
+                     xlim = ranges[,ii], las = 2, cex.axis = cex.axis)
+                if(show.lines) abline(v=truepars[ii], col = "red", lwd = 3)
+                if(show.cis) abline(v=cis[,ii], col = "yellow", lwd = 3)
+                mtext(parnames[ii], side = 3, line = -2, adj = .98, col = "red", cex = cex.nm)
+              }else{
+                smoothScatter(posts[,jj],posts[,ii], cex = cex, col = col, las = 2, cex.axis = cex.axis,
+                              main = "", xlab = "", ylab = "", nrpoints = nrpoints,
+                              xlim = ranges[,jj], ylim = ranges[,ii])
+                if(show.lines) abline(v=truepars[jj], col = "red", lwd = 2)
+                if(show.lines) abline(h=truepars[ii], col = "red", lwd = 2)              
+              }
+          }
+      }
+    if(do.pdf | do.jpeg) dev.off()
+  }
+
+## get posteriors in friendly data frame
+procpost <- function(d.out)
+    {
+        mcmc.d.out <- list(NA)
+        d.aratio <- 0
+        for(ii in 1:nc) {
+                                        #  rownames(d.out[[ii]]$out) <- c(names(ldpars),'nll')
+            mcmc.d.out[[ii]] <- as.mcmc(t(d.out[[ii]]$out))
+            d.aratio <- d.aratio + d.out[[ii]]$aratio
+            if(ii==1) { ## initialize
+                init.adapt <- d.out[[ii]]$inits
+            }else{ ## append
+                init.adapt <- rbind(init.adapt, d.out[[ii]]$inits)
+            }
+        }
+        mcmc.d.out <- mcmc.list(mcmc.d.out) # as mcmc.list
+        d.aratio <- d.aratio/nc             # acceptance ratio
+        print(paste("adaptive phase aratio is", round(d.aratio,2)))
+        parnames <- names(ldpars)
+        for(pp in parnames) assign(paste0(pp,'.vec'), unlist(mcmc.d.out[,pp])) ## pull out all chains into vectors
+        for(pp in parnames) {
+            if(pp==parnames[[1]]) {
+                posts <- get(paste0(pp,'.vec'))
+            }else{
+                posts <- cbind(posts, get(paste0(pp,'.vec')))
+            }
+        }
+        colnames(posts) <- parnames
+        posts
+    }
