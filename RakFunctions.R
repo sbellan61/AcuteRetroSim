@@ -469,7 +469,7 @@ cp.lt.k <- function(td,kk,dpars) {
 #  if(abs(cp-cpi)>10^-10) browser() #stop('analytic integral error')
 return(cp)
 }
-
+  
 ## debug(ucp.lt)
 ## ucp.lt(kk = kk.temp, kkt=kkt.temp, inf = 1, dpars=dpars)
 ## debug(cp.lt.k)
@@ -620,21 +620,53 @@ ucp.lt <- function(kk, kkt=NA, inf,dpars) {
 ## ucp.lt(1,1,1,dpars) + ucp.lt(1,NA,0,dpars)                ## should be 1 {mm->d.mm} or {mm->d.hh}
 ## ucp.lt(2,2,1,dpars) + ucp.lt(1,2,1,dpars) + ucp.lt(2,NA,0,dpars) ## should be 1 {mm->hh->d.hh} or {mm->mm->d.hh} or {mm->mm->d.mm}
 ## ucp.lt(3,3,1,dpars) + ucp.lt(2,3,1,dpars) + ucp.lt(1,3,1,dpars) + ucp.lt(3,NA,0,dpars) ## similarly, all possible options for 3 intervals...
- 
-## wrapper for mle()
-holl.lik.mle <-  function(acute.sc, late.sc, bp, dur.ac, dur.lt, dur.aids,
-                          rakll, excl.by.err, verbose = T, browse = F)
-  {
-    ldpars <- c(acute.sc = acute.sc, late.sc = late.sc, bp = bp,
-                dur.ac = dur.ac, dur.lt = dur.lt, dur.aids = dur.aids)
-    nll <- holl.lik(ldpars = ldpars, rakll = rakll, excl.by.err = excl.by.err, verbose = verbose, browse = browse)
-    return(nll)
+
+ucp.lt.2 <- function(latet, dpars, browse=F) {
+  for(nm in names(dpars))      assign(nm, dpars[nm]) ## loading 'bp'
+  ## i1p
+#  print(dpars)
+#  browser()
+  if(browse) browser()
+  max.int <- max(0,(interv-dpars['dur.aids']))
+  i1p <-   try(integrate(Vectorize(cp.lt.1,'td'), lower=0, upper=max.int, dpars=dpars)$val / interv, silent = T)
+  w.step <- 0
+  while(inherits(i1p, 'try-error')){
+    if(w.step>30) ucpN <- 0 # give up on this integral eventually & just reject this proposal
+    max.int <- max.int*.98
+    i1p <-   try(integrate(Vectorize(cp.lt.1,'td'), lower=0, upper=max.int, dpars=dpars)$val / interv, silent = T)
+    w.step <- w.step+1
   }
+  ll.lt <- latet$i[latet$int==1]*log(i1p) + (latet$n[latet$int==1]-latet$i[latet$int==1])*log(1-i1p)
+  temp <- (latet$n[latet$int==1]-latet$i[latet$int==1])*log(1-i1p)
+  for(vv in 2:(max.vis-1)) { # remaining intervals observed (2nd before death, 3rd, etc..)
+    ## ivvp
+    max.int <- min(10,max(0,(interv*vv-dpars['dur.aids'])))
+    ivvp <- try(integrate(Vectorize(cp.lt.k,'td'), lower=0, upper=max.int, kk=vv, dpars = dpars)$val / interv, silent=T)
+    w.step <- 0
+    while(inherits(ivvp, 'try-error')){
+      if(w.step>30) ucpN <- 0 # give up on this integral eventually & just reject this proposal
+      max.int <- max.int*.98
+      ivvp <- try(integrate(Vectorize(cp.lt.k,'td'), lower=0, upper=max.int, kk=vv, dpars = dpars)$val / interv, silent=T)
+      w.step <- w.step+1
+    }
+    ## i1p^i1 * (1-i1p)^(n1-i1) etc...
+    ll.lt <- ll.lt + latet$i[latet$int==vv]*log(ivvp) + (latet$n[latet$int==vv]-latet$i[latet$int==vv])*log(1-ivvp)
+    temp <- temp + (latet$n[latet$int==vv]-latet$i[latet$int==vv])*log(1-ivvp)
+  }
+  #print(-temp)
+  nll.lt <- -ll.lt
+  return(nll.lt)
+}
 
 ####################################################################################################
 ## Calculate Hollingsworth et al. style likelihood
 holl.lik <- function(ldpars, rakll, # dpars has disease progression/infectiousnes parameters
+                     late.v1 = F, # which version of late couples likelihood?
                      excl.by.err = F,         ## exclude {ss->mm/ff} couples as in Wawer?
+                     range.dur.ac = c(.25,10),     ## to give posterior (likelihood * prior), let everything have flat priors except dur.ac which we'll
+                     ## make flat on [.25,10] months to keep things bounded
+                     range.dur.lt = c(.5,36), ## flat bounded prior on late phase
+                     range.dur.aids = c(.5, 36),  ## flat bounded prior on aids phase
                      verbose = T, browse = F)
   {
     if(browse) browser()
@@ -667,31 +699,46 @@ holl.lik <- function(ldpars, rakll, # dpars has disease progression/infectiousne
     }
     ## Late Couples
     if(verbose) print('adding up late nlls')
-    lt.kkinf <- xtabs(~kk + kkt + inf, data = rakll, subset = phase=='late')
-    lt.nll <- 0
-    ## late couples without infected 2ndary partners observed for kk intervals before death (called kkt in rakll)
+    if(late.v1) {
+      lt.kkinf <- xtabs(~kk + kkt + inf, data = rakll, subset = phase=='late')
+      lt.nll <- 0
+      ## late couples without infected 2ndary partners observed for kk intervals before death (called kkt in rakll)
                                         #browser()
-    for(jj in 1:ncol(as.matrix(lt.kkinf[,,'0']))) {
-      lt.nll <- lt.nll - lt.kkinf['0',jj,'0'] * log(ucp.lt(kk = as.numeric(colnames(lt.kkinf)[jj]), kkt=NA, inf = 0, dpars=dpars))
-      if(verbose) print(lt.nll)
-    }
-    ## late couples with infected 2ndary partners observed kkt intervals before death that with
-    ## 2ndary seroconversion occuring in kk-th interval before death
-    wh.row <- which(rownames(lt.kkinf)!='0')
-    for(ii in wh.row) { ## values of kk
-      for(jj in 1:ncol(as.matrix(lt.kkinf[,,'1']))) { ## values of kkt
-        kk.temp <- as.numeric(rownames(lt.kkinf)[ii])
-        kkt.temp <- as.numeric(colnames(lt.kkinf)[jj])
-        if(! kk.temp > kkt.temp ) { ## if !kk>kkt
-          lt.nll <- lt.nll - lt.kkinf[ii,jj,'1'] * log(ucp.lt(kk = kk.temp, kkt=kkt.temp, inf = 1, dpars=dpars))
-          ## if(is.na(lt.nll))  print('lt.nll=NA'); browser()
-          ## if(lt.nll==Inf) print('lt.nll=Inf'); browser()
-          if(verbose) print(lt.nll)
+      for(jj in 1:ncol(as.matrix(lt.kkinf[,,'0']))) {
+        lt.nll <- lt.nll - lt.kkinf['0',jj,'0'] * log(ucp.lt(kk = as.numeric(colnames(lt.kkinf)[jj]), kkt=NA, inf = 0, dpars=dpars))
+        if(verbose) print(lt.nll)
+      }
+      ## late couples with infected 2ndary partners observed kkt intervals before death that with
+      ## 2ndary seroconversion occuring in kk-th interval before death
+      wh.row <- which(rownames(lt.kkinf)!='0')
+      for(ii in wh.row) { ## values of kk
+        for(jj in 1:ncol(as.matrix(lt.kkinf[,,'1']))) { ## values of kkt
+          kk.temp <- as.numeric(rownames(lt.kkinf)[ii])
+          kkt.temp <- as.numeric(colnames(lt.kkinf)[jj])
+          if(! kk.temp > kkt.temp ) { ## if !kk>kkt
+            lt.nll <- lt.nll - lt.kkinf[ii,jj,'1'] * log(ucp.lt(kk = kk.temp, kkt=kkt.temp, inf = 1, dpars=dpars))
+            ## if(is.na(lt.nll))  print('lt.nll=NA'); browser()
+            ## if(lt.nll==Inf) print('lt.nll=Inf'); browser()
+            if(verbose) print(lt.nll)
+          }
         }
       }
+    }else{ #late v2
+      templt <- hmod.to.wdat(rakll)$latet
+      lt.nll <- ucp.lt.2(templt, dpars = dpars, browse=F)
+            if(verbose) print(lt.nll)      
     }
     nll <- inc.nll + prev.nll + lt.nll
     nll <- as.numeric(nll)
+    if(length(range.dur.ac)>0) { ## give 0 posterior probability (nll - log(prior)=Inf) if outside range of dur.ac
+      if(dpars['dur.ac'] < range.dur.ac[1] | dpars['dur.ac'] > range.dur.ac[2]) nll <- Inf
+    }
+    if(length(range.dur.lt)>0) { ## give 0 posterior probability (nll - log(prior)=Inf) if outside range of dur.lt
+      if(dpars['dur.lt'] < range.dur.lt[1] | dpars['dur.lt'] > range.dur.lt[2]) nll <- Inf
+    }
+    if(length(range.dur.aids)>0) { ## give 0 posterior probability (nll - log(prior)=Inf) if outside range of dur.aids
+      if(dpars['dur.aids'] < range.dur.aids[1] | dpars['dur.aids'] > range.dur.aids[2]) nll <- Inf
+    }
     if(verbose) print('total nll:')
     return(nll)
   }
@@ -760,7 +807,38 @@ holl.mod <- function(i.n = 50, p.n = 50, l.n = 50, interv = 10,  max.vis = 4, dp
   }
   dat$phase <- factor(dat$phase, levels = c('inc','prev','late'))
   return(dat)
-}        
+}
+
+hmod.to.wdat <- function(sim) { ## turn simulation into Wawer style table
+  ## early
+  inctab <- xtabs(~inf+kk, sim, subset=phase=='inc')
+  inct <- data.frame(int = 1, n = sum(sim$phase=='inc'), i = inctab[2,1])
+  for(ii in 2:ncol(inctab)) {
+    temp <- data.frame(int = ii,
+                       n =  inct$n[ii-1] - inct$i[ii-1],
+                       i = inctab[2,ii])
+    inct <- rbind(inct, temp)
+  }
+  ## prev
+  prevtab <- xtabs(~inf+kk, sim, subset=phase=='prev')
+  prevt <- data.frame(int = 1, n = sum(sim$phase=='prev'), i = prevtab[2,1])
+  for(ii in 2:ncol(prevtab)) {
+    temp <- data.frame(int = ii,
+                       n =  prevt$n[ii-1] - prevt$i[ii-1],
+                       i = prevtab[2,ii])
+    prevt <- rbind(prevt, temp)
+  }
+  ## late
+  latetab <- xtabs(~inf+kk, sim, subset=phase=='late')
+  latet <- data.frame(int = ncol(latetab)-1, n = sum(sim$phase=='late'), i = latetab[2,2])
+  for(ii in 2:(ncol(latetab)-1)) {
+    temp <- data.frame(int = ncol(latetab)-ii,
+                       n =  latet$n[ii-1] - latet$i[ii-1],
+                       i = latetab[2,ii+1])
+    latet <- rbind(latet, temp)
+  }
+return(list(inct=inct, prevt=prevt, latet= latet))
+}
 
 ## Fit Hollingsworth model with MCMC
 ## MCMC SAMPLER
@@ -807,7 +885,7 @@ hollsampler <- function(sd.props, inits,
         ## trace = T if in non-thinned iteration, or the previous one (in case of rejection)
         ## calculate proposal par log probability
         if(verbose2)    print(vv)
-        if(vv==3311) browser()
+        #if(vv==3311) browser()
         lprob.prop <- holl.lik(pars.prop, rakdat, excl.by.err = excl.by.err, verbose = F, browse = F)
         if(verbose2) print(lprob.prop)
         ## holl.lik gives -log(L), so negative of that gives the log probability (assuming flat improper priors)
@@ -843,7 +921,7 @@ holl.init.fxn <- function(seed = 1) {
   }
 
 holl.wrp <- function(seed=1, sd.props, rakdat, excl.by.err, force.inits=NULL,
-                multiv=F, covar=NULL, 
+                multiv=F, covar=NULL, jit = .8,
                 verbose = T, verbose2 = F, tell = 50, browse = F,
                 niter, nthin, nburn)
   { ## new version of wrp needs to save progress for long chains (WA)
@@ -851,14 +929,13 @@ holl.wrp <- function(seed=1, sd.props, rakdat, excl.by.err, force.inits=NULL,
     if(length(force.inits)==0) {
         inits.temp <- holl.init.fxn(seed = seed) # initial conditions different for each seed
     }else{
-        inits.temp <- jitter(force.inits, a = .5)
+        inits.temp <- jitter(force.inits, a = jit)
     }
     hollsampler(sd.props = sd.props, inits = inits.temp, rakdat = sim, excl.by.err = F,
                 multiv = multiv, covar = covar, 
                 verbose = verbose, verbose2 = verbose2, tell = tell, seed = seed, 
                 niter = niter, nthin = nthin, nburn = nburn, browse=browse)
   }
-
 
 
 ## Plot posterior pairwise-correlations & histograms
@@ -924,5 +1001,72 @@ procpost <- function(d.out)
             }
         }
         colnames(posts) <- parnames
-        posts
+        return(list(posts = posts, mcmc.out=mcmc.d.out))
     }
+
+####################################################################################################
+## Real Wawer data
+#head(sim)
+
+## ## total 235 couples + 13 included pre-death + 15 excluded by error
+## x <- rep(NA, 235+13+15)
+## wdat <- data.frame(uid=1:length(x),phase=x,inf=x,kk=x,kkt=x)
+## ## ## Incident couples
+## ## 10/23 in 1st interval (probably missing 40% loss to follow-up due to error, could really be  10/38)
+## ## 2/13 in 2nd
+## ## 1/7 in 3rd-5th (NOT SURE WHICH INTERVAL IT WAS, but let's make it 3rd for now)
+## wdat[1:10,-1] <- data.frame('inc',1, 1, NA)[rep(1,10),]
+## wdat[11:12,-1] <- data.frame('inc',1, 2, NA)[rep(1,2),]
+## wdat[13,-1] <- data.frame('inc',1, 3, NA)
+## ## Now who didn't seroconvert
+## ####
+## ## None only seen for one interval, but let's pretend that 23/.6 = 38 couples were actually
+## ## there. 38-10 = 28. Of 28, only 13 were seen in next interval. So somthing like 28-13 = 15 were
+## ## only seen -- to -+ and then lost thereafter
+## wdat[14:28,-1] <- data.frame('inc',0, 1, NA)
+## ## 13-2 = 11, but only 7 followed in next interval. So 4 couples were only seen for 2 intervals
+## wdat[29:32,-1] <- data.frame('inc',0, 2, NA)
+## ## 6 couples were then seen for (both?) the last two intervals & didn't go to ++
+## wdat[33:38,-1] <- data.frame('inc',0, 4, NA)
+## ## ## Chronic couples
+## ## 14/161 in 1st
+## ## 9/129 in 2nd
+## ## 10/92 in 3rd
+## ## 3/45 in 4th
+## wdat[39:52,-1] <- data.frame('prev',1, 1, NA) #14 infected
+## wdat[53:61,-1] <- data.frame('prev',1, 2, NA) #9 infected
+## wdat[62:71,-1] <- data.frame('prev',1, 3, NA) #10 infected
+## wdat[72:74,-1] <- data.frame('prev',1, 4, NA) #3 infected
+## ## uninfecteds
+## wdat[75:92,-1] <- data.frame('prev',0, 1, NA) ## 161-14-129 = 18 only followed once
+## wdat[93:120,-1] <- data.frame('prev',0, 2, NA) ## 129-9-92 = 28 only followed twice
+## wdat[121:157,-1] <- data.frame('prev',0, 3, NA) ## 92-10-45 = 37 only followed thrice
+## wdat[158:199,-1] <- data.frame('prev',0, 4, NA) ## 45-3 = 42 followed 4x
+## ## ## Late couples
+## ## 2/22 in 4th to last
+## ## 9/35 in 3rd to last, 35 - (22-2) = 15 new couples followed 
+## ## 8/31 in 2nd to last  31 - (35-9) = 5 new couples followed
+## ## 0/13 in last before death, 23 - 31 - 8 = 0 new couple followed (23 couples were available last interval but only 13 had the live partner followed up)
+## ## 19/51 total, though that's missing the 13, which would yield 64 late couples
+## ####################################################################################################
+## ## UNCLEAR how many of infected couples in 3rd-2nd intervals were new couples just enrolled vs seen
+## ## in previous interval. It shouldn't affect the likelihood much since we're just juggling 'p' or
+## ## '(1-p)' around between couples.
+## ## ASSUME that none are new couples
+## wdat[200:201,] <- data.frame('late',1, 4, 4) ## 2 infected in 4th interval before death
+## wdat[202:210,] <- data.frame('late',1, 3, 4) ## 9 infected in 3rd interval before death 
+## wdat[211:218,] <- data.frame('late',1, 2, 4) ## 8 infected in 2nd interval before death
+##                                              ## 0 infected in last interval before death
+## ## uninfecteds, only 13 seen in last interval
+## wdat[219:221,] <- data.frame('late',0, 0, 4) ##3:   22 - 2 - 9 -8 = 3 followed full time til death
+## wdat[222:231,] <- data.frame('late',0, 0, 3) ##10:  35 - 9 - 8 - (3) = 15 followed full time til death, but only 13 were seen the whole time so limit 13 - 3 = 10, 5 left over
+## wdat[232:236,] <- data.frame('late',0, 0, 3*) ##5 seen in 3rd-2nd intervals but not in 1st
+## wdat[237:241,] <- data.frame('late',0, 0, 3*) ##5  31 - 8 - (3 + 15) = 5 seen in 2nd interval before death but not 1st 
+## ## for the rest, none were seen in last interval
+## ## 31 - 8 = 23 followed full time until death, but really only 13 of these were seen both interals,
+## wdat[240:252,] <- data.frame('late',1, 0, 4*) ## 10 seen whole time except last interval***
+## wdat[253:262,] <- data.frame('late',1, 0, 4) ## 13 seen the whole time including
+## ## 63 couples total
+## ####################################################################################################
+## ## Why are we missing one couple? strange, but it's unclear how they have 51 total given that 31 + 9 + 2 + (15+5new = 
+## tail(sim,50)

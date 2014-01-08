@@ -13,11 +13,11 @@ interv <- 10
 max.vis <- floor(40/interv) + 1
 
 dpars <- c(acute.sc = 15, late.sc = 4, bp = .007,
-             dur.ac = 2, dur.lt = 9, dur.aids = 10)
+             dur.ac = 2, dur.lt = 6, dur.aids = 4)
 ldpars <- log(dpars)
 
-nn <- 2000
-sim <- holl.mod(nn,nn,nn,dpars=dpars, verbose=F)
+nn <- 2000 # crashes for > 4000, not sure why
+sim <- rbind(holl.mod(nn,nn,nn,dpars=dpars, verbose=F), holl.mod(nn,nn,nn,dpars=dpars, verbose=F))
 xtabs(~inf + kk + phase, sim)
 xtabs(~kk + kkt + inf, data = sim, subset = phase == "late")
 
@@ -32,11 +32,10 @@ holl.lik(log(dpars), sim, excl.by.err = F, verbose = F, browse = F)
 ## hls
 
 nc <- 12
-niter <- 1*1000
-nburn <- 300
+niter <- 2*1000
+nburn <- 500
 sd.props <- c(.05, .1, .01, .05, .1, .05)
 names(sd.props) <- names(ldpars)
-print("beginning adaptive phase")
 seed.bump <- 0
 d.out <- mclapply((seed.bump + 1:nc), holl.wrp,
                   sd.props = sd.props, force.inits = ldpars, rakdat = sim, excl.by.err = F,
@@ -44,7 +43,8 @@ d.out <- mclapply((seed.bump + 1:nc), holl.wrp,
                   verbose = T, verbose2 = F, tell = 100, 
                   niter = niter, nthin = 1, nburn = nburn, browse=F)
 ndirnm <- 'results'
-posts <- procpost(d.out)
+posts <- procpost(d.out)$posts
+dmcmc <- procpost(d.out)$mcmc
 hollsbpairs(posts, truepars = ldpars, show.lines = T, ## plot posterior correlations after adaptive phase
         file.nm = file.path(ndirnm,"Holl posterior pairs after adaptive phase"), width = 12, height = 12,
         cex = 1, col = "black", nrpoints = 100, do.jpeg = T, browse=F)
@@ -61,31 +61,38 @@ edpars
 sigma.ad <- cov.wt(posts)$cov ## posterior covariance matrix, then plot what proposal distr is gonna look like
 sigma <- sigma.ad
 
+
 ####################################################################################################
 ## fitting phase with multivariate block sampling
-niter <- 3*1000
-nburn <- 500
-f.out <- mclapply((seed.bump + 1:nc), holl.wrp, force.inits = ldpars,
+niter <- 4*1000
+nburn <- 1500
+f.out <- mclapply((seed.bump + 1:nc), holl.wrp, force.inits = ldpars, jit = 1,
                   sd.props = sd.props,  rakdat = sim, excl.by.err = F,
                   multiv = T, covar = sigma, 
                   verbose = T, verbose2 = F, tell = 100, 
                   niter = niter, nthin = 1, nburn = nburn, browse=F)
-fposts <- procpost(f.out)
-
-hollsbpairs(fposts, truepars = ldpars[parnames], show.lines = T, ## plot posterior correlations after fit phase
+fposts <- procpost(f.out)$posts
+fmcmc <- procpost(f.out)$mcmc.out
+pdf('mcmc summ.pdf'); plot(fmcmc); dev.off()
+ord <- c(3,1,4,2,5,6)
+hollsbpairs(fposts[,ord], truepars = ldpars[ord], show.lines = T, ## plot posterior correlations after fit phase
         file.nm = file.path(ndirnm,"Holl posterior pairs after fit phase"), width = 12, height = 12,
         cex = 1, col = "black", nrpoints = 100, do.jpeg = T, browse=F)
 exfposts <- as.data.frame(exp(fposts))
 exfposts$atr.month.ac <- (exfposts$acute.sc-1)*exfposts$dur.ac
-edpars <- dpars[parnames]
+edpars <- dpars
 edpars <- c(edpars, atr.month.ac = (edpars['acute.sc']-1)*edpars['dur.ac'])
-hollsbpairs(exfposts, truepars = edpars, show.lines = T, ## plot posterior correlations after fit phase
+ord <- c(3,7,1,4,2,5,6)
+hollsbpairs(exfposts[,ord], truepars = edpars[ord], show.lines = T, ## plot posterior correlations after fit phase
         file.nm = file.path(ndirnm,"exp Holl posterior pairs after fit phase"), width = 12, height = 12,
         cex = 1, col = "black", nrpoints = 100, do.jpeg = T, browse=F)
 apply(exfposts, 2, range)
 apply(exfposts, 2, function(x) signif(quantile(x, c(.025, .5, .975)),3))
 edpars
 
+fsigma.ad <- cov.wt(fposts)$cov ## posterior covariance matrix, then plot what proposal distr is gonna look like
+fsigma <- fsigma.ad
+save.image('results/140108.Rdata')
 ## #ltf.prob <- NA
 ## rak.coh <- rak.coh.fxn(ts=output$ts, dat = output$evout, interv=interv, max.vis=max.vis, 
 ##                        ltf.prob = 0, rr.ltf.ff = 4.3, rr.ltf.mm = 2, rr.ltf.hh = 1, rr.ltf.d = 0,
