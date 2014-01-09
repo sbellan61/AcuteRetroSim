@@ -596,23 +596,28 @@ ucp.lt <- function(kk, kkt=NA, inf,dpars) {
             ucpN <- try(1 - integrate(Vectorize(cp.lt.1,'td'), lower=0, upper=max.int, dpars=dpars)$val / interv, silent = T)
             w.step <- w.step+1
         }
+        #print(ucpN)
         if(kk >1) { ## otherwise, if observed more than one interval before death, multiply this by not being observed any of the other kk-2 intervals before death
             for(jj in kk:2) { ## calculate probability of not being infected between
                 ## intervals kk to last before death (last is interval 1 before death)
                 max.int <- min(10,max(0,(interv*jj-dpars['dur.aids'])))
-                ucpN <- try(ucpN * (1 - integrate(Vectorize(cp.lt.k,'td'), lower=0, upper=max.int, kk=jj, dpars=dpars)$val / interv), silent=T)
+                ucpNnew <- try((1 - integrate(Vectorize(cp.lt.k,'td'), lower=0, upper=max.int, kk=jj, dpars=dpars)$val / interv), silent=T)
                 w.step <- 0
                 while(inherits(ucpN, 'try-error')){
                     if(w.step>30) ucpN <- 0 # give up on this integral eventually & just reject this proposal
                     max.int <- max.int*.98
-                    ucpN <- try(ucpN * (1 - integrate(Vectorize(cp.lt.k,'td'), lower=0, upper=max.int, kk=jj, dpars=dpars)$val / interv), silent=T)
+                    ucpNnew <- try((1 - integrate(Vectorize(cp.lt.k,'td'), lower=0, upper=max.int, kk=jj, dpars=dpars)$val / interv), silent=T)
                     w.step <- w.step+1
                 }
+                #print(ucpNnew)
+                #print(ucpN)
+                ucpN <- ucpN * ucpNnew
             }
         }
         return(as.numeric(ucpN))        
     }
 }
+
 
 ####################################################################################################
 ####################################################################################################
@@ -620,6 +625,7 @@ ucp.lt <- function(kk, kkt=NA, inf,dpars) {
 ## ucp.lt(1,1,1,dpars) + ucp.lt(1,NA,0,dpars)                ## should be 1 {mm->d.mm} or {mm->d.hh}
 ## ucp.lt(2,2,1,dpars) + ucp.lt(1,2,1,dpars) + ucp.lt(2,NA,0,dpars) ## should be 1 {mm->hh->d.hh} or {mm->mm->d.hh} or {mm->mm->d.mm}
 ## ucp.lt(3,3,1,dpars) + ucp.lt(2,3,1,dpars) + ucp.lt(1,3,1,dpars) + ucp.lt(3,NA,0,dpars) ## similarly, all possible options for 3 intervals...
+
 
 ucp.lt.2 <- function(latet, dpars, browse=F) {
   for(nm in names(dpars))      assign(nm, dpars[nm]) ## loading 'bp'
@@ -636,7 +642,11 @@ ucp.lt.2 <- function(latet, dpars, browse=F) {
     i1p <-   try(integrate(Vectorize(cp.lt.1,'td'), lower=0, upper=max.int, dpars=dpars)$val / interv, silent = T)
     w.step <- w.step+1
   }
+  pps <- i1p
+  #browser()
   ll.lt <- latet$i[latet$int==1]*log(i1p) + (latet$n[latet$int==1]-latet$i[latet$int==1])*log(1-i1p)
+  #print(i1p)
+  ucN <- 1-i1p
   temp <- (latet$n[latet$int==1]-latet$i[latet$int==1])*log(1-i1p)
   for(vv in 2:(max.vis-1)) { # remaining intervals observed (2nd before death, 3rd, etc..)
     ## ivvp
@@ -649,15 +659,19 @@ ucp.lt.2 <- function(latet, dpars, browse=F) {
       ivvp <- try(integrate(Vectorize(cp.lt.k,'td'), lower=0, upper=max.int, kk=vv, dpars = dpars)$val / interv, silent=T)
       w.step <- w.step+1
     }
+    ucN <- ucN*(1-ivvp)
+    pps <- c(pps, ivvp)
     ## i1p^i1 * (1-i1p)^(n1-i1) etc...
     ll.lt <- ll.lt + latet$i[latet$int==vv]*log(ivvp) + (latet$n[latet$int==vv]-latet$i[latet$int==vv])*log(1-ivvp)
-    temp <- temp + (latet$n[latet$int==vv]-latet$i[latet$int==vv])*log(1-ivvp)
+    temp <- temp + (latet$n[latet$int==1]-latet$i[latet$int==1])*log(1-ivvp)
   }
-  #print(-temp)
-  nll.lt <- -ll.lt
+#  browser()
+  pps <- rev(pps) ## since 1st is last row in latet
+  lls <- latet$i * log(pps) + (latet$n-latet$i) * log(1-pps)
+  nll.lt <- -sum(lls)
   return(nll.lt)
 }
-
+ 
 ####################################################################################################
 ## Calculate Hollingsworth et al. style likelihood
 holl.lik <- function(ldpars, rakll, # dpars has disease progression/infectiousnes parameters
@@ -705,23 +719,29 @@ holl.lik <- function(ldpars, rakll, # dpars has disease progression/infectiousne
       ## late couples without infected 2ndary partners observed for kk intervals before death (called kkt in rakll)
                                         #browser()
       for(jj in 1:ncol(as.matrix(lt.kkinf[,,'0']))) {
-        lt.nll <- lt.nll - lt.kkinf['0',jj,'0'] * log(ucp.lt(kk = as.numeric(colnames(lt.kkinf)[jj]), kkt=NA, inf = 0, dpars=dpars))
-        if(verbose) print(lt.nll)
+          to.add <- - lt.kkinf['0',jj,'0'] * log(ucp.lt(kk = as.numeric(colnames(lt.kkinf)[jj]), kkt=NA, inf = 0, dpars=dpars))
+        lt.nll <- lt.nll + to.add
+        if(verbose) print(to.add)
+        ## print(lt.kkinf['0',jj,'0'])
+        ## print(ucp.lt(kk = as.numeric(colnames(lt.kkinf)[jj]), kkt=NA, inf = 0, dpars=dpars))
       }
       ## late couples with infected 2ndary partners observed kkt intervals before death that with
       ## 2ndary seroconversion occuring in kk-th interval before death
       wh.row <- which(rownames(lt.kkinf)!='0')
       for(ii in wh.row) { ## values of kk
         for(jj in 1:ncol(as.matrix(lt.kkinf[,,'1']))) { ## values of kkt
+          #browser()
           kk.temp <- as.numeric(rownames(lt.kkinf)[ii])
           kkt.temp <- as.numeric(colnames(lt.kkinf)[jj])
           if(! kk.temp > kkt.temp ) { ## if !kk>kkt
-            lt.nll <- lt.nll - lt.kkinf[ii,jj,'1'] * log(ucp.lt(kk = kk.temp, kkt=kkt.temp, inf = 1, dpars=dpars))
+            to.add <- - lt.kkinf[ii,jj,'1'] * log(ucp.lt(kk = kk.temp, kkt=kkt.temp, inf = 1, dpars=dpars))
+            lt.nll <- lt.nll + to.add
             ## if(is.na(lt.nll))  print('lt.nll=NA'); browser()
             ## if(lt.nll==Inf) print('lt.nll=Inf'); browser()
-            if(verbose) print(lt.nll)
+            if(verbose)             print(to.add)
           }
         }
+        if(verbose) print(lt.nll)
       }
     }else{ #late v2
       templt <- hmod.to.wdat(rakll)$latet
@@ -829,14 +849,14 @@ hmod.to.wdat <- function(sim) { ## turn simulation into Wawer style table
     prevt <- rbind(prevt, temp)
   }
   ## late
+  #browser()
   latetab <- xtabs(~inf+kk, sim, subset=phase=='late')
-  latet <- data.frame(int = ncol(latetab)-1, n = sum(sim$phase=='late'), i = latetab[2,2])
-  for(ii in 2:(ncol(latetab)-1)) {
-    temp <- data.frame(int = ncol(latetab)-ii,
-                       n =  latet$n[ii-1] - latet$i[ii-1],
-                       i = latetab[2,ii+1])
-    latet <- rbind(latet, temp)
+  latet <- data.frame(int = colnames(latetab)[-1], n = NA,i = latetab[2,-1])
+  latet$n[1] <- sum(sim$phase=='late')
+  for(ii in 2:nrow(latet)) {
+      latet$n[ii] <- latet$n[ii-1]-latet$i[ii-1]
   }
+  latet <- latet[nrow(latet):1,]
 return(list(inct=inct, prevt=prevt, latet= latet))
 }
 

@@ -19,9 +19,32 @@ ldpars <- log(dpars)
 nn <- 2000 # crashes for > 4000, not sure why
 sim <- rbind(holl.mod(nn,nn,nn,dpars=dpars, verbose=F), holl.mod(nn,nn,nn,dpars=dpars, verbose=F))
 xtabs(~inf + kk + phase, sim)
-xtabs(~kk + kkt + inf, data = sim, subset = phase == "late")
 
-holl.lik(log(dpars), sim, excl.by.err = F, verbose = F, browse = F)
+
+lt.kkinf <- xtabs(~kk + kkt + inf, data = sim, subset = phase == "late")
+
+holl.lik(log(dpars), sim, excl.by.err = F, verbose = T, late.v1=T, browse = F)
+holl.lik(log(dpars), sim, excl.by.err = F, verbose = F, late.v1=F, browse = F)
+
+ucp.lt(1,1,1,dpars)
+ucp.lt(1,4,1,dpars)
+ucp.lt(3,4,1,dpars) / (1-ucp.lt(4,4,1,dpars))
+ucp.lt(2,4,1,dpars) / (1-ucp.lt(3,4,1,dpars))
+templt <- hmod.to.wdat(sim)$latet
+ucp.lt.2(templt, dpars = dpars, browse=F)
+
+[1] "adding up late nlls"
+[1] 968.4472
+
+system.time(
+            for(lt in seq(3.9,4.1,l=5)) {
+              print(lt)
+              dpars.t <- dpars
+              dpars.t[2] <- lt
+              ldpars.t <- log(dpars.t) 
+              print(holl.lik(ldpars.t, sim, excl.by.err = F, late.v1=T, verbose = F, browse = F))
+            }
+            )
 
 ## sd.props <- rep(.15, length(ldpars))
 ## names(sd.props) <- names(ldpars)
@@ -34,10 +57,10 @@ holl.lik(log(dpars), sim, excl.by.err = F, verbose = F, browse = F)
 nc <- 12
 niter <- 2*1000
 nburn <- 500
-sd.props <- c(.05, .1, .01, .05, .1, .05)
+sd.props <- c(.05, .1, .01, .05, .1, .05)*1.2
 names(sd.props) <- names(ldpars)
 seed.bump <- 0
-d.out <- mclapply((seed.bump + 1:nc), holl.wrp,
+d.out <- mclapply((seed.bump + 1:nc), holl.wrp, jit = .5,
                   sd.props = sd.props, force.inits = ldpars, rakdat = sim, excl.by.err = F,
                   multiv = F, covar = NULL, 
                   verbose = T, verbose2 = F, tell = 100, 
@@ -93,6 +116,7 @@ edpars
 fsigma.ad <- cov.wt(fposts)$cov ## posterior covariance matrix, then plot what proposal distr is gonna look like
 fsigma <- fsigma.ad
 save.image('results/140108.Rdata')
+
 ## #ltf.prob <- NA
 ## rak.coh <- rak.coh.fxn(ts=output$ts, dat = output$evout, interv=interv, max.vis=max.vis, 
 ##                        ltf.prob = 0, rr.ltf.ff = 4.3, rr.ltf.mm = 2, rr.ltf.hh = 1, rr.ltf.d = 0,
