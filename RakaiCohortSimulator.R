@@ -20,39 +20,7 @@ nn <- 2000 # crashes for > 4000, not sure why
 sim <- rbind(holl.mod(nn,nn,nn,dpars=dpars, verbose=F), holl.mod(nn,nn,nn,dpars=dpars, verbose=F))
 xtabs(~inf + kk + phase, sim)
 
-
-lt.kkinf <- xtabs(~kk + kkt + inf, data = sim, subset = phase == "late")
-
-holl.lik(log(dpars), sim, excl.by.err = F, verbose = T, late.v1=T, browse = F)
-holl.lik(log(dpars), sim, excl.by.err = F, verbose = F, late.v1=F, browse = F)
-
-ucp.lt(1,1,1,dpars)
-ucp.lt(1,4,1,dpars)
-ucp.lt(3,4,1,dpars) / (1-ucp.lt(4,4,1,dpars))
-ucp.lt(2,4,1,dpars) / (1-ucp.lt(3,4,1,dpars))
-templt <- hmod.to.wdat(sim)$latet
-ucp.lt.2(templt, dpars = dpars, browse=F)
-
-[1] "adding up late nlls"
-[1] 968.4472
-
-system.time(
-            for(lt in seq(3.9,4.1,l=5)) {
-              print(lt)
-              dpars.t <- dpars
-              dpars.t[2] <- lt
-              ldpars.t <- log(dpars.t) 
-              print(holl.lik(ldpars.t, sim, excl.by.err = F, late.v1=T, verbose = F, browse = F))
-            }
-            )
-
-## sd.props <- rep(.15, length(ldpars))
-## names(sd.props) <- names(ldpars)
-## hls <- hollsampler(sd.props = sd.props, inits = ldpars, rakdat = sim, excl.by.err = F,
-##                    multiv = F, covar = NULL, 
-##                    verbose = T, tell = 50, seed = 1, 
-##                    niter = 2*10, nthin = 1, nburn = 3, browse=F)
-## hls
+holl.lik(log(dpars), sim, excl.by.err = F, verbose = T, browse = F)
 
 nc <- 12
 niter <- 2*1000

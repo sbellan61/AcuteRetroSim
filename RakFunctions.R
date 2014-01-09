@@ -483,28 +483,18 @@ return(cp)
 
 ####################################################################################################
 ## Incident Couples: k = interval since -- (1st, 2nd, 3rd, 4th, etc..)
-ucp.inc <- function(kk,inf,dpars) {
+ucp.inc.2 <- function(inct,dpars) {
   for(nm in names(dpars))      assign(nm, dpars[nm]) ## loading 'bp'
   ## numerical integrals (to check calculus)
-  ucpS <- integrate(Vectorize(cp.inc.1,'tt'), lower=0, upper=interv, dpars = dpars)$val / interv ## 
-  ucpNS <- 1-ucpS
-  if(kk >1) { ## otherwise, if k = 2,3,...
-    for(jj in 2:kk) {
+  pps <- integrate(Vectorize(cp.inc.1,'tt'), lower=0, upper=interv, dpars = dpars)$val / interv ## 
+    for(jj in 2:nrow(inct)) {
       ## numerical integrals
-      ucpS <- ucpNS * integrate(Vectorize(cp.inc.k,'tt'), lower=0, upper=interv, kk=jj, dpars = dpars)$val / interv
-      ucpNS <- ucpNS * (1- integrate(Vectorize(cp.inc.k,'tt'), lower=0, upper=interv, kk=jj, dpars = dpars)$val / interv)
+      pps <- c(pps, integrate(Vectorize(cp.inc.k,'tt'), lower=0, upper=interv, kk=jj, dpars = dpars)$val / interv)
     }
-  }
-  if(is.na(log(ucpS))) browser()
-  if(is.na(log(ucpNS))) browser()  
-  if(inf==1) return(as.numeric(ucpS)) #list(ucpA,ucpS))
-  if(inf==0) return(as.numeric(ucpNS)) #list(ucpNA,ucpNS))
+  lls <- inct$i * log(pps) + (inct$n-inct$i) * log(1-pps)
+  nll.inc <- -sum(lls)
+  return(nll.inc)
 }
-## Test code to make sure function is working right
-## ucp.inc(1,0,dpars) + ucp.inc(1,1,dpars)                ## should be 1
-## ucp.inc(2,1,dpars) + ucp.inc(2,0,dpars) - ucp.inc(1,0,dpars)  ## should be 0 (w/ rounding error,dpars)
-## ucp.inc(3,1,dpars) + ucp.inc(3,0,dpars) - ucp.inc(2,0,dpars)  ## should be 0 (w/ rounding error,dpars)
-## ucp.inc(4,1,dpars) + ucp.inc(4,0,dpars) - ucp.inc(3,0,dpars)  ## should be 0 (w/ rounding error)
 
 ####################################################################################################
 ##############################
@@ -525,107 +515,6 @@ ucp.prev <- function(kk,inf,dpars) {  ## probability of seroconversion in interv
 ##############################
 ## probability of seroconversion in interval kk BEFORE death, given not in previous
 ## intervals, **when observed for a total of kkt intervals before death**
-
-ucp.lt <- function(kk, kkt=NA, inf,dpars) {
-    if(inf==1) {
-        if(kk>kkt) stop('error: kk>kkt')
-        ## if kkt = 1, then it's the same as the conditional probability in the last month
-        if(kkt==1) { ## only need to integrate up until (interv-dur.aids) because if dying more than
-            ## dur.aids before last interval, there's no transmission in this interval
-            max.int <- max(0,(interv-dpars['dur.aids']))
-            ucp <- try(integrate(Vectorize(cp.lt.1,'td'), lower=0, upper=max.int, dpars=dpars)$val / interv,
-                       silent = T)
-            w.step <- 0
-            while(inherits(ucp ,'try-error')){ ## if there's a divergent integral, then integrate over a
-                ## little smaller of an interval to avoid the problematic area
-                if(w.step>30) ucp <- 0 # give up on this integral eventually & just reject this proposal
-                max.int <- max.int *.98
-                ucp <- try(integrate(Vectorize(cp.lt.1,'td'), lower=0, upper=max.int, dpars=dpars)$val / interv,
-                           silent = T)
-                w.step <- w.step + 1
-            }
-        }
-        if(kkt >1) { ## otherwise, if observed more than one interval before death
-            if(kk==kkt) { ## if infected in first interval of observation
-                ## min/max trickery is to avoid divergent integrals occurring when most of the function takes the value of 0 (due to aids phase)
-                max.int <- min(10,max(0,(interv*kk-dpars['dur.aids'])))
-                ucp <- try(integrate(Vectorize(cp.lt.k,'td'), lower=0, upper=max.int, kk=kk, dpars=dpars)$val / interv, silent = T)
-                w.step <- 0
-                while(inherits(ucp ,'try-error')){ ## if there's a divergent integral, then integrate over smaller region
-                    if(w.step>30) ucp <- 0 # give up on this integral eventually & just reject this proposal
-                    max.int <- max.int*.98
-                    ucp <- try(integrate(Vectorize(cp.lt.k,'td'), lower=0, upper=max.int, kk=kk, dpars=dpars)$val / interv, silent = T)
-                    w.step <- w.step + 1
-                }              
-            }else{ ## if not infected in at least one interval before infected (kk<kkt)
-                ucp <- 1 ## initialize ucp for below loop
-                for(jj in kkt:(kk+1)) { ## calculate probability of not being infected between
-                    ## visits kkt to (kk+1) before death (where 1 = visit at dath)
-                    max.int <- min(10,max(0,(interv*jj-dpars['dur.aids'])))
-                    ucp <- try(ucp * (1 - integrate(Vectorize(cp.lt.k,'td'), lower=0, upper=max.int, kk=jj, dpars=dpars)$val /interv), silent = T)
-                    w.step <- 0
-                    while(inherits(ucp, 'try-error')){
-                        if(w.step>30) ucp <- 0 # give up on this integral eventually & just reject this proposal
-                        max.int <- max.int*.98
-                        ucp <- try(ucp * (1 - integrate(Vectorize(cp.lt.k,'td'), lower=0, upper=max.int, kk=jj, dpars=dpars)$val /interv), silent = T)
-                        w.step <- w.step + 1
-                    }
-                }
-                ## times the probability of being infected in the kk-th interval
-                max.int <- max.int*.98
-                ucp <- try(ucp * integrate(Vectorize(cp.lt.k,'td'), lower=0, upper=max.int, kk=kk, dpars=dpars)$val / interv, silent = T)
-                w.step <- 0
-                while(inherits(ucp, 'try-error')){
-                    if(w.step>30) ucp <- 0 # give up on this integral eventually & just reject this proposal
-                    max.int <- max.int*.98
-                    ucp <- try(ucp * integrate(Vectorize(cp.lt.k,'td'), lower=0, upper=max.int, kk=kk, dpars=dpars)$val / interv, silent = T)
-                    w.step <- w.step + 1
-                }                
-            }
-        }
-        return(as.numeric(ucp))
-    }
-    if(inf==0) {
-        max.int <- max(0,(interv-dpars['dur.aids']))
-        ucpN <- try(1 - integrate(Vectorize(cp.lt.1,'td'), lower=0, upper=max.int, dpars=dpars)$val / interv, silent = T)
-        w.step <- 0
-        while(inherits(ucpN ,'try-error')){ ## if there's a divergent integral, then integrate over a
-            if(w.step>30) ucpN <- 0 # give up on this integral eventually & just reject this proposal
-            ## little smaller of an interval to avoid the problematic area
-            max.int <- max.int*.98
-            ucpN <- try(1 - integrate(Vectorize(cp.lt.1,'td'), lower=0, upper=max.int, dpars=dpars)$val / interv, silent = T)
-            w.step <- w.step+1
-        }
-        #print(ucpN)
-        if(kk >1) { ## otherwise, if observed more than one interval before death, multiply this by not being observed any of the other kk-2 intervals before death
-            for(jj in kk:2) { ## calculate probability of not being infected between
-                ## intervals kk to last before death (last is interval 1 before death)
-                max.int <- min(10,max(0,(interv*jj-dpars['dur.aids'])))
-                ucpNnew <- try((1 - integrate(Vectorize(cp.lt.k,'td'), lower=0, upper=max.int, kk=jj, dpars=dpars)$val / interv), silent=T)
-                w.step <- 0
-                while(inherits(ucpN, 'try-error')){
-                    if(w.step>30) ucpN <- 0 # give up on this integral eventually & just reject this proposal
-                    max.int <- max.int*.98
-                    ucpNnew <- try((1 - integrate(Vectorize(cp.lt.k,'td'), lower=0, upper=max.int, kk=jj, dpars=dpars)$val / interv), silent=T)
-                    w.step <- w.step+1
-                }
-                #print(ucpNnew)
-                #print(ucpN)
-                ucpN <- ucpN * ucpNnew
-            }
-        }
-        return(as.numeric(ucpN))        
-    }
-}
-
-
-####################################################################################################
-####################################################################################################
-## Test code to make sure function is working right
-## ucp.lt(1,1,1,dpars) + ucp.lt(1,NA,0,dpars)                ## should be 1 {mm->d.mm} or {mm->d.hh}
-## ucp.lt(2,2,1,dpars) + ucp.lt(1,2,1,dpars) + ucp.lt(2,NA,0,dpars) ## should be 1 {mm->hh->d.hh} or {mm->mm->d.hh} or {mm->mm->d.mm}
-## ucp.lt(3,3,1,dpars) + ucp.lt(2,3,1,dpars) + ucp.lt(1,3,1,dpars) + ucp.lt(3,NA,0,dpars) ## similarly, all possible options for 3 intervals...
-
 
 ucp.lt.2 <- function(latet, dpars, browse=F) {
   for(nm in names(dpars))      assign(nm, dpars[nm]) ## loading 'bp'
@@ -675,7 +564,6 @@ ucp.lt.2 <- function(latet, dpars, browse=F) {
 ####################################################################################################
 ## Calculate Hollingsworth et al. style likelihood
 holl.lik <- function(ldpars, rakll, # dpars has disease progression/infectiousnes parameters
-                     late.v1 = F, # which version of late couples likelihood?
                      excl.by.err = F,         ## exclude {ss->mm/ff} couples as in Wawer?
                      range.dur.ac = c(.25,10),     ## to give posterior (likelihood * prior), let everything have flat priors except dur.ac which we'll
                      ## make flat on [.25,10] months to keep things bounded
@@ -688,18 +576,10 @@ holl.lik <- function(ldpars, rakll, # dpars has disease progression/infectiousne
     dpars <- exp(ldpars)
     ## Excluding incident couples seen serodiscordant once & then never again as in Wawer 2005?
     if(excl.by.err) rakll <- rakll[!rakll$excl.by.err,]
-    ## Create data frame for Hollingsworth style analysis
+    wtab <- hmod.to.wdat(rakll)        # Get Wawer Table 1 type tables
     ## Incident Couples
-    inc.kkinf <- xtabs(~kk + inf, data = rakll, subset = phase=='inc')
-    inc.nll <- 0
-    ## for incident couples observed jj intervals, calculate negative log likelihood of that
-    ## many couples seroconverting or not seroconverting in exactly that interval.
-    if(verbose) print('adding up incident nlls')
-    for(jj in 1:nrow(inc.kkinf)) { 
-      inc.nll <- inc.nll - inc.kkinf[jj,'0']*log(ucp.inc(jj,0, dpars=dpars)) -
-        inc.kkinf[jj,'1']*log(ucp.inc(jj,1, dpars=dpars))
-      if(verbose) print(inc.nll)
-    }
+    inc.nll <- ucp.inc.2(wtab$inct, dpars)
+    if(verbose) print(inc.nll)
     ## Prevalent Couples
     if(verbose) print('adding up prevalent nlls')
     prev.kkinf <- xtabs(~kk + inf, data = rakll, subset = phase=='prev')
@@ -713,41 +593,8 @@ holl.lik <- function(ldpars, rakll, # dpars has disease progression/infectiousne
     }
     ## Late Couples
     if(verbose) print('adding up late nlls')
-    if(late.v1) {
-      lt.kkinf <- xtabs(~kk + kkt + inf, data = rakll, subset = phase=='late')
-      lt.nll <- 0
-      ## late couples without infected 2ndary partners observed for kk intervals before death (called kkt in rakll)
-                                        #browser()
-      for(jj in 1:ncol(as.matrix(lt.kkinf[,,'0']))) {
-          to.add <- - lt.kkinf['0',jj,'0'] * log(ucp.lt(kk = as.numeric(colnames(lt.kkinf)[jj]), kkt=NA, inf = 0, dpars=dpars))
-        lt.nll <- lt.nll + to.add
-        if(verbose) print(to.add)
-        ## print(lt.kkinf['0',jj,'0'])
-        ## print(ucp.lt(kk = as.numeric(colnames(lt.kkinf)[jj]), kkt=NA, inf = 0, dpars=dpars))
-      }
-      ## late couples with infected 2ndary partners observed kkt intervals before death that with
-      ## 2ndary seroconversion occuring in kk-th interval before death
-      wh.row <- which(rownames(lt.kkinf)!='0')
-      for(ii in wh.row) { ## values of kk
-        for(jj in 1:ncol(as.matrix(lt.kkinf[,,'1']))) { ## values of kkt
-          #browser()
-          kk.temp <- as.numeric(rownames(lt.kkinf)[ii])
-          kkt.temp <- as.numeric(colnames(lt.kkinf)[jj])
-          if(! kk.temp > kkt.temp ) { ## if !kk>kkt
-            to.add <- - lt.kkinf[ii,jj,'1'] * log(ucp.lt(kk = kk.temp, kkt=kkt.temp, inf = 1, dpars=dpars))
-            lt.nll <- lt.nll + to.add
-            ## if(is.na(lt.nll))  print('lt.nll=NA'); browser()
-            ## if(lt.nll==Inf) print('lt.nll=Inf'); browser()
-            if(verbose)             print(to.add)
-          }
-        }
-        if(verbose) print(lt.nll)
-      }
-    }else{ #late v2
-      templt <- hmod.to.wdat(rakll)$latet
-      lt.nll <- ucp.lt.2(templt, dpars = dpars, browse=F)
-            if(verbose) print(lt.nll)      
-    }
+    lt.nll <- ucp.lt.2(wtab$latet, dpars = dpars, browse=F)
+    if(verbose) print(lt.nll)      
     nll <- inc.nll + prev.nll + lt.nll
     nll <- as.numeric(nll)
     if(length(range.dur.ac)>0) { ## give 0 posterior probability (nll - log(prior)=Inf) if outside range of dur.ac
@@ -1028,65 +875,46 @@ procpost <- function(d.out)
 ## Real Wawer data
 #head(sim)
 
-## ## total 235 couples + 13 included pre-death + 15 excluded by error
-## x <- rep(NA, 235+13+15)
-## wdat <- data.frame(uid=1:length(x),phase=x,inf=x,kk=x,kkt=x)
-## ## ## Incident couples
-## ## 10/23 in 1st interval (probably missing 40% loss to follow-up due to error, could really be  10/38)
-## ## 2/13 in 2nd
-## ## 1/7 in 3rd-5th (NOT SURE WHICH INTERVAL IT WAS, but let's make it 3rd for now)
-## wdat[1:10,-1] <- data.frame('inc',1, 1, NA)[rep(1,10),]
-## wdat[11:12,-1] <- data.frame('inc',1, 2, NA)[rep(1,2),]
-## wdat[13,-1] <- data.frame('inc',1, 3, NA)
-## ## Now who didn't seroconvert
-## ####
-## ## None only seen for one interval, but let's pretend that 23/.6 = 38 couples were actually
-## ## there. 38-10 = 28. Of 28, only 13 were seen in next interval. So somthing like 28-13 = 15 were
-## ## only seen -- to -+ and then lost thereafter
-## wdat[14:28,-1] <- data.frame('inc',0, 1, NA)
-## ## 13-2 = 11, but only 7 followed in next interval. So 4 couples were only seen for 2 intervals
-## wdat[29:32,-1] <- data.frame('inc',0, 2, NA)
-## ## 6 couples were then seen for (both?) the last two intervals & didn't go to ++
-## wdat[33:38,-1] <- data.frame('inc',0, 4, NA)
-## ## ## Chronic couples
-## ## 14/161 in 1st
-## ## 9/129 in 2nd
-## ## 10/92 in 3rd
-## ## 3/45 in 4th
-## wdat[39:52,-1] <- data.frame('prev',1, 1, NA) #14 infected
-## wdat[53:61,-1] <- data.frame('prev',1, 2, NA) #9 infected
-## wdat[62:71,-1] <- data.frame('prev',1, 3, NA) #10 infected
-## wdat[72:74,-1] <- data.frame('prev',1, 4, NA) #3 infected
-## ## uninfecteds
-## wdat[75:92,-1] <- data.frame('prev',0, 1, NA) ## 161-14-129 = 18 only followed once
-## wdat[93:120,-1] <- data.frame('prev',0, 2, NA) ## 129-9-92 = 28 only followed twice
-## wdat[121:157,-1] <- data.frame('prev',0, 3, NA) ## 92-10-45 = 37 only followed thrice
-## wdat[158:199,-1] <- data.frame('prev',0, 4, NA) ## 45-3 = 42 followed 4x
-## ## ## Late couples
-## ## 2/22 in 4th to last
-## ## 9/35 in 3rd to last, 35 - (22-2) = 15 new couples followed 
-## ## 8/31 in 2nd to last  31 - (35-9) = 5 new couples followed
-## ## 0/13 in last before death, 23 - 31 - 8 = 0 new couple followed (23 couples were available last interval but only 13 had the live partner followed up)
-## ## 19/51 total, though that's missing the 13, which would yield 64 late couples
-## ####################################################################################################
-## ## UNCLEAR how many of infected couples in 3rd-2nd intervals were new couples just enrolled vs seen
-## ## in previous interval. It shouldn't affect the likelihood much since we're just juggling 'p' or
-## ## '(1-p)' around between couples.
-## ## ASSUME that none are new couples
-## wdat[200:201,] <- data.frame('late',1, 4, 4) ## 2 infected in 4th interval before death
-## wdat[202:210,] <- data.frame('late',1, 3, 4) ## 9 infected in 3rd interval before death 
-## wdat[211:218,] <- data.frame('late',1, 2, 4) ## 8 infected in 2nd interval before death
-##                                              ## 0 infected in last interval before death
-## ## uninfecteds, only 13 seen in last interval
-## wdat[219:221,] <- data.frame('late',0, 0, 4) ##3:   22 - 2 - 9 -8 = 3 followed full time til death
-## wdat[222:231,] <- data.frame('late',0, 0, 3) ##10:  35 - 9 - 8 - (3) = 15 followed full time til death, but only 13 were seen the whole time so limit 13 - 3 = 10, 5 left over
-## wdat[232:236,] <- data.frame('late',0, 0, 3*) ##5 seen in 3rd-2nd intervals but not in 1st
-## wdat[237:241,] <- data.frame('late',0, 0, 3*) ##5  31 - 8 - (3 + 15) = 5 seen in 2nd interval before death but not 1st 
-## ## for the rest, none were seen in last interval
-## ## 31 - 8 = 23 followed full time until death, but really only 13 of these were seen both interals,
-## wdat[240:252,] <- data.frame('late',1, 0, 4*) ## 10 seen whole time except last interval***
-## wdat[253:262,] <- data.frame('late',1, 0, 4) ## 13 seen the whole time including
-## ## 63 couples total
-## ####################################################################################################
-## ## Why are we missing one couple? strange, but it's unclear how they have 51 total given that 31 + 9 + 2 + (15+5new = 
-## tail(sim,50)
+## total 235 couples + 13 included pre-death + 15 excluded by error
+x <- rep(NA, 235+13+15)
+wdat <- data.frame(uid=1:length(x),phase=x,inf=x,kk=x,kkt=x)
+## ## Incident couples
+## 10/23 in 1st interval (probably missing 40% loss to follow-up due to error, could really be  10/38)
+## 2/13 in 2nd
+## 1/7 in 3rd-4th (NOT SURE WHICH INTERVAL IT WAS, but let's make it 4th for now, since that keeps the denominator the same in both)
+inct <- data.frame(int = 1:4, n = c(23,13,7,7), i = c(10,2,0,1))
+wdat[1:10,-1] <- data.frame('inc',1, 1, NA)[rep(1,10),]
+wdat[11:12,-1] <- data.frame('inc',1, 2, NA)[rep(1,2),]
+wdat[13,-1] <- data.frame('inc',1, 3, NA)
+## Now who didn't seroconvert
+####
+## None only seen for one interval, but let's pretend that 23/.6 = 38 couples were actually
+## there. 38-10 = 28. Of 28, only 13 were seen in next interval. So somthing like 28-13 = 15 were
+## only seen -- to -+ and then lost thereafter
+wdat[14:28,-1] <- data.frame('inc',0, 1, NA)
+## 13-2 = 11, but only 7 followed in next interval. So 4 couples were only seen for 2 intervals
+wdat[29:32,-1] <- data.frame('inc',0, 2, NA)
+## 6 couples were then seen for (both?) the last two intervals & didn't go to ++
+wdat[33:38,-1] <- data.frame('inc',0, 4, NA)
+## ## Chronic couples
+## 14/161 in 1st
+## 9/129 in 2nd
+## 10/92 in 3rd
+## 3/45 in 4th
+prevt <- data.frame(int = 1:4, n = c(161,129,92,45), i = c(14,9,10,3))
+wdat[39:52,-1] <- data.frame('prev',1, 1, NA) #14 infected
+wdat[53:61,-1] <- data.frame('prev',1, 2, NA) #9 infected
+wdat[62:71,-1] <- data.frame('prev',1, 3, NA) #10 infected
+wdat[72:74,-1] <- data.frame('prev',1, 4, NA) #3 infected
+## uninfecteds
+wdat[75:92,-1] <- data.frame('prev',0, 1, NA) ## 161-14-129 = 18 only followed once
+wdat[93:120,-1] <- data.frame('prev',0, 2, NA) ## 129-9-92 = 28 only followed twice
+wdat[121:157,-1] <- data.frame('prev',0, 3, NA) ## 92-10-45 = 37 only followed thrice
+wdat[158:199,-1] <- data.frame('prev',0, 4, NA) ## 45-3 = 42 followed 4x
+## ## Late couples
+## 2/22 in 4th to last
+## 9/35 in 3rd to last, 35 - (22-2) = 15 new couples followed 
+## 8/31 in 2nd to last  31 - (35-9) = 5 new couples followed
+## 0/13 in last before death, 23 - 31 - 8 = 0 new couple followed (23 couples were available last interval but only 13 had the live partner followed up)
+## 19/51 total, though that's missing the 13, which would yield 64 late couples
+latet <- data.frame(int = 4:1, n = c(22,35,31,13), i = c(2,9,8,0))
