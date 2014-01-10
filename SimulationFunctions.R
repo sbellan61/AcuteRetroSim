@@ -209,21 +209,18 @@ cloop <- function(batch, dat, pars, breaks, vfreq, browse = F, death, acute.sc, 
         ## keep simulating until date of death > date of couple
         ## formation, i.e. condition on couple forming.
         finished <- FALSE
-        while(!finished) 
-          {
+        while(!finished) {          
             ## male before marriage: get bernoulli probability of infection in each month of sexual
             ## activity before marriage
             m.inf.bef <- rbinom(dat$tmar[ii] - dat$tms[ii],1, # hets: b,beh,gen
                                 prob = 1 - exp(-bmb*dat$m.het.hilo[ii]*dat$m.het.b[ii]*dat$m.het.beh[ii]*dat$m.het.gen[ii]*epicf[dat$tms[ii]:(dat$tmar[ii]-1), epic.ind.temp]))
-            if(sum(m.inf.bef)>0)            ## if he gets infected in 1 or more months
-              {
+            if(sum(m.inf.bef)>0) {            ## if he gets infected in 1 or more months
                 ## change serostatus to HIV+ & use earliest infection as date of infection. Then
                 ## figure out date of death from age-at-seroconversion dependent Weibull survival
                 ## times.
                 temp.mdoi <- dat$tms[ii] + min(which(m.inf.bef==1)) - 1 # date of infection
                 temp.mdod <- temp.mdoi + ageweib(dat$mage[ii] - (dat$tint[ii] - temp.mdoi), death = death) # date of death
-                if(temp.mdod > dat$tmar[ii]) # if death is after couple formation, set values & finished
-                  {
+                if(temp.mdod > dat$tmar[ii]) { # if death is after couple formation, set values & finished
                     dat$mser[ii] <- 1         # sero-positive
                     dat$mdoi[ii] <- temp.mdoi # dat$tms[ii] + min(which(m.inf.bef==1)) - 1
                     dat$mdod[ii] <- temp.mdod # mdoi[ii] + ageweib(dat$mage[ii] - (dat$tint[ii] - mdoi[ii]), death = death)
@@ -237,8 +234,7 @@ cloop <- function(batch, dat, pars, breaks, vfreq, browse = F, death, acute.sc, 
         ## keep simulting until date of death > date of couple
         ## formation, i.e. condition on couple forming.
         finished <- FALSE
-        while(!finished) 
-          {
+        while(!finished) {
             ## female before marriage: get bernoulli probability of
             ## infection in each month of sexual activity before
             ## marriage

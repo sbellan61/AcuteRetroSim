@@ -478,9 +478,6 @@ return(cp)
 ####################################################################################################
 ## 2) Unconditional probability of transmitting in a particular inteval
 ##############################
-## Need to integrate the conditional probability of 2ndary seroconversion (or not) in each interval
-## over all possible timing of index partner seroconversion in the first interval.
-
 ####################################################################################################
 ## Incident Couples: k = interval since -- (1st, 2nd, 3rd, 4th, etc..)
 ucp.inc.2 <- function(inct,dpars) {
@@ -500,15 +497,15 @@ ucp.inc.2 <- function(inct,dpars) {
 ##############################
 ## Prevalent Couples (assumed to be the same in all intervals)
 ##############################
-ucp.prev <- function(kk,inf,dpars) {  ## probability of seroconversion in interval k, given not in previous intervals
-  if(inf==1) ret <- cp.prev.k(dpars=dpars) * (1-cp.prev.k(dpars=dpars))^(kk-1)
-  if(inf==0) ret <- (1-cp.prev.k(dpars=dpars))^kk
-  return(as.numeric(ret))
+ucp.prev.2 <- function(prevt,dpars) { 
+    for(nm in names(dpars))      assign(nm, dpars[nm]) ## loading 'bp'
+    pp <- 1-exp(-bp*interv)
+    lls <- prevt$i * log(pp) + (prevt$n-prevt$i) * log(1-pp)
+    nll.prev <- -sum(lls)
+    return(nll.prev)
 }
-## Test code to make sure function is working right
-## ucp.prev(1,0) + ucp.prev(1,1)                ## should be 1
-## ucp.prev(2,1) + ucp.prev(2,0) - ucp.prev(1,0)  ## should be 0 (w/ rounding error)
-## ucp.prev(3,1) + ucp.prev(3,0) - ucp.prev(2,0)  ## should be 0 (w/ rounding error)
+
+
 ####################################################################################################
 ##############################
 ## Late Couples (assumed to be the same in all intervals)
@@ -533,10 +530,10 @@ ucp.lt.2 <- function(latet, dpars, browse=F) {
   }
   pps <- i1p
   #browser()
-  ll.lt <- latet$i[latet$int==1]*log(i1p) + (latet$n[latet$int==1]-latet$i[latet$int==1])*log(1-i1p)
+  #ll.lt <- latet$i[latet$int==1]*log(i1p) + (latet$n[latet$int==1]-latet$i[latet$int==1])*log(1-i1p)
   #print(i1p)
-  ucN <- 1-i1p
-  temp <- (latet$n[latet$int==1]-latet$i[latet$int==1])*log(1-i1p)
+  #ucN <- 1-i1p
+  #temp <- (latet$n[latet$int==1]-latet$i[latet$int==1])*log(1-i1p)
   for(vv in 2:(max.vis-1)) { # remaining intervals observed (2nd before death, 3rd, etc..)
     ## ivvp
     max.int <- min(10,max(0,(interv*vv-dpars['dur.aids'])))
@@ -548,23 +545,58 @@ ucp.lt.2 <- function(latet, dpars, browse=F) {
       ivvp <- try(integrate(Vectorize(cp.lt.k,'td'), lower=0, upper=max.int, kk=vv, dpars = dpars)$val / interv, silent=T)
       w.step <- w.step+1
     }
-    ucN <- ucN*(1-ivvp)
+    #ucN <- ucN*(1-ivvp)
     pps <- c(pps, ivvp)
     ## i1p^i1 * (1-i1p)^(n1-i1) etc...
-    ll.lt <- ll.lt + latet$i[latet$int==vv]*log(ivvp) + (latet$n[latet$int==vv]-latet$i[latet$int==vv])*log(1-ivvp)
-    temp <- temp + (latet$n[latet$int==1]-latet$i[latet$int==1])*log(1-ivvp)
+    #ll.lt <- ll.lt + latet$i[latet$int==vv]*log(ivvp) + (latet$n[latet$int==vv]-latet$i[latet$int==vv])*log(1-ivvp)
+    #temp <- temp + (latet$n[latet$int==1]-latet$i[latet$int==1])*log(1-ivvp)
   }
 #  browser()
   pps <- rev(pps) ## since 1st is last row in latet
-  lls <- latet$i * log(pps) + (latet$n-latet$i) * log(1-pps)
-  nll.lt <- -sum(lls)
+  ## !=0 indicing below is to avoid 0*log(0) returning NaN. Instead it
+  ## !should not be added in (0 events obesrved)
+  lls.inf <- latet$i[latet$i!=0] * log(pps[latet$i!=0]) # those infected
+  lls.ninf <- (latet$n-latet$i)[(latet$n-latet$i)!=0] * log(1-pps[(latet$n-latet$i)!=0]) # those uninfected
+  nll.lt <- -sum(lls.inf)-sum(lls.ninf)
   return(nll.lt)
 }
  
+
+hmod.to.wdat <- function(sim, excl.by.err = F) { ## turn simulation into Wawer style table
+    ## Excluding incident couples seen serodiscordant once & then never again as in Wawer 2005?
+    if(excl.by.err) sim <- sim[!sim$excl.by.err,]
+    ## early
+    inctab <- xtabs(~inf+kk, sim, subset=phase=='inc')
+    inct <- data.frame(int = 1, n = sum(sim$phase=='inc'), i = inctab[2,1])
+    for(ii in 2:ncol(inctab)) {
+        temp <- data.frame(int = ii,
+                           n =  inct$n[ii-1] - inct$i[ii-1],
+                           i = inctab[2,ii])
+        inct <- rbind(inct, temp)
+    }
+    ## prev
+    prevtab <- xtabs(~inf+kk, sim, subset=phase=='prev')
+    prevt <- data.frame(int = 1, n = sum(sim$phase=='prev'), i = prevtab[2,1])
+    for(ii in 2:ncol(prevtab)) {
+        temp <- data.frame(int = ii,
+                           n =  prevt$n[ii-1] - prevt$i[ii-1],
+                           i = prevtab[2,ii])
+        prevt <- rbind(prevt, temp)
+    }
+    ## late
+    latetab <- xtabs(~inf+kk, sim, subset=phase=='late')
+    latet <- data.frame(int = colnames(latetab)[-1], n = NA,i = latetab[2,-1])
+    latet$n[1] <- sum(sim$phase=='late')
+    for(ii in 2:nrow(latet)) {
+        latet$n[ii] <- latet$n[ii-1]-latet$i[ii-1]
+    }
+    latet <- latet[nrow(latet):1,]
+    return(list(inct=inct, prevt=prevt, latet= latet))
+}
+
 ####################################################################################################
 ## Calculate Hollingsworth et al. style likelihood
-holl.lik <- function(ldpars, rakll, # dpars has disease progression/infectiousnes parameters
-                     excl.by.err = F,         ## exclude {ss->mm/ff} couples as in Wawer?
+holl.lik <- function(ldpars, wtab, ## log-parms, Wawer Table 1 type tables
                      range.dur.ac = c(.25,10),     ## to give posterior (likelihood * prior), let everything have flat priors except dur.ac which we'll
                      ## make flat on [.25,10] months to keep things bounded
                      range.dur.lt = c(.5,36), ## flat bounded prior on late phase
@@ -574,25 +606,13 @@ holl.lik <- function(ldpars, rakll, # dpars has disease progression/infectiousne
     if(browse) browser()
     ## exponentiate ldpars
     dpars <- exp(ldpars)
-    ## Excluding incident couples seen serodiscordant once & then never again as in Wawer 2005?
-    if(excl.by.err) rakll <- rakll[!rakll$excl.by.err,]
-    wtab <- hmod.to.wdat(rakll)        # Get Wawer Table 1 type tables
     ## Incident Couples
     inc.nll <- ucp.inc.2(wtab$inct, dpars)
     if(verbose) print(inc.nll)
     ## Prevalent Couples
-    if(verbose) print('adding up prevalent nlls')
-    prev.kkinf <- xtabs(~kk + inf, data = rakll, subset = phase=='prev')
-    prev.nll <- 0
-    ## for prevalent couples observed jj intervals, calculate negative log likelihood of that
-    ## many couples seroconverting or not seroconverting in exactly that interval.
-    for(jj in 1:nrow(prev.kkinf)) { 
-      prev.nll <- prev.nll - prev.kkinf[jj,'0']*log(ucp.prev(jj,0, dpars=dpars)) -
-        prev.kkinf[jj,'1']*log(ucp.prev(jj,1, dpars=dpars))
-      if(verbose) print(prev.nll)
-    }
+    prev.nll <- ucp.prev.2(wtab$prevt, dpars)
+    if(verbose) print(prev.nll)    
     ## Late Couples
-    if(verbose) print('adding up late nlls')
     lt.nll <- ucp.lt.2(wtab$latet, dpars = dpars, browse=F)
     if(verbose) print(lt.nll)      
     nll <- inc.nll + prev.nll + lt.nll
@@ -612,6 +632,7 @@ holl.lik <- function(ldpars, rakll, # dpars has disease progression/infectiousne
 
 ## function to calculate attributable chronic-infection-months due to elevated acute phase infectivity
 arr <- function(ldp) as.numeric((exp(ldp['acute.sc'])-1)*exp(ldp['dur.ac']))
+
 
 ## Simulate dat using exactly Hollingsworth's model to make sure we're fitting it correctly
 holl.mod <- function(i.n = 50, p.n = 50, l.n = 50, interv = 10,  max.vis = 4, dpars, verbose=F, browse = F) {
@@ -676,42 +697,10 @@ holl.mod <- function(i.n = 50, p.n = 50, l.n = 50, interv = 10,  max.vis = 4, dp
   return(dat)
 }
 
-hmod.to.wdat <- function(sim) { ## turn simulation into Wawer style table
-  ## early
-  inctab <- xtabs(~inf+kk, sim, subset=phase=='inc')
-  inct <- data.frame(int = 1, n = sum(sim$phase=='inc'), i = inctab[2,1])
-  for(ii in 2:ncol(inctab)) {
-    temp <- data.frame(int = ii,
-                       n =  inct$n[ii-1] - inct$i[ii-1],
-                       i = inctab[2,ii])
-    inct <- rbind(inct, temp)
-  }
-  ## prev
-  prevtab <- xtabs(~inf+kk, sim, subset=phase=='prev')
-  prevt <- data.frame(int = 1, n = sum(sim$phase=='prev'), i = prevtab[2,1])
-  for(ii in 2:ncol(prevtab)) {
-    temp <- data.frame(int = ii,
-                       n =  prevt$n[ii-1] - prevt$i[ii-1],
-                       i = prevtab[2,ii])
-    prevt <- rbind(prevt, temp)
-  }
-  ## late
-  #browser()
-  latetab <- xtabs(~inf+kk, sim, subset=phase=='late')
-  latet <- data.frame(int = colnames(latetab)[-1], n = NA,i = latetab[2,-1])
-  latet$n[1] <- sum(sim$phase=='late')
-  for(ii in 2:nrow(latet)) {
-      latet$n[ii] <- latet$n[ii-1]-latet$i[ii-1]
-  }
-  latet <- latet[nrow(latet):1,]
-return(list(inct=inct, prevt=prevt, latet= latet))
-}
-
 ## Fit Hollingsworth model with MCMC
 ## MCMC SAMPLER
 hollsampler <- function(sd.props, inits,
-                        rakdat, excl.by.err,
-                        fixed = NULL, 
+                        wtab, fixed = NULL,
                         multiv = F, covar = NULL, # if multiv, sample from multivariate distribution (calculated during adaptive phase)
                         verbose = T, verbose2 = F, tell = 100, seed = 1, 
                         niter = 6*1000, nthin = 5, nburn = 1000, browse=F)
@@ -728,7 +717,7 @@ hollsampler <- function(sd.props, inits,
     }
     vv <- 2
     accept <- 0                  #track each parameters acceptance individually
-    lprob.cur <- holl.lik(pars, rakdat, excl.by.err = excl.by.err, verbose = F, browse = F)
+    lprob.cur <- holl.lik(pars, wtab, verbose = F, browse = F)
     out <- as.data.frame(c(pars, nll =lprob.cur))
     last.it <- 0
     start <- Sys.time()
@@ -752,11 +741,12 @@ hollsampler <- function(sd.props, inits,
         ## trace = T if in non-thinned iteration, or the previous one (in case of rejection)
         ## calculate proposal par log probability
         if(verbose2)    print(vv)
-        #if(vv==3311) browser()
-        lprob.prop <- holl.lik(pars.prop, rakdat, excl.by.err = excl.by.err, verbose = F, browse = F)
+        lprob.prop <- holl.lik(pars.prop, wtab, verbose = F, browse = F)
+        if(is.na(lprob.prop)) browser()
         if(verbose2) print(lprob.prop)
         ## holl.lik gives -log(L), so negative of that gives the log probability (assuming flat improper priors)
         lmh <- -lprob.prop + lprob.cur       # log Metropolis-Hastings ratio
+        if(is.na(lmh)) print(paste0('lmh=',lmh,', pars.prop=',pars.prop, ', vv=',vv,', seed=',seed))
         if(verbose2) print(lmh)
         ## if MHR >= 1 or a uniform random # in [0,1] is <= MHR, accept otherwise reject
         if(lmh >= 0 | runif(1,0,1) <= exp(lmh)) {
@@ -787,7 +777,7 @@ holl.init.fxn <- function(seed = 1) {
     ldpars
   }
 
-holl.wrp <- function(seed=1, sd.props, rakdat, excl.by.err, force.inits=NULL,
+holl.wrp <- function(seed=1, sd.props, wtab, force.inits=NULL,
                 multiv=F, covar=NULL, jit = .8,
                 verbose = T, verbose2 = F, tell = 50, browse = F,
                 niter, nthin, nburn)
@@ -798,7 +788,7 @@ holl.wrp <- function(seed=1, sd.props, rakdat, excl.by.err, force.inits=NULL,
     }else{
         inits.temp <- jitter(force.inits, a = jit)
     }
-    hollsampler(sd.props = sd.props, inits = inits.temp, rakdat = sim, excl.by.err = F,
+    hollsampler(sd.props = sd.props, inits = inits.temp, wtab = wtab,
                 multiv = multiv, covar = covar, 
                 verbose = verbose, verbose2 = verbose2, tell = tell, seed = seed, 
                 niter = niter, nthin = nthin, nburn = nburn, browse=browse)
@@ -806,7 +796,7 @@ holl.wrp <- function(seed=1, sd.props, rakdat, excl.by.err, force.inits=NULL,
 
 
 ## Plot posterior pairwise-correlations & histograms
-hollsbpairs <- function(posts, truepars = NULL, file.nm, width = 10, height = 10, show.lines = T,
+hollsbpairs <- function(posts, truepars = NULL, file.nm, width = 10, height = 10, show.lines = T, range0 = NULL,
                         cex = 1, col = "black", nrpoints = 200, do.pdf = F, do.jpeg = T, ranges = NULL,
                         cex.axis = 1.5, cex.nm = 2.5, greek = T, show.cis = T, browse = F)
   {
@@ -814,6 +804,7 @@ hollsbpairs <- function(posts, truepars = NULL, file.nm, width = 10, height = 10
     if(do.pdf) pdf(paste(file.nm, ".pdf", sep=""), width = width, height = height)
     if(do.jpeg) jpeg(paste(file.nm, ".jpeg", sep=""), width = width*100, height = height*100)
     if(length(ranges)==0)   ranges <- apply(rbind(posts,truepars), 2, range)
+    if(length(range0)>1) ranges[1,range0] <- 0
     cis <- apply(rbind(posts,truepars), 2, function(x) quantile(x, c(.025, .975)))
     par(mar=rep(3,4),oma=rep(2,4),mfrow=rep(ncol(posts),2))
     parnames <- colnames(posts)
@@ -841,7 +832,7 @@ hollsbpairs <- function(posts, truepars = NULL, file.nm, width = 10, height = 10
   }
 
 ## get posteriors in friendly data frame
-procpost <- function(d.out)
+procpost <- function(d.out, nll = F, nc = 12) # show nll?
     {
         mcmc.d.out <- list(NA)
         d.aratio <- 0
@@ -859,6 +850,7 @@ procpost <- function(d.out)
         d.aratio <- d.aratio/nc             # acceptance ratio
         print(paste("adaptive phase aratio is", round(d.aratio,2)))
         parnames <- names(ldpars)
+        if(nll) parnames <- c(parnames, 'nll')
         for(pp in parnames) assign(paste0(pp,'.vec'), unlist(mcmc.d.out[,pp])) ## pull out all chains into vectors
         for(pp in parnames) {
             if(pp==parnames[[1]]) {
@@ -867,54 +859,39 @@ procpost <- function(d.out)
                 posts <- cbind(posts, get(paste0(pp,'.vec')))
             }
         }
-        colnames(posts) <- parnames
+        posts <- as.data.frame(posts)
+        if(nll) colnames(posts) <- c(parnames,'nll') else colnames(posts) <- parnames
+        posts$atr.month.ac <- log((exp(posts$acute.sc)-1)*exp(posts$dur.ac))
+        posts$atr.month.lt <- log((exp(posts$late.sc)-1)*exp(posts$dur.lt))
+        if(nll) {
+            posts <- posts[,c('bp','atr.month.ac','acute.sc','dur.ac','atr.month.lt','late.sc','dur.lt','dur.aids','nll')]
+        }else{
+            posts <- posts[,c('bp','atr.month.ac','acute.sc','dur.ac','atr.month.lt','late.sc','dur.lt','dur.aids')] 
+        }
         return(list(posts = posts, mcmc.out=mcmc.d.out))
     }
 
 ####################################################################################################
 ## Real Wawer data
-#head(sim)
-
-## total 235 couples + 13 included pre-death + 15 excluded by error
-x <- rep(NA, 235+13+15)
-wdat <- data.frame(uid=1:length(x),phase=x,inf=x,kk=x,kkt=x)
-## ## Incident couples
+## Incident couples
 ## 10/23 in 1st interval (probably missing 40% loss to follow-up due to error, could really be  10/38)
 ## 2/13 in 2nd
 ## 1/7 in 3rd-4th (NOT SURE WHICH INTERVAL IT WAS, but let's make it 4th for now, since that keeps the denominator the same in both)
 inct <- data.frame(int = 1:4, n = c(23,13,7,7), i = c(10,2,0,1))
-wdat[1:10,-1] <- data.frame('inc',1, 1, NA)[rep(1,10),]
-wdat[11:12,-1] <- data.frame('inc',1, 2, NA)[rep(1,2),]
-wdat[13,-1] <- data.frame('inc',1, 3, NA)
-## Now who didn't seroconvert
-####
-## None only seen for one interval, but let's pretend that 23/.6 = 38 couples were actually
-## there. 38-10 = 28. Of 28, only 13 were seen in next interval. So somthing like 28-13 = 15 were
-## only seen -- to -+ and then lost thereafter
-wdat[14:28,-1] <- data.frame('inc',0, 1, NA)
-## 13-2 = 11, but only 7 followed in next interval. So 4 couples were only seen for 2 intervals
-wdat[29:32,-1] <- data.frame('inc',0, 2, NA)
-## 6 couples were then seen for (both?) the last two intervals & didn't go to ++
-wdat[33:38,-1] <- data.frame('inc',0, 4, NA)
-## ## Chronic couples
+inct.no.err <- data.frame(int = 1:4, n = c(round(23/.6),13,7,7), i = c(10,2,0,1))
+## Prevalent couples
 ## 14/161 in 1st
 ## 9/129 in 2nd
 ## 10/92 in 3rd
 ## 3/45 in 4th
 prevt <- data.frame(int = 1:4, n = c(161,129,92,45), i = c(14,9,10,3))
-wdat[39:52,-1] <- data.frame('prev',1, 1, NA) #14 infected
-wdat[53:61,-1] <- data.frame('prev',1, 2, NA) #9 infected
-wdat[62:71,-1] <- data.frame('prev',1, 3, NA) #10 infected
-wdat[72:74,-1] <- data.frame('prev',1, 4, NA) #3 infected
-## uninfecteds
-wdat[75:92,-1] <- data.frame('prev',0, 1, NA) ## 161-14-129 = 18 only followed once
-wdat[93:120,-1] <- data.frame('prev',0, 2, NA) ## 129-9-92 = 28 only followed twice
-wdat[121:157,-1] <- data.frame('prev',0, 3, NA) ## 92-10-45 = 37 only followed thrice
-wdat[158:199,-1] <- data.frame('prev',0, 4, NA) ## 45-3 = 42 followed 4x
-## ## Late couples
+## Late couples
 ## 2/22 in 4th to last
 ## 9/35 in 3rd to last, 35 - (22-2) = 15 new couples followed 
 ## 8/31 in 2nd to last  31 - (35-9) = 5 new couples followed
 ## 0/13 in last before death, 23 - 31 - 8 = 0 new couple followed (23 couples were available last interval but only 13 had the live partner followed up)
 ## 19/51 total, though that's missing the 13, which would yield 64 late couples
 latet <- data.frame(int = 4:1, n = c(22,35,31,13), i = c(2,9,8,0))
+wtab.rl <- list(inct=inct, prevt=prevt, latet=latet)
+wtab.rl.no.err <- list(inct=inct, prevt=prevt, latet=latet)
+
