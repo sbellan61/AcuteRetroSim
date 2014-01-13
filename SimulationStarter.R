@@ -13,9 +13,9 @@
 ## cluster), runs a simulation using functions from sim fxns3.R, and then saves the output in a
 ## specified directory structure
 #################################################################################################### 
-rm(list=ls())                           # clear workspace
+#rm(list=ls())                           # clear workspace
 
-#setwd('/home1/02413/sbellan/SDPSimulations/')     # setwd
+setwd('/home1/02413/sbellan/Rakai/SDPSimulations/')     # setwd
 args=(commandArgs(TRUE))                # load arguments from R CMD BATCH 
 if(length(args)>0)  {## Then cycle through each element of the list and evaluate the expressions.
     for(i in 1:length(args)) {
@@ -24,6 +24,7 @@ if(length(args)>0)  {## Then cycle through each element of the list and evaluate
 set.seed(seed)
 vfreq <- 200 ## how often to report on results
 source("SimulationFunctions.R")                   # load simulation functions from script
+source("RakFunctions.R") # load Rakai analysis simulation functions from script
 load("data files/copula sigmas.Rdata")  # multivariate copula covariance matrix for simulating couple pseudopopulations
 load("data files/epic.Rdata")     # infectious HIV prevalence
 ##  transmission parameters fit to DHS across the range of a acute phase relative hazards
@@ -147,3 +148,8 @@ tail(output$tss)                        # columns explained below
 ## infections by gender-route combination
 print(output$pars)                      # input parameters
 print(spars)                            # inputted hazards
+
+coh <- mak.coh(output$evout, output$ts, browse=F)
+
+save.image(temp)
+#load("results/RakAcute/Acute7/Uganda/Uganda-3125-321.Rdata")

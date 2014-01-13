@@ -746,7 +746,7 @@ hollsampler <- function(sd.props, inits,
         if(verbose2) print(lprob.prop)
         ## holl.lik gives -log(L), so negative of that gives the log probability (assuming flat improper priors)
         lmh <- -lprob.prop + lprob.cur       # log Metropolis-Hastings ratio
-        if(is.na(lmh)) print(paste0('lmh=',lmh,', pars.prop=',pars.prop, ', vv=',vv,', seed=',seed))
+        if(is.na(lmh)) print(paste0('lmh=',lmh,', pars.prop=',paste(exp(pars.prop), collapse=', '), ', vv=',vv,', seed=',seed))
         if(verbose2) print(lmh)
         ## if MHR >= 1 or a uniform random # in [0,1] is <= MHR, accept otherwise reject
         if(lmh >= 0 | runif(1,0,1) <= exp(lmh)) {
@@ -803,9 +803,9 @@ hollsbpairs <- function(posts, truepars = NULL, file.nm, width = 10, height = 10
     if(browse) browser()
     if(do.pdf) pdf(paste(file.nm, ".pdf", sep=""), width = width, height = height)
     if(do.jpeg) jpeg(paste(file.nm, ".jpeg", sep=""), width = width*100, height = height*100)
-    if(length(ranges)==0)   ranges <- apply(rbind(posts,truepars), 2, range)
+    if(length(ranges)==0)   ranges <- apply(rbind(posts,truepars), 2, function(x) range(x,na.rm=T))
     if(length(range0)>1) ranges[1,range0] <- 0
-    cis <- apply(rbind(posts,truepars), 2, function(x) quantile(x, c(.025, .975)))
+    cis <- apply(rbind(posts,truepars), 2, function(x) quantile(x, c(.025, .975), na.rm=T))
     par(mar=rep(3,4),oma=rep(2,4),mfrow=rep(ncol(posts),2))
     parnames <- colnames(posts)
     for(ii in 1:ncol(posts))
@@ -893,5 +893,5 @@ prevt <- data.frame(int = 1:4, n = c(161,129,92,45), i = c(14,9,10,3))
 ## 19/51 total, though that's missing the 13, which would yield 64 late couples
 latet <- data.frame(int = 4:1, n = c(22,35,31,13), i = c(2,9,8,0))
 wtab.rl <- list(inct=inct, prevt=prevt, latet=latet)
-wtab.rl.no.err <- list(inct=inct, prevt=prevt, latet=latet)
+wtab.rl.no.err <- list(inct=inct.no.err, prevt=prevt, latet=latet)
 

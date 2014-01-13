@@ -387,7 +387,7 @@ cloop <- function(batch, dat, pars, breaks, vfreq, browse = F, death, acute.sc, 
 ## ts: rows are months from 1900-2011, columns give # of couples in each serostatus/death/aged out state
 ## rakacRR: calcuates retrospective cohort style relative risk of acute phase infectiousness a la Rakai (see function below)
 ######################################################################
-ts.fxn <- function(dat, nc = 12, verbose = T, vfreq = 500, return.ts = F, browse = F, do.rak = T, start.rak = 1994, end.rak = 1999)
+ts.fxn <- function(dat, nc = 12, verbose = T, vfreq = 500, return.ts = F, browse = F, do.rak = T, start.rak = 1994, end.rak = 2011)
     {
         if(browse)  browser()
         start <- min(dat[,c("tms","tfs")])
@@ -1840,3 +1840,70 @@ discret <- function(dfun, range = c(0, 12*60),
     out$pp <- out$pp / sum(out$pp)      # normalize to 1
     return(out)
   }
+
+
+## convert serostates from psrun() to 4-variate couple serostatuses for fitting
+state.to.ser <- function(xx) {
+    xx <- as.character(xx)
+    xx[grepl('hh',xx)] <- 1
+    xx[grepl('mm',xx)] <- 2
+    xx[grepl('ff',xx)] <- 3
+    xx[grepl('ss',xx)] <- 4
+    xx <- factor(xx)
+    return(xx)
+}
+
+####################################################################################################
+## Create a cohort out of simulated data
+mak.coh <- function(dat, ts, start = 1997, end = 2012,
+                    nc = 12,
+                    interv = 12,
+                    ## ltf.prob = monthly probability of loss to follow-up, rr = +- or -+ vs -- or ++
+                    ltf.prob = NA, rr.ltf.ff = 1, rr.ltf.mm = 1, rr.ltf.hh = 1, rr.ltf.d = 0, # .d is ltf when dead
+                    browse = F)
+    {
+        if(browse) browser()
+################################################## 
+        ## find all couples observed within interval
+        sttmon <- (start-1900)*12       # start month in CMC
+        endmon <- (end-1900)*12         # end month in CMC
+        ## create cohort
+        ## each couple's observations are jittered in time (not all surveyed in the same month, this
+        ## is to make sure fitting can handle this issue
+        dat$start.jit <- sttmon+ceiling(runif(nrow(dat), 1,12))
+        breaks <- cut(1:nrow(dat), nc)
+        coh.ls <- mclapply(1:nc, coh.par, dat = dat, ts = ts,
+                           breaks = breaks, endmon=endmon, interv = interv) ## break down into parallel processing
+        coh <- list()
+        for(ii in 1:nc) coh <- append(coh, coh.ls[[ii]])      ## recombine into one list
+        coh[which(as.numeric(lapply(coh, nrow))==0)] <-  NULL
+        return(coh)
+    }
+
+## Process ts object into cohort list (for parallelization by mak.coh())
+coh.par <- function(batch, dat, ts, breaks, endmon, interv) {
+    dat <- dat[breaks==levels(breaks)[batch],]
+    ts <- ts[,breaks==levels(breaks)[batch]]    
+    coh <- list()
+    for(ii in 1:nrow(dat)) {
+        mm.temp <- seq(dat$start.jit[ii], endmon, by = interv)
+        mm.temp <- round(jitter(mm.temp, a = 2))
+        mm.temp <- mm.temp[!mm.temp>endmon]
+        state.temp <- ts[mm.temp, ii]
+        ser.temp <- state.to.ser(state.temp)
+        ## add LTF censoring later on
+        coh.ii <- data.frame(mm = mm.temp, ser = ser.temp, state = state.temp)
+        deathvis <- grepl('d.',coh.ii$state) ## only include the first visit at which a partner's dead, rest are redundant
+        if(sum(deathvis)>0) {
+            fdeathvis <- min(which(deathvis))
+            coh.ii <- coh.ii[1:fdeathvis,]
+        }
+        oldvis <- grepl('a.',coh.ii$state) | is.na(coh.ii$state)
+        coh.ii <- coh.ii[!oldvis,]
+        if(grepl('d.',coh.ii$state[1])) coh.ii <- coh.ii[NULL,] ## if the first observation is dead, remove it
+        coh[[paste0('c',dat$uid[ii])]] <- coh.ii
+        #coh <- append(coh, paste0('c',dat$uid[ii]) list(coh.ii))
+    }
+    return(coh)
+}
+

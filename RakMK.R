@@ -3,7 +3,7 @@
 ## to run on a cluster.
 ####################################################################################################
 #rm(list=ls())                                  # clear workspace
-#setwd('/home1/02413/sbellan/SDPSimulations/')     # setwd
+setwd('/home1/02413/sbellan/Rakai/SDPSimulations/')     # setwd
 load("data files/ds.nm.all.Rdata") # country names
 load('data files/pars.arr.ac.Rdata')    # load acute phase relative hazards used to fit (in.arr[,,2])
 #load('data files/CFJobsToDo.Rdata') ## for finishing up jobs from last run that didn't get finished due to cluster problems.
@@ -22,7 +22,7 @@ nc <- 12                                       # core per simulation
 ####################################################################################################
 countries <- 1:length(ds.nm)
 countries <- which(ds.nm=='Uganda')
-each.val <- 1000                          #  number of couples per couple formation (marital) cohort
+each.val <- 100                          #  number of couples per couple formation (marital) cohort
 counterf.betas <- F                       # change betas in counterfactuals? if not change beta_within & c's (so beta_within affects all routes)
 sub.betas <- F                           # substitute betas? if not beta_within & c's
 rtsc <- c(0, 1/10, 1/5, 1/2, 1, 2, 5, 10)  # transmission route scalars
