@@ -18,9 +18,9 @@ ageweib <- function(age, death = T)
 ##  Event-driven simulation function
 event.fn <- function(pars, dat, browse = F, # transmission coefficients to use for simulation, DHS couples data, debug
                      death = T, # have aids death in model?
-                     acute.sc = 26, # Acute to chronic phase relative hazard (2 months after infection)
-                     late.sc = 1, # Late to chronic phase relative hazard (20-11 months before death)
-                     aids.sc = 0, # AIDS to chronic phase relative hazard (2 months after infection) (10-0 months before death)
+                     acute.sc = 26, dur.ac = 2, # Acute to chronic phase relative hazard (2 months after infection)
+                     late.sc = 1, dur.lt = 9, # Late to chronic phase relative hazard (20-11 months before death)
+                     aids.sc = 0, dur.aids = 10,# AIDS to chronic phase relative hazard (2 months after infection) (10-0 months before death)
                      ##  route-specific heterogeneity
                      het.b = F, het.b.sd = 0, het.b.cor = 0, # pre-couple
                      het.e = F, het.e.sd = 0, het.e.cor = 0, # extra-couple
@@ -108,7 +108,10 @@ event.fn <- function(pars, dat, browse = F, # transmission coefficients to use f
     ## formation date strata since early couples will always take longest.
     breaks <- rep(1:nc, length.out = nrow(dat))
     ## Call couple loop function below in multicore
-    multi.out <- mclapply(1:nc, cloop, dat = dat, breaks = breaks, vfreq = vfreq, death = death, acute.sc = acute.sc, late.sc = late.sc, aids.sc = aids.sc,
+    multi.out <- mclapply(1:nc, cloop, dat = dat, breaks = breaks, vfreq = vfreq, death = death,
+                          acute.sc = acute.sc, dur.ac = dur.ac,
+                          late.sc = late.sc, dur.lt = dur.lt,
+                          aids.sc = aids.sc, dur.aids = dur.aids,
                           pars = hpars, browse=F)
     temp <- multi.out[[1]]    ## Combine mclapply output from each core back into data frame
     if(nc>1) {
@@ -186,7 +189,7 @@ event.fn <- function(pars, dat, browse = F, # transmission coefficients to use f
 ## couple loop for event.fn (to allow parallelization
 ## batch ii does couples in the range breaks[ii,1:2]
 ######################################################################
-cloop <- function(batch, dat, pars, breaks, vfreq, browse = F, death, acute.sc, late.sc, aids.sc = 0)
+cloop <- function(batch, dat, pars, breaks, vfreq, browse = F, death, acute.sc, dur.ac, late.sc, dur.lt, aids.sc = 0, dur.aids)
   {                                     
     set.seed(batch)                     # in case doing nonparametric inflation, we want each inflated couple to have different trajectories
     if(browse) browser()
@@ -271,40 +274,40 @@ cloop <- function(batch, dat, pars, breaks, vfreq, browse = F, death, acute.sc, 
                 ## bernoulli, c(male inf by part, female inf by part);
                 ## if(((tt - dat$mdoi[ii]) <= 2 & dat$mser[ii]) | ((tt - dat$fdoi[ii]) <= 2& dat$fser[ii])) browser()
                 ###################################################################### 
-                ## ACUTE phase scalars
+                ## LATE phase scalars from (dur.lt+dur.aids)-(dur.aids) months before death
                 if(dat$mser[ii]) {
-                    m.ac.sc <- ifelse((tt - dat$mdoi[ii]) <= 2, acute.sc, 1) # male acutely infected for 2 months after infection
-                  }else{
-                    m.ac.sc <- 1
-                  }
-                if(dat$fser[ii]) {
-                    f.ac.sc <- ifelse((tt - dat$fdoi[ii]) <= 2, acute.sc, 1) # female acutely infected for 2 months after infection
-                  }else{
-                    f.ac.sc <- 1
-                  }
-                ###################################################################### 
-                ## LATE phase scalars
-                if(dat$mser[ii]) {
-                    m.lt.sc <- ifelse(tt > (dat$mdod[ii] - 20) & tt <= (dat$mdod[ii] - 10), late.sc, 1) # male late-stage from 20-10 months before death
-                  }else{
+                    m.lt.sc <- ifelse(tt >= (dat$mdod[ii] - (dur.lt + dur.aids)) & tt < (dat$mdod[ii] - dur.aids), late.sc, 1) 
+                }else{
                     m.lt.sc <- 1
-                  }
+                }
                 if(dat$fser[ii]) {
-                    f.lt.sc <- ifelse(tt > (dat$fdod[ii] - 20) & tt <= (dat$fdod[ii] - 10), late.sc, 1) # female late-stage from 20-10 months before death
-                  }else{
-                    f.lt.sc <- 1
-                  }
+                    f.lt.sc <- ifelse(tt >= (dat$fdod[ii] - (dur.lt + dur.aids)) & tt < (dat$fdod[ii] - dur.aids), late.sc, 1)
+                }else{
+                        f.lt.sc <- 1
+                    }
                 ###################################################################### 
                 ## AIDS phase scalars
                 if(dat$mser[ii]) {
-                    m.aids.sc <- ifelse(tt > (dat$mdod[ii] - 10), aids.sc, 1) # male late-stage from 20-10 months before death
+                    m.aids.sc <- ifelse(tt >= (dat$mdod[ii] - dur.aids), aids.sc, 1) # male late-stage from 20-10 months before death
                   }else{
                     m.aids.sc <- 1
                   }
                 if(dat$fser[ii]) {
-                    f.aids.sc <- ifelse(tt > (dat$fdod[ii] - 10), aids.sc, 1) # female late-stage from 20-10 months before death
+                    f.aids.sc <- ifelse(tt >= (dat$fdod[ii] - dur.aids), aids.sc, 1) # female late-stage from 20-10 months before death
                   }else{
                     f.aids.sc <- 1
+                  }
+                ## ###################################################################### 
+                ## ACUTE phase scalars (done last so that acute scalars trumps early/late
+                if(dat$mser[ii]) {## male acutely infected for dur.ac months after infection
+                    m.ac.sc <- ifelse((tt - dat$mdoi[ii]) <= dur.ac, acute.sc, 1) 
+                  }else{
+                    m.ac.sc <- 1
+                  }
+                if(dat$fser[ii]) {## female acutely infected for dur.ac months after infection
+                    f.ac.sc <- ifelse((tt - dat$fdoi[ii]) <= dur.ac, acute.sc, 1) 
+                  }else{
+                    f.ac.sc <- 1
                   }
                 ## Bernoulli within-couple transmission probabilities in current month; hets: p, gen
                 temp.prob <- 1 - exp(-c(f.ac.sc*f.lt.sc*f.aids.sc*bmp*dat$m.het.hilo[ii]*dat$m.het.p[ii]*dat$m.het.gen[ii],
@@ -318,16 +321,16 @@ cloop <- function(batch, dat, pars, breaks, vfreq, browse = F, death, acute.sc, 
                     dat$mdod[ii] <- tt + ageweib(dat$mage[ii] - (dat$tint[ii] - tt), death = death)
                     dat$mcoi[ii] <- "p" # within-couple
                     ## track phase of infector
-                    if((tt - dat$fdoi[ii])<=2) {
+                    if((tt - dat$fdoi[ii])<=dur.ac) {
                         dat$mcoi.phase[ii] <- 'a' #acute
                       }else{
-                        if(tt <= (dat$fdod[ii] - 20)) {
+                        if(tt <= (dat$fdod[ii] - (dur.lt+dur.aids))) {
                             dat$mcoi.phase[ii] <- 'c' #chronic
                           }else{
-                            if(tt <= (dat$fdod[ii] - 10)) {
+                            if(tt <= (dat$fdod[ii] - dur.aids)) {
                                 dat$mcoi.phase[ii] <- 'l' #late
                               }else{
-                            if(tt > (dat$fdod[ii] - 10) & tt <= (dat$fdod[ii])) dat$mcoi.phase[ii] <- 'ad' #aids
+                            if(tt > (dat$fdod[ii] - dur.aids) & tt <= (dat$fdod[ii])) dat$mcoi.phase[ii] <- 'ad' #aids
                               }
                           }
                       }
@@ -338,16 +341,16 @@ cloop <- function(batch, dat, pars, breaks, vfreq, browse = F, death, acute.sc, 
                     dat$fdoi[ii] <- tt
                     dat$fdod[ii] <- tt + ageweib(dat$fage[ii] - (dat$tint[ii] - tt), death = death)
                     dat$fcoi[ii] <- "p" # within-couple
-                    if((tt - dat$mdoi[ii])<=2) {
+                    if((tt - dat$mdoi[ii])<=dur.ac) {
                         dat$fcoi.phase[ii] <- 'a' #acute
                       }else{
-                        if(tt <= (dat$mdod[ii] - 20)) {
+                        if(tt <= (dat$mdod[ii] - (dur.lt+dur.aids))) {
                             dat$fcoi.phase[ii] <- 'c' #chronic
                           }else{
-                            if(tt <= (dat$mdod[ii] - 10)) {
+                            if(tt <= (dat$mdod[ii] - dur.aids)) {
                                 dat$fcoi.phase[ii] <- 'l' #late
                               }else{
-                                if(tt > (dat$mdod[ii] - 10) & tt <= (dat$mdod[ii])) dat$fcoi.phase[ii] <- 'ad'
+                                if(tt > (dat$mdod[ii] - dur.aids) & tt <= (dat$mdod[ii])) dat$fcoi.phase[ii] <- 'ad'
                               }
                           }
                       }
@@ -788,7 +791,7 @@ psrun <- function(country, s.demog = NA, # country to simulate;  country whose r
                   return.ts = F,
                   ## sensitivity analyses
                   death = T,             #  include AIDS mortality?
-                  acute.sc, late.sc, aids.sc, #  relative hazards of HIV phases compared to chronic phase
+                  acute.sc, dur.ac, late.sc, dur.lt, aids.sc, dur.aids, #  relative hazards of HIV phases compared to chronic phase
                   ##  next three lines scale transmission coefficients by the following values (used
                   ## for counterfactual simulations where different routes are amplified or
                   ## diminished)
@@ -929,7 +932,10 @@ psrun <- function(country, s.demog = NA, # country to simulate;  country whose r
     cpars["bfp"] <- cpars["bfp"]*bfp.sc
   }
     ##  call event-driven simulation
-    evout <- event.fn(cpars, psdat, vfreq = 100, death = death, acute.sc = acute.sc, late.sc = late.sc, aids.sc = aids.sc, nc = nc,
+    evout <- event.fn(cpars, psdat, vfreq = 100, death = death, nc = nc,
+                      acute.sc = acute.sc, dur.ac = dur.ac,
+                      late.sc = late.sc, dur.lt = dur.lt,
+                      aids.sc = aids.sc, dur.aids = dur.aids, 
                       het.b = het.b, het.b.sd = het.b.sd, het.b.cor = het.b.cor,
                       het.e = het.e, het.e.sd = het.e.sd, het.e.cor = het.e.cor,
                       het.p = het.p, het.p.sd = het.p.sd, het.p.cor = het.p.cor, 
@@ -949,20 +955,21 @@ psrun <- function(country, s.demog = NA, # country to simulate;  country whose r
     ##  produce output list
     output <- list(jobnum = jobnum, simj = simj, evout = evout, tss = tss, ts = ts, hrout = hrout,
                    pars = c(bmb.sc = bmb.sc, bfb.sc = bfb.sc, bme.sc = bme.sc, bfe.sc = bfe.sc, bmp.sc = bmp.sc, bfp.sc = bfp.sc, 
-                     death = death, acute.sc = acute.sc, late.sc = late.sc, aids.sc = aids.sc,
-                     s.epic = s.epic, s.demog = s.demog,
-                     s.bmb = s.bmb, s.bfb = s.bfb,
-                     s.bme = s.bme, s.bfe = s.bfe,
-                     s.bmp = s.bmp, s.bfp = s.bfp,                     
-                     het.b = het.b, het.b.sd = het.b.sd, het.b.cor = het.b.cor,
-                     het.e = het.e, het.e.sd = het.e.sd, het.e.cor = het.e.cor,
-                     het.p = het.p, het.p.sd = het.p.sd, het.p.cor = het.p.cor, 
-                     het.gen = het.gen, het.gen.sd = het.gen.sd, het.gen.cor = het.gen.cor,
-                     het.beh = het.beh, het.beh.sd = het.beh.sd, het.beh.cor = het.beh.cor,
-                     hilo = hilo, phigh.m = phigh.m, phigh.f = phigh.f, rrhigh.m = rrhigh.m, rrhigh.f = rrhigh.f,
-                     group.ind = group.ind, infl.fac = infl.fac, maxN = maxN,
-                     psNonPar = psNonPar, last.int = F, sample.tmar = sample.tmar, tint = tint,
-                     hours = hours),
+                       death = death, acute.sc = acute.sc, dur.ac = dur.ac,
+                       late.sc = late.sc, dur.lt = dur.lt, aids.sc = aids.sc, dur.aids = dur.aids, 
+                       s.epic = s.epic, s.demog = s.demog,
+                       s.bmb = s.bmb, s.bfb = s.bfb,
+                       s.bme = s.bme, s.bfe = s.bfe,
+                       s.bmp = s.bmp, s.bfp = s.bfp,                     
+                       het.b = het.b, het.b.sd = het.b.sd, het.b.cor = het.b.cor,
+                       het.e = het.e, het.e.sd = het.e.sd, het.e.cor = het.e.cor,
+                       het.p = het.p, het.p.sd = het.p.sd, het.p.cor = het.p.cor, 
+                       het.gen = het.gen, het.gen.sd = het.gen.sd, het.gen.cor = het.gen.cor,
+                       het.beh = het.beh, het.beh.sd = het.beh.sd, het.beh.cor = het.beh.cor,
+                       hilo = hilo, phigh.m = phigh.m, phigh.f = phigh.f, rrhigh.m = rrhigh.m, rrhigh.f = rrhigh.f,
+                       group.ind = group.ind, infl.fac = infl.fac, maxN = maxN,
+                       psNonPar = psNonPar, last.int = F, sample.tmar = sample.tmar, tint = tint,
+                       hours = hours),
                    tmar = tmar, each = each) # these are vectors & so must be given separately
     sim.nm <- paste(ds.nm[country], "-", nrow(evout), '-', jobnum, sep = "") # name simulation results (country-#couples-jobum)
     ## create file name making sure not to save over old files
@@ -1874,9 +1881,10 @@ mak.coh <- function(dat, ts, start = 1997, end = 2012,
         breaks <- cut(1:nrow(dat), nc)
         coh.ls <- mclapply(1:nc, coh.par, dat = dat, ts = ts,
                            breaks = breaks, endmon=endmon, interv = interv) ## break down into parallel processing
-        coh <- list()
-        for(ii in 1:nc) coh <- append(coh, coh.ls[[ii]])      ## recombine into one list
-        coh[which(as.numeric(lapply(coh, nrow))==0)] <-  NULL
+        ## coh <- list()
+        ## for(ii in 1:nc) coh <- append(coh, coh.ls[[ii]])      ## recombine into one list
+        ## coh[which(as.numeric(lapply(coh, nrow))==0)] <-  NULL
+        for(ii in 1:nc)         if(ii==1) coh <- coh.ls[[1]]            else coh <- rbind(coh, coh.ls[[ii]])
         return(coh)
     }
 
@@ -1884,15 +1892,15 @@ mak.coh <- function(dat, ts, start = 1997, end = 2012,
 coh.par <- function(batch, dat, ts, breaks, endmon, interv) {
     dat <- dat[breaks==levels(breaks)[batch],]
     ts <- ts[,breaks==levels(breaks)[batch]]    
-    coh <- list()
+    #coh <- list()
     for(ii in 1:nrow(dat)) {
-        mm.temp <- seq(dat$start.jit[ii], endmon, by = interv)
-        mm.temp <- round(jitter(mm.temp, a = 2))
-        mm.temp <- mm.temp[!mm.temp>endmon]
-        state.temp <- ts[mm.temp, ii]
+        tt.temp <- seq(dat$start.jit[ii], endmon, by = interv)
+        tt.temp <- round(jitter(tt.temp, a = 2))
+        tt.temp <- tt.temp[!tt.temp>endmon]
+        state.temp <- ts[tt.temp, ii]
         ser.temp <- state.to.ser(state.temp)
         ## add LTF censoring later on
-        coh.ii <- data.frame(mm = mm.temp, ser = ser.temp, state = state.temp)
+        coh.ii <- data.frame(uid = dat$uid[ii], tt = tt.temp, ser = ser.temp, state = state.temp)
         deathvis <- grepl('d.',coh.ii$state) ## only include the first visit at which a partner's dead, rest are redundant
         if(sum(deathvis)>0) {
             fdeathvis <- min(which(deathvis))
@@ -1901,8 +1909,8 @@ coh.par <- function(batch, dat, ts, breaks, endmon, interv) {
         oldvis <- grepl('a.',coh.ii$state) | is.na(coh.ii$state)
         coh.ii <- coh.ii[!oldvis,]
         if(grepl('d.',coh.ii$state[1])) coh.ii <- coh.ii[NULL,] ## if the first observation is dead, remove it
-        coh[[paste0('c',dat$uid[ii])]] <- coh.ii
-        #coh <- append(coh, paste0('c',dat$uid[ii]) list(coh.ii))
+        #coh[[paste0('c',dat$uid[ii])]] <- coh.ii
+        if(ii==1) coh <- coh.ii else coh <- rbind(coh,coh.ii)
     }
     return(coh)
 }

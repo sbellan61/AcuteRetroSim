@@ -212,12 +212,21 @@ rak.coh.fxn <- function(ts, dat, interv = 10, max.vis = 5, start.rak, end.rak, #
  
 ####################################################################################################
 ## Wawer et al. style analysis of Rakai retrospective cohort
-rak.wawer <- function(rak.coh, verbose = F, browse = F)
-    {
+rak.wawer <- function(rak.coh, verbose = F, browse = F, excl.extram = T, excl.aclt) {
         if(browse) browser()
         ts.vm <- rak.coh$ts.rak
         dat.vm <- rak.coh$dat.rak
         interv <- rak.coh$interv
+        if(excl.extram) { ## Remove couples where 2nd partner was infected extra-couly
+            sel <- which(apply(ts.vm, 2, function(x) sum(grepl('hh',x))>0))
+            sel.m2e <- sel[dat.vm$mcoi[sel]=='e' & dat.vm$mdoi[sel] > dat.vm$fdoi[sel]] # male 2nd
+            sel.f2e <- sel[dat.vm$fcoi[sel]=='e' & dat.vm$fdoi[sel] > dat.vm$mdoi[sel]] # female 2nd
+            sel.b2e <- sel[dat.vm$mcoi[sel]=='e' & dat.vm$fcoi[sel]=='e' & dat.vm$mdoi[sel] == dat.vm$fdoi[sel]] # both same time
+            rem <- c(sel.m2e, sel.f2e, sel.b2e)
+            rem <- 1:nrow(dat.vm) %in% rem
+            dat.vm <- dat.vm[!rem,]
+            ts.vm <- ts.vm[,!rem]
+        }
         ncpl <- ncol(ts.vm)
         ## Calculate person-months at risk for second partner in each couple group.
         ## Create line list
@@ -251,7 +260,7 @@ rak.wawer <- function(rak.coh, verbose = F, browse = F)
         rakll$pm[inc.wh.nhh] <- apply(ts.vm[,inc.wh.nhh], 2, function(x) sum(grepl('mm',x) + grepl('ff',x))-1)*interv + interv/2
         ##################################################
         ## Chronic infections
-       ch.wh <- which(apply(ts.vm, 2, function(x) sum(grepl('ss',x) + grepl('d.',x))==0))
+       ch.wh <- which(apply(ts.vm, 2, function(x) { sum(grepl('ss',x) + grepl('d.',x))==0  | (sum(grepl('ss',x))==0 & sum(grepl('d\\.hh\\.m',x))>0 & sum(grepl('ff',x))>0) | (sum(grepl('ss',x))==0 & sum(grepl('d\\.hh\\.f',x))>0 & sum(grepl('mm',x))>0) }))
         rakll$phase[ch.wh] <- 'prev'
         ## those that became ++
        ch.wh.hh <- ch.wh[which(apply(ts.vm[,ch.wh], 2, function(x) sum(grepl('hh',x))>0))]
@@ -262,8 +271,8 @@ rak.wawer <- function(rak.coh, verbose = F, browse = F)
         ch.wh.nhh <- ch.wh[!ch.wh %in% ch.wh.hh]
         rakll$pm[ch.wh.nhh] <- apply(ts.vm[,ch.wh.nhh], 2, function(x) sum(grepl('mm',x) + grepl('ff',x))-1)*interv
         ##################################################
-        ## Late infections
-        lt.wh <- which(apply(ts.vm, 2, function(x) sum(grepl('d.',x))>0))
+        ## Late infections ## male death after male SDC, or vice versa
+        lt.wh <- which(apply(ts.vm, 2, function(x) {sum(grepl('d\\.mm',x) | grepl('d\\.ff',x)) > 0 | (sum(grepl('d\\.hh\\.m',x))>0 & sum(grepl('mm',x))>0) | (sum(grepl('d\\.hh\\.f',x))>0 & sum(grepl('ff',x))>0) } ))
         # **************************************************???
         ## What to do with couples that are both EARLY & LATE?? for now leave them as early only
         lt.wh <- lt.wh[!lt.wh %in% inc.wh]
@@ -346,22 +355,20 @@ rak.wawer <- function(rak.coh, verbose = F, browse = F)
         ## If uninfected or infected: kkt = all non-dead observations
         rakll$kkt[lt.wh] <- apply(ts.vm[,lt.wh], 2, function(x) sum(x %in%c('mm','ff','hh'), na.rm=T))
         ## If infected: k = last time SDC, kkt = all non-dead observations
-        rakll$kk[lt.wh.hh] <- apply(ts.vm[,lt.wh.hh], 2, function(x) min(which(grepl('d.',x))) - max(which(x %in% c('mm','ff'))))
+        rakll$kk[lt.wh.hh] <- apply(ts.vm[,lt.wh.hh], 2, function(x) min(which(grepl('d\\.',x))) - max(which(x %in% c('mm','ff'))))
         ## If uninfected: k = 0, because NA's screw up code later on, but this is meaningless
         rakll$kk[lt.wh.nhh] <- 0
         ## Check that calcultions are working
+        if(excl.aclt) { ## exclude couples where date of infection was close to date of death
+            sel <- (dat.vm$fdod - dat.vm$fdoi < max.vis*interv) | (dat.vm$fdod - dat.vm$fdoi < max.vis*interv)
+            rem.uids <- dat.vm$uid[sel]
+            rakll <- rakll[!rakll$uid %in% rem.uids,]            
+        }
+
         if(verbose) {rnd <- sample(lt.wh,10); print(ts.vm[,rnd]); print(rakll[rnd,])}
-        return(list(e.arh = e.arh, e.arh = e.arh.err, rakll = rakll))  
+        return(list(e.arh = e.arh, e.arh.err = e.arh.err, rakll = rakll))  
     }
 
-
-####################################################################################################
-## Hollingsworth et al. style analysis of Rakai retrospective cohort
-rak.holl <- function(rak.coh, incl.exl.by.err = F, browse = F)
-    {
-        if(browse) browser()
-
-    }
 
 ####################################################################################################
 ####################################################################################################
@@ -468,8 +475,7 @@ cp.lt.k <- function(td,kk,dpars) {
     } }
 #  if(abs(cp-cpi)>10^-10) browser() #stop('analytic integral error')
 return(cp)
-}
-  
+} 
 ## debug(ucp.lt)
 ## ucp.lt(kk = kk.temp, kkt=kkt.temp, inf = 1, dpars=dpars)
 ## debug(cp.lt.k)
@@ -512,7 +518,6 @@ ucp.prev.2 <- function(prevt,dpars) {
 ##############################
 ## probability of seroconversion in interval kk BEFORE death, given not in previous
 ## intervals, **when observed for a total of kkt intervals before death**
-
 ucp.lt.2 <- function(latet, dpars, browse=F) {
   for(nm in names(dpars))      assign(nm, dpars[nm]) ## loading 'bp'
   ## i1p
@@ -551,8 +556,8 @@ ucp.lt.2 <- function(latet, dpars, browse=F) {
     #ll.lt <- ll.lt + latet$i[latet$int==vv]*log(ivvp) + (latet$n[latet$int==vv]-latet$i[latet$int==vv])*log(1-ivvp)
     #temp <- temp + (latet$n[latet$int==1]-latet$i[latet$int==1])*log(1-ivvp)
   }
-#  browser()
   pps <- rev(pps) ## since 1st is last row in latet
+  pps <- pps[(max.vis-1):1 %in% latet$int] ## get rid of any where there were no individuals even observed
   ## !=0 indicing below is to avoid 0*log(0) returning NaN. Instead it
   ## !should not be added in (0 events obesrved)
   lls.inf <- latet$i[latet$i!=0] * log(pps[latet$i!=0]) # those infected
@@ -561,16 +566,19 @@ ucp.lt.2 <- function(latet, dpars, browse=F) {
   return(nll.lt)
 }
  
-
-hmod.to.wdat <- function(sim, excl.by.err = F) { ## turn simulation into Wawer style table
+ 
+## turn SB simulation into Wawer style table differs from above function because not all individuals
+## are follow-ed up for same number of visits
+sbmod.to.wdat <- function(sim, browse=F, excl.by.err = F) {    
     ## Excluding incident couples seen serodiscordant once & then never again as in Wawer 2005?
+    if(browse) browser()
     if(excl.by.err) sim <- sim[!sim$excl.by.err,]
     ## early
     inctab <- xtabs(~inf+kk, sim, subset=phase=='inc')
     inct <- data.frame(int = 1, n = sum(sim$phase=='inc'), i = inctab[2,1])
     for(ii in 2:ncol(inctab)) {
         temp <- data.frame(int = ii,
-                           n =  inct$n[ii-1] - inct$i[ii-1],
+                           n =  inct$n[ii-1] - inct$i[ii-1] - inctab[1,ii-1],
                            i = inctab[2,ii])
         inct <- rbind(inct, temp)
     }
@@ -579,18 +587,22 @@ hmod.to.wdat <- function(sim, excl.by.err = F) { ## turn simulation into Wawer s
     prevt <- data.frame(int = 1, n = sum(sim$phase=='prev'), i = prevtab[2,1])
     for(ii in 2:ncol(prevtab)) {
         temp <- data.frame(int = ii,
-                           n =  prevt$n[ii-1] - prevt$i[ii-1],
+                           n =  prevt$n[ii-1] - prevt$i[ii-1] - prevtab[1,ii-1],
                            i = prevtab[2,ii])
         prevt <- rbind(prevt, temp)
     }
-    ## late
+    ## late ** still need to fix **
     latetab <- xtabs(~inf+kk, sim, subset=phase=='late')
-    latet <- data.frame(int = colnames(latetab)[-1], n = NA,i = latetab[2,-1])
-    latet$n[1] <- sum(sim$phase=='late')
-    for(ii in 2:nrow(latet)) {
-        latet$n[ii] <- latet$n[ii-1]-latet$i[ii-1]
-    }
-    latet <- latet[nrow(latet):1,]
+    latet <- data.frame(int = max(sim$kkt, na.rm=T):1, n = 0, i = 0)
+    for(ii in 1:nrow(latet)) {
+        int <- latet$int[ii]
+        #wh.tm <- sim$phase=='late' & (sim$kkt == int | (sim$kkt>int & sim$kk<=int))
+        #print(head(sim[wh.tm,],20))
+            latet$n[latet$int==int] <- sum(sim$phase=='late' & (sim$kkt == int | (sim$kkt>int & sim$kk<=int)) )
+            latet$i[latet$int==int] <- sum(sim$phase=='late' & sim$kk==int)
+        }              
+    head(sim[sim$phase=='late',],10)
+    #latet <- latet[nrow(latet):1,]
     return(list(inct=inct, prevt=prevt, latet= latet))
 }
 
@@ -797,23 +809,21 @@ holl.wrp <- function(seed=1, sd.props, wtab, force.inits=NULL,
 
 ## Plot posterior pairwise-correlations & histograms
 hollsbpairs <- function(posts, truepars = NULL, file.nm, width = 10, height = 10, show.lines = T, range0 = NULL,
+                        inits.tp = NULL, # data frame of inits, columns matching posts
                         cex = 1, col = "black", nrpoints = 200, do.pdf = F, do.jpeg = T, ranges = NULL,
                         cex.axis = 1.5, cex.nm = 2.5, greek = T, show.cis = T, browse = F)
   {
     if(browse) browser()
     if(do.pdf) pdf(paste(file.nm, ".pdf", sep=""), width = width, height = height)
     if(do.jpeg) jpeg(paste(file.nm, ".jpeg", sep=""), width = width*100, height = height*100)
-    if(length(ranges)==0)   ranges <- apply(rbind(posts,truepars), 2, function(x) range(x,na.rm=T))
+    if(length(ranges)==0)   ranges <- apply(rbind(posts,truepars,inits.tp), 2, function(x) range(x,na.rm=T))
     if(length(range0)>1) ranges[1,range0] <- 0
     cis <- apply(rbind(posts,truepars), 2, function(x) quantile(x, c(.025, .975), na.rm=T))
     par(mar=rep(3,4),oma=rep(2,4),mfrow=rep(ncol(posts),2))
     parnames <- colnames(posts)
-    for(ii in 1:ncol(posts))
-      {
-        for(jj in 1:ncol(posts))
-          {
-            if(ii==jj)
-              {
+    for(ii in 1:ncol(posts)) {
+        for(jj in 1:ncol(posts)) {
+            if(ii==jj) {
                 hist(posts[,ii], breaks = 40, col = "black", main = "", xlab = "", ylab = "",
                      xlim = ranges[,ii], las = 2, cex.axis = cex.axis)
                 if(show.lines) abline(v=truepars[ii], col = "red", lwd = 3)
@@ -823,6 +833,7 @@ hollsbpairs <- function(posts, truepars = NULL, file.nm, width = 10, height = 10
                 smoothScatter(posts[,jj],posts[,ii], cex = cex, col = col, las = 2, cex.axis = cex.axis,
                               main = "", xlab = "", ylab = "", nrpoints = nrpoints,
                               xlim = ranges[,jj], ylim = ranges[,ii])
+                if(!is.null(inits.tp)) points(inits.tp[,jj], inits.tp[,ii], cex = 1, pch = 19, col = 'purple')
                 if(show.lines) abline(v=truepars[jj], col = "red", lwd = 2)
                 if(show.lines) abline(h=truepars[ii], col = "red", lwd = 2)              
               }
@@ -830,9 +841,9 @@ hollsbpairs <- function(posts, truepars = NULL, file.nm, width = 10, height = 10
       }
     if(do.pdf | do.jpeg) dev.off()
   }
-
+ 
 ## get posteriors in friendly data frame
-procpost <- function(d.out, nll = F, nc = 12) # show nll?
+procpost <- function(d.out, nll = F, nc = 12, to.plot=T, to.plot.exp=T, ldpars, dirnm, nm) # show nll?
     {
         mcmc.d.out <- list(NA)
         d.aratio <- 0
@@ -841,9 +852,9 @@ procpost <- function(d.out, nll = F, nc = 12) # show nll?
             mcmc.d.out[[ii]] <- as.mcmc(t(d.out[[ii]]$out))
             d.aratio <- d.aratio + d.out[[ii]]$aratio
             if(ii==1) { ## initialize
-                init.adapt <- d.out[[ii]]$inits
+                inits <- d.out[[ii]]$inits
             }else{ ## append
-                init.adapt <- rbind(init.adapt, d.out[[ii]]$inits)
+                inits <- rbind(inits, d.out[[ii]]$inits)
             }
         }
         mcmc.d.out <- mcmc.list(mcmc.d.out) # as mcmc.list
@@ -868,8 +879,36 @@ procpost <- function(d.out, nll = F, nc = 12) # show nll?
         }else{
             posts <- posts[,c('bp','atr.month.ac','acute.sc','dur.ac','atr.month.lt','late.sc','dur.lt','dur.aids')] 
         }
-        return(list(posts = posts, mcmc.out=mcmc.d.out))
+        ## Plotting
+        if(to.plot) {
+            parnames <- c('bp','acute.sc','dur.ac','late.sc','dur.lt','dur.aids')
+            hollsbpairs(posts[,parnames], truepars = ldpars[parnames], show.lines = T, ## plot posterior correlations after adaptive phase
+                        inits.tp = inits[,parnames], file.nm = file.path(dirnm, paste0(nm,' LOG')), width = 12, height = 12,
+                        cex = 1, col = "black", nrpoints = 100, do.jpeg = T, browse=F)
+            if(to.plot.exp) {
+                exposts <- posts
+                exposts[names(exposts)!='nll'] <- exp(posts[names(posts)!='nll'])
+                edpars <- exp(ldpars)
+                edpars <- c(edpars, atr.month.ac = as.numeric((edpars['acute.sc']-1)*edpars['dur.ac']),
+                            atr.month.lt = as.numeric((edpars['late.sc']-1)*edpars['dur.lt']))
+                einits <- exp(inits)
+                einits <- cbind(einits, atr.month.ac = as.numeric((einits[,'acute.sc']-1)*einits[,'dur.ac']),
+                                atr.month.lt = as.numeric((einits[,'late.sc']-1)*einits[,'dur.lt']))
+                tracenames <- c('bp','atr.month.ac','acute.sc','dur.ac','atr.month.lt','late.sc','dur.lt','dur.aids')
+                hollsbpairs(exposts[,tracenames], truepars = edpars[tracenames], show.lines = T, 
+                            inits.tp = einits[,tracenames], file.nm = file.path(dirnm, nm),
+                            width = 12, height = 12,
+                            cex = 1, col = "black", nrpoints = 100, do.jpeg = T, browse=F)
+            }}
+        sigma <- cov.wt(posts[,names(ldpars)])$cov ## posterior covariance matrix, then plot what proposal distr is gonna look like
+        gel <- gelman.diag(mcmc.d.out)
+        #print(paste0('gelman-rubin diagnostic:', gel
+        outtab <- rbind(apply(exposts[tracenames], 2, function(x) signif(quantile(x, c(.025, .5, .975),na.rm=T),3)),
+                        edpars[tracenames])
+        return(list(posts = posts, exposts = exposts[,tracenames], mcmc.out=mcmc.d.out, inits = inits, sigma = sigma, gel = gel,
+                    outtab = outtab))
     }
+
 
 ####################################################################################################
 ## Real Wawer data

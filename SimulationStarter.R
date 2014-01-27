@@ -148,8 +148,3 @@ tail(output$tss)                        # columns explained below
 ## infections by gender-route combination
 print(output$pars)                      # input parameters
 print(spars)                            # inputted hazards
-
-coh <- mak.coh(output$evout, output$ts, browse=F)
-
-save.image(temp)
-#load("results/RakAcute/Acute7/Uganda/Uganda-3125-321.Rdata")
