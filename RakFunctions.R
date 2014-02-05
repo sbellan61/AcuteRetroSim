@@ -132,31 +132,76 @@ empir.arh <- function(dat, ts, start.rak = 1994, end.rak = 1999, browse = F)
     }
 
 
+## Calculate hazards from a ts type object for observed person months 
+truehrs <- function(tst, evt, sl=NULL) {
+##  browser()
+  if(!is.null(sl)) {
+    tst <- tst[,sl] #cohsim$ts.rak.all
+    evt <- evt[sl,] ##cohsim$dat.rak
+  }
+  pms.ac <- sum(grepl('ac', as.vector(tst)))
+  infs.ac <- sum(apply(tst,2,function(x) sum(grepl('hh',x))>0) & (evt$mcoi.phase=='a' | evt$fcoi.phase=='a'), na.rm=T)
+  pms.ch <- sum(as.vector(tst) %in% c('mm','ff'))
+  infs.ch <- sum(apply(tst,2,function(x) sum(grepl('hh',x))>0) & (evt$mcoi.phase=='c' | evt$fcoi.phase=='c'), na.rm=T)
+  pms.lt <- sum(grepl('lt', as.vector(tst)))
+  infs.lt <- sum(apply(tst,2,function(x) sum(grepl('hh',x))>0) & (evt$mcoi.phase=='l' | evt$fcoi.phase=='l'), na.rm=T)
+  pms.aids <- sum(grepl('aids', as.vector(tst)))
+  infs.aids <- sum(apply(tst,2,function(x) sum(grepl('hh',x))>0) & (evt$mcoi.phase=='ad' | evt$fcoi.phase=='ad'), na.rm=T)
+  for(ph in c('ac','ch','lt','aids')) assign(paste0('hz.',ph),get(paste0('infs.',ph))/get(paste0('pms.',ph)))
+  hzs <- c(ac=hz.ac,ch=hz.ch, lt=hz.lt)
+  hrs <- c(ac = hz.ac/hz.ch, lt = hz.lt/hz.ch)
+  ehms <- c(ac = as.numeric((hz.ac/hz.ch-1)*dpars['dur.ac']),
+            lt = as.numeric((hz.lt/hz.ch-1)*dpars['dur.lt']),
+            ltaids = as.numeric((hz.lt/hz.ch-1)*dpars['dur.lt']  +   (hz.aids/hz.ch-1)*dpars['dur.aids']))
+  return(list(hzs=hzs, hrs = hrs, ehms = ehms))
+}
+
 ## create a retrospective cohort at interv monthly intervals from start.rak to end.rak, only keep
 ## couples that were observed more than once, and which were serodiscordant at some point during the
 ## observed time (they could go -- to ++ in one visit interval though).
-rak.coh.fxn <- function(ts, dat, interv = 10, max.vis = 5, start.rak, end.rak, ## interv is interval in months between visits
+rak.coh.fxn <- function(ts.ap, dat, interv = 10, max.vis = 5, start.rak, end.rak, ## interv is interval in months between visits
                         ## ltf.prob = monthly probability of loss to follow-up, rr = +- or -+ vs -- or ++
                         ltf.prob = NA, rr.ltf.ff = 1, rr.ltf.mm = 1, rr.ltf.hh = 1, rr.ltf.d = 0, # .d is ltf when dead
-                        browse = F) 
+                        verbose = F, browse = F) 
     {
         if(browse) browser()
+        sdcs <- c('mm','mm.ac','mm.lt','mm.aids','ff','ff.ac','ff.lt','ff.aids') #,'hh')
+        if(verbose)     {
+          print('EHMs from full simulation:')
+          sel <- apply(ts.ap, 2, function(x) { sum(x %in% sdcs)>0 } )
+          print(signif(truehrs(ts.ap[,sel], dat[sel,])$ehms,3))
+        }
         sttmon <- (start.rak-1900)*12       # start month in CMC
         endmon <- (end.rak-1900)*12         # end month in CMC
         ## Select all couples that were serodiscordant at some point during the cohort (don't have to worry about ss
         ## -> hh transition in one month, because in our model an individual cannot be infected & infect their
         ## partner in the same month)
-        sel <- apply(ts[sttmon:endmon,], 2, function(x) { sum(x %in% c('mm','ff','hh'))>0 } )
-        ts.sdc <- ts[,sel]
+        sel <- apply(ts.ap[sttmon:endmon,], 2, function(x) { sum(x %in% sdcs)>0 } )
+        ts.sdc <- ts.ap[,sel]
         dat.sdc <- dat[sel,]
         ## reduce data frame to visit months
-        vis.mon <- seq(sttmon, endmon, by = interv) 
+        vis.mon <- seq(sttmon, endmon, by = interv)
+        vis.mon.all <- min(vis.mon):max(vis.mon)
         ts.vm <- ts.sdc[vis.mon,]
+        ts.vm.all <- ts.sdc[vis.mon.all,]
+        row.names(ts.vm) <- vis.mon
+        row.names(ts.vm.all) <- vis.mon.all
         ## replace time points of couples with partners aged out of cohort with NA (>49 for f, >59 for m; note actual Rakai
         ## cohort is >59 for both, but we stick with DHS criteria, shouldn't make a difference)
-        ts.vm <- apply(ts.vm, 2, function(x) { x[grepl('a.',x)] <- NA; return(x) } )
+        ts.vm <- apply(ts.vm, 2, function(x) { x[grepl('a\\.',x)] <- NA; return(x) } )
+        ts.vm.all <- apply(ts.vm.all, 2, function(x) { x[grepl('a\\.',x)] <- NA; return(x) } )        
         ## replace pre-couple time points with NAs
-        ts.vm <- apply(ts.vm, 2, function(x) { x[grepl('b.',x)] <- NA; return(x) } )
+        ts.vm <- apply(ts.vm, 2, function(x) { x[grepl('b\\.',x)] <- NA; return(x) } )
+        ts.vm.all <- apply(ts.vm.all, 2, function(x) { x[grepl('b\\.',x)] <- NA; return(x) } )
+        ## Remove any couples with only NA's now
+        no.obs <- apply(ts.vm,2, function(x) sum(!is.na(x)))==0
+        dat.vm <- dat.sdc[!no.obs,]
+        ts.vm <- ts.vm[,!no.obs]
+        ts.vm.all <- ts.vm.all[,!no.obs]
+        if(verbose)     {
+          print(paste('EHMs after subsetting to SDCs from', start.rak, 'to', end.rak))
+          print(signif(truehrs(ts.vm.all, dat.vm)$ehms,3))
+        }
         ## Censor data for couples visited more than 5 times, (only 5 rounds were done in Rakai study, 40 months total)
         num.vis <- apply(ts.vm, 2, function(x) sum(!is.na(x)))
         ## number of visits each couple makes before being lost to follow-up
@@ -167,11 +212,14 @@ rak.coh.fxn <- function(ts, dat, interv = 10, max.vis = 5, start.rak, end.rak, #
             ltfp.ff <- 1 - exp(-rr.ltf.ff * ltf.rt * interv) ## probability of loss to follow up in each interval (ff)
             ltfp.hh <- 1 - exp(-rr.ltf.hh * ltf.rt * interv) ## probability of loss to follow up in each interval (hh)
             ltfp.d <- 1 - exp(-rr.ltf.d * ltf.rt * interv) ## probability of loss to follow up in each interval (hh)            
-            ## create ltfp matrix
+            ## create ltfp matrixo
             ltfps <- ts.vm
-            sers <- c('ss','mm','ff','hh')
-            for(ser in sers)        ltfps[which(ts.vm==ser, arr.ind=T)] <- get(paste0('ltfp.',ser))
-            ltfps[apply(ltfps, 2, function(x) grepl('d.', x))] <- ltfp.d
+            sers <- list('ss','mm','ff','hh')
+            sers.ap <- list(ss='ss', mm =c('mm','mm.ac','mm.lt','mm.aids'), ff = c('ff','ff.ac','ff.lt','ff.aids'), hh = 'hh')
+            for(ser in sers)        ltfps[which(ts.vm%in%sers.ap[[ser]], arr.ind=T)] <- get(paste0('ltfp.',ser))
+            ltfps[apply(ltfps, 2, function(x) grepl('d\\.', x))] <- ltfp.d
+            first.vis <- apply(ts.vm,2, function(x) min(which(!is.na(x))))
+            ltfps[cbind(first.vis,1:ncol(ltfps))] <- 0 ## do not censor first visit
             ## logical matrix of ltf censoring
             ltf.log <- apply(ltfps,2, function(x) { x <- as.numeric(x); x[!is.na(x)] <- rbinom(sum(!is.na(x)), 1, x[!is.na(x)]); return(x)})
             ## first censorship
@@ -191,183 +239,375 @@ rak.coh.fxn <- function(ts, dat, interv = 10, max.vis = 5, start.rak, end.rak, #
                 show.visits <- temp.visits[1:max.vis] # visits to show
                 ts.vm[! 1:nrow(ts.vm) %in% show.visits, ii] <- NA # censor others
             }
-        }           
+            vis.obs <- which(!is.na(ts.vm[,ii]))
+            obs.range <- range(rownames(ts.vm)[vis.obs])
+            unseen <- rownames(ts.vm.all) < obs.range[1] | rownames(ts.vm.all) > obs.range[2]
+            ts.vm.all[unseen,ii]<- NA
+          }
         ## now reduce cohort data frame to all couples that were observed serodiscordant at some
         ## point during the cohort, or that were observed -- and then ++ between visit intervals.
-        sel.coh <- apply(ts.vm, 2, function(x) { sum(x %in% c('mm','ff'), na.rm=T)>0 | (sum(x=='ss', na.rm=T)>0 & sum(x=='hh', na.rm=T)>0) } )
+        sel.coh <- apply(ts.vm, 2, function(x) { sum(x %in% sdcs, na.rm=T)>0 | (sum(x=='ss', na.rm=T)>0 & sum(x=='hh', na.rm=T)>0) } )
         ts.vm <- ts.vm[, sel.coh]
-        dat.vm <- dat.sdc[sel.coh,]
+        ts.vm.all <- ts.vm.all[, sel.coh]        
+        dat.vm <- dat.vm[sel.coh,]
+        if(verbose) {
+          print('EHMs after censoring due to LTF or max.vis:')
+          print(signif(truehrs(ts.vm.all, dat.vm)$ehms,3))
+        }
         ## remove any couples that were only observed once because of aging out
         nage <- colSums(!is.na(ts.vm))>1
         ts.vm <- ts.vm[,nage]
+        ts.vm.all <- ts.vm.all[,nage]        
         dat.vm <- dat.vm[nage,]
         ## remove any couples that were only observed once because of death (is.na clause makes sure to exclude pre-couple times)
-        death1 <- apply(ts.vm, 2, function(x) { sum(!grepl('d.',x) & !is.na(x)) ==1 })
+        death1 <- apply(ts.vm, 2, function(x) { sum(!grepl('d\\.',x) & !is.na(x)) ==1 })
         ts.vm <- ts.vm[,!death1]
-        dat.vm <- dat.vm[!death1,]      
+        ts.vm.all <- ts.vm.all[,!death1]        
+        dat.vm <- dat.vm[!death1,]
+        fvis <- apply(ts.vm, 2, function(x) min(which(!is.na(x))))
+        dat.vm$fvis.tt <- vis.mon[fvis] ## month in CMC of first survey as a couple with measured person-time at risk
+        rand <- sample(1:ncol(ts.vm),8)
+        ts.vm[,rand]
+        ts.vm.all[,rand]
         ## ts.vm[,sample(1:ncol(ts.vm),10)] # look at some couples
-        rak.coh <- list(dat.rak = dat.vm, ts.rak = ts.vm, interv = interv)
+        ## Select ts.vm.all
+        rak.coh <- list(dat.rak = dat.vm, ts.rak = ts.vm, ts.rak.all = ts.vm.all, interv = interv)
         return(rak.coh)
     }
- 
+
 ####################################################################################################
 ## Wawer et al. style analysis of Rakai retrospective cohort
-rak.wawer <- function(rak.coh, verbose = F, browse = F, excl.extram = T, excl.aclt) {
-        if(browse) browser()
-        ts.vm <- rak.coh$ts.rak
-        dat.vm <- rak.coh$dat.rak
-        interv <- rak.coh$interv
-        if(excl.extram) { ## Remove couples where 2nd partner was infected extra-couly
-            sel <- which(apply(ts.vm, 2, function(x) sum(grepl('hh',x))>0))
-            sel.m2e <- sel[dat.vm$mcoi[sel]=='e' & dat.vm$mdoi[sel] > dat.vm$fdoi[sel]] # male 2nd
-            sel.f2e <- sel[dat.vm$fcoi[sel]=='e' & dat.vm$fdoi[sel] > dat.vm$mdoi[sel]] # female 2nd
-            sel.b2e <- sel[dat.vm$mcoi[sel]=='e' & dat.vm$fcoi[sel]=='e' & dat.vm$mdoi[sel] == dat.vm$fdoi[sel]] # both same time
-            rem <- c(sel.m2e, sel.f2e, sel.b2e)
-            rem <- 1:nrow(dat.vm) %in% rem
-            dat.vm <- dat.vm[!rem,]
-            ts.vm <- ts.vm[,!rem]
-        }
-        ncpl <- ncol(ts.vm)
-        ## Calculate person-months at risk for second partner in each couple group.
-        ## Create line list
-        rakll <- data.frame(uid = dat.vm$uid, phase = NA, pm = NA, inf = 0, pm.trunc = NA, inf.trunc = NA, excl.by.err = F)
-        ## Excluded by error are couples that were observed during at least 2 visits, but with the
-        ## last observed visit being serodiscordant. Based on Wawer et al.'s methods description and
-        ## the fact that the exact same # of incident couples were followed for 1 interval as for 2
-        ## (indicating that they excluded any just followed for 1).      
-        first.obs <- apply(ts.vm, 2, function(x) min(which(!is.na(x))))
-        ##################################################
-        ## Incident infections
-        inc.wh <- which(apply(ts.vm, 2, function(x) sum(grepl('ss',x))>0))
-        rakll$phase[inc.wh] <- 'inc'
-        last.sus <- rep(NA, ncpl)
-        last.sus[inc.wh] <- apply(ts.vm[,inc.wh], 2, function(x) max(which(x=='ss')))
-        ## those that went to ++ at some point
-        inc.wh.hh <- inc.wh[which(apply(ts.vm[,inc.wh], 2, function(x) sum(grepl('hh',x))>0))]
-        rakll$inf[inc.wh.hh] <- 1
-        ## those that went -- to ++ in one interval
-        inc.wh.hh1 <- inc.wh[ts.vm[cbind(last.sus[inc.wh]+1,inc.wh)]=='hh'] 
-        rakll$pm[inc.wh.hh1] <- interv/4
-        ## those that went -- to ++ but not in one interval
-        inc.wh.hh2 <- inc.wh.hh[!inc.wh.hh %in% inc.wh.hh1]
-        rakll$pm[inc.wh.hh2] <- apply(ts.vm[,inc.wh.hh2], 2, function(x) sum(grepl('mm',x)) + sum(grepl('ff',x))) * interv
-        ## those that never went to ++
-        inc.wh.nhh <- inc.wh[!inc.wh %in% inc.wh.hh]
-        ## those that never went to ++ that were only observed SDC once and were consequently probably excluded from the Wawer study
-        inc.wh.nhh.exl.err <- inc.wh.nhh[apply(ts.vm[,inc.wh.nhh], 2, function(x) sum(grepl('mm',x) + grepl('ff',x))==1)]
-        rakll$excl.by.err[inc.wh.nhh.exl.err] <- T
-        ## person months = (# times observed SDC -1)*interv + interv/2
-        rakll$pm[inc.wh.nhh] <- apply(ts.vm[,inc.wh.nhh], 2, function(x) sum(grepl('mm',x) + grepl('ff',x))-1)*interv + interv/2
-        ##################################################
-        ## Chronic infections
-       ch.wh <- which(apply(ts.vm, 2, function(x) { sum(grepl('ss',x) + grepl('d.',x))==0  | (sum(grepl('ss',x))==0 & sum(grepl('d\\.hh\\.m',x))>0 & sum(grepl('ff',x))>0) | (sum(grepl('ss',x))==0 & sum(grepl('d\\.hh\\.f',x))>0 & sum(grepl('mm',x))>0) }))
-        rakll$phase[ch.wh] <- 'prev'
-        ## those that became ++
-       ch.wh.hh <- ch.wh[which(apply(ts.vm[,ch.wh], 2, function(x) sum(grepl('hh',x))>0))]
-        ##person months = (# times observed SDC -1)*interv + interv/2 for ++
-        rakll$pm[ch.wh.hh] <- apply(ts.vm[,ch.wh.hh], 2, function(x) sum(grepl('mm',x) + grepl('ff',x))-1)*interv + interv/2
-        rakll$inf[ch.wh.hh] <- 1
-        ## those that stayed +-
-        ch.wh.nhh <- ch.wh[!ch.wh %in% ch.wh.hh]
-        rakll$pm[ch.wh.nhh] <- apply(ts.vm[,ch.wh.nhh], 2, function(x) sum(grepl('mm',x) + grepl('ff',x))-1)*interv
-        ##################################################
-        ## Late infections ## male death after male SDC, or vice versa
-        lt.wh <- which(apply(ts.vm, 2, function(x) {sum(grepl('d\\.mm',x) | grepl('d\\.ff',x)) > 0 | (sum(grepl('d\\.hh\\.m',x))>0 & sum(grepl('mm',x))>0) | (sum(grepl('d\\.hh\\.f',x))>0 & sum(grepl('ff',x))>0) } ))
-        # **************************************************???
-        ## What to do with couples that are both EARLY & LATE?? for now leave them as early only
-        lt.wh <- lt.wh[!lt.wh %in% inc.wh]
-        rakll$phase[lt.wh] <- 'late'
-        ## those that became ++ and were seen ++ at a visit *including* if only first seen ++ at the first visit after a partner's death
-        lt.wh.hh <- lt.wh[which(apply(ts.vm[,lt.wh], 2, function(x) sum(grepl('hh',x) )>0))]
-        rakll$inf[lt.wh.hh] <- 1
-        rakll$pm[lt.wh.hh] <- apply(ts.vm[,lt.wh.hh], 2, function(x) sum(grepl('mm',x) + grepl('ff',x))-1)*interv + interv/2
-        ## those that stayed +- up until last visit
-        lt.wh.nhh <- lt.wh[!lt.wh %in% lt.wh.hh]
-        rakll$pm[lt.wh.nhh] <- apply(ts.vm[,lt.wh.nhh], 2, function(x) sum(grepl('mm',x) + grepl('ff',x))-1)*interv
-        rakll$phase <- factor(rakll$phase)
-        rakll$phase <- relevel(rakll$phase, ref = 'prev')
-        ##################################################
-        ## one final adjustment, Wawer compare hazards from first '5 months' post incident couples'
-        ## index partner's infection to the hazards in prevalent SDCs. So we need to truncate the
-        ## person-months observe in incident couples to 5 months for those observed for longer in
-        ## this analysis, and also need to exclude any infections that occurred after.
-        rakll$pm.trunc <- rakll$pm
-        rakll$pm.trunc[rakll$phase=='inc' & rakll$pm.trunc>interv/2] <- interv/2
-        rakll$inf.trunc <- rakll$inf
-        rakll$inf.trunc[inc.wh.hh2] <- 0
-        ####################################################################################################
-        ## Poisson Regression (ignoring any source of heterogeneity, i.e. no coital acts, GUD, age, etc)
-        ## assume coital acts are a function of person-months and use that as the offset
-        ## formul <- formula(inf.trunc ~ offset(pm.trunc) + phase)
-        ## mod <- glm(formul, family = poisson, data = rakll)
-        ## summary(mod)
-        ## exp(coef(mod))
-        ################################################## ***************
-        ## left off here, it's underestimating ARH & not running the Poisson regession... Try making
-        ## a better function of interv & max.vis, it should converge to empir.arh for small interv &
-        ## big max.vis
-        ####################################################################################################
-        ## empirical hazards
-        ehz.inc <- sum(rakll$inf.trunc[inc.wh]) / sum(rakll$pm.trunc[inc.wh])
-        ehz.ch <- sum(rakll$inf.trunc[ch.wh]) / sum(rakll$pm.trunc[ch.wh])
-        ehz.lt <- sum(rakll$inf.trunc[lt.wh]) / sum(rakll$pm.trunc[lt.wh])
-        ## empirical hazard ratio
-        e.arh <- ehz.inc/ehz.ch
-        e.arh
-        ## empirical hazards excluding couples only observed +- at one point (& excluded by error)
-        sel <- inc.wh[!inc.wh %in% which(rakll$excl.by.err)]
-        ehz.inc <- sum(rakll$inf.trunc[sel]) / sum(rakll$pm.trunc[sel])
-        sel <- ch.wh[!ch.wh %in% which(rakll$excl.by.err)]        
-        ehz.ch <- sum(rakll$inf.trunc[sel]) / sum(rakll$pm.trunc[sel])
-        sel <- lt.wh[!lt.wh %in% which(rakll$excl.by.err)]        
-        ehz.lt <- sum(rakll$inf.trunc[sel]) / sum(rakll$pm.trunc[sel])
-        ## empirical hazard ratio
-        e.arh.err <- ehz.inc/ehz.ch
-        e.arh.err
-        ##################################################
-        ## Add variables needed for Hollingsworth et al. style analysis     
-        rakll$kk <- NA ## intervals followed (or interval of infection for late couples)
-        rakll$kkt <- NA ## for late couples total intervals between first observation & index partner death
-        ##########
-        ## Incident Couples {ss->hh->hh} k=1; {ss->mm} k = 1; {ss->mm->mm} k =2; {ss->mm->hh->hh} k = 2:
-        ## If infected: All non-susceptible visits minus all ++ visits except one.
-        rakll$kk[inc.wh.hh] <- apply(ts.vm[,inc.wh.hh], 2, function(x) sum(x!='ss',na.rm=T) - (sum(x=='hh',na.rm=T)-1))
-        ## If uninfected:All non-susceptible visits.        
-        rakll$kk[inc.wh.nhh] <- apply(ts.vm[,inc.wh.nhh], 2, function(x) sum(x!='ss',na.rm=T))
-        ## Check that calcultions are working
-        if(verbose) {rnd <- sample(inc.wh,10); print(ts.vm[,rnd]); print(rakll[rnd,])}
-        ##########
-        ## Prevalent couples {mm->hh} k=1; {mm->hh->hh} k=1; {mm->mm->hh->hh} k = 2; {mm->mm->mm} k=2
-        ## If infected: All SDC visits
-        rakll$kk[ch.wh.hh] <- apply(ts.vm[,ch.wh.hh], 2, function(x) sum(x%in%c('mm','ff'), na.rm=T))
-        ## If uninfected: All SDC visits - 1
-        rakll$kk[ch.wh.nhh] <- apply(ts.vm[,ch.wh.nhh], 2, function(x) sum(x%in%c('mm','ff'), na.rm=T)) - 1
-        ## Check that calcultions are working
-        if(verbose) {rnd <- sample(ch.wh,10); print(ts.vm[,rnd]); print(rakll[rnd,])}
-        ##########
-        ## Late couples: more complicated because we have to account for both total follow-up
-        ## intervals & interval of infection (if second partner gets infected) which may not be the
-        ## same since we are also keeping track of time until index partner's death.
-        ## {mm->mm->hh->d.hh} k=2 (interval of infection), kkt=3 (intervals followed before death)
-        ## {mm->mm->mm->d.m} k=NA (no infection), kkt = 3
-        ## {mm->d.m} k=NA, kkt=1
-        ## {mm->mm->d.hh} k = 1 (last inteval before death), kkt=2
-        ## If uninfected or infected: kkt = all non-dead observations
-        rakll$kkt[lt.wh] <- apply(ts.vm[,lt.wh], 2, function(x) sum(x %in%c('mm','ff','hh'), na.rm=T))
-        ## If infected: k = last time SDC, kkt = all non-dead observations
-        rakll$kk[lt.wh.hh] <- apply(ts.vm[,lt.wh.hh], 2, function(x) min(which(grepl('d\\.',x))) - max(which(x %in% c('mm','ff'))))
-        ## If uninfected: k = 0, because NA's screw up code later on, but this is meaningless
-        rakll$kk[lt.wh.nhh] <- 0
-        ## Check that calcultions are working
-        if(excl.aclt) { ## exclude couples where date of infection was close to date of death
-            sel <- (dat.vm$fdod - dat.vm$fdoi < max.vis*interv) | (dat.vm$fdod - dat.vm$fdoi < max.vis*interv)
-            rem.uids <- dat.vm$uid[sel]
-            rakll <- rakll[!rakll$uid %in% rem.uids,]            
-        }
-
-        if(verbose) {rnd <- sample(lt.wh,10); print(ts.vm[,rnd]); print(rakll[rnd,])}
-        return(list(e.arh = e.arh, e.arh.err = e.arh.err, rakll = rakll))  
+rak.wawer <- function(rak.coh, verbose = F, verbose2=F, browse = F, excl.extram = T, decont=F, start.rak, het.gen.sd) {
+  if(browse) browser()
+  ts.vm <- rak.coh$ts.rak
+  ts.vm.all <- rak.coh$ts.rak.all
+  dat.vm <- rak.coh$dat.rak
+  if(verbose) {
+    print('EHMs as inputted:')
+    print(signif(truehrs(ts.vm.all, dat.vm)$ehms,3))
+  }
+  interv <- rak.coh$interv
+  rm(rak.coh) ## to release memory
+  if(excl.extram) { ## Remove couples where 2nd partner was infected extra-couly
+    sel <- which(apply(ts.vm, 2, function(x) sum(grepl('hh',x))>0))
+    sel.m2e <- sel[dat.vm$mcoi[sel]=='e' & dat.vm$mdoi[sel] > dat.vm$fdoi[sel]] # male 2nd
+    sel.f2e <- sel[dat.vm$fcoi[sel]=='e' & dat.vm$fdoi[sel] > dat.vm$mdoi[sel]] # female 2nd
+    sel.b2e <- sel[dat.vm$mcoi[sel]=='e' & dat.vm$fcoi[sel]=='e' & dat.vm$mdoi[sel] == dat.vm$fdoi[sel]] # both same time
+    rem <- c(sel.m2e, sel.f2e, sel.b2e)
+    rem <- 1:nrow(dat.vm) %in% rem
+    dat.vm <- dat.vm[!rem,]
+    ts.vm <- ts.vm[,!rem]
+    ts.vm.all <- ts.vm.all[,!rem]
+    if(verbose) {
+      print('EHMs after excluding couples with 2nd partner infected extra-couply:')
+      print(signif(truehrs(ts.vm.all, dat.vm)$ehms,3))
     }
+  }
+  ncpl <- ncol(ts.vm)
+  ## Calculate person-months at risk for second partner in each couple group.
+  ## Create line list
+  sdcs <- c('mm','mm.ac','mm.lt','mm.aids','ff','ff.ac','ff.lt','ff.aids')
+  sers.ap <- list(ss='ss', mm =c('mm','mm.ac','mm.lt','mm.aids'), ff = c('ff','ff.ac','ff.lt','ff.aids'), hh = 'hh')
+  make.rakll <- function(dat.vm, ts.vm) {
+    rakll <- data.frame(uid = dat.vm$uid, phase = NA, pm = NA, inf = 0, pm.trunc = NA, inf.trunc = NA, excl.by.err = F,
+                        mcoi = dat.vm$mcoi, fcoi = dat.vm$fcoi, mcoi.phase = dat.vm$mcoi.phase, fcoi.phase = dat.vm$fcoi.phase,
+                        secp = NA, secp.lhet = NA, secp.age = NA, indp.age = NA, mardur = NA)  ## second partner infected
+    secp.m <- which(dat.vm$mdoi>dat.vm$fdoi | is.na(dat.vm$mdoi))
+    secp.f <- which(dat.vm$mdoi<dat.vm$fdoi | is.na(dat.vm$fdoi))
+    rakll$secp[secp.m] <- 'm'
+    rakll$secp[secp.f] <- 'f'
+    rakll$secp.lhet[secp.m] <- log(dat.vm$m.het.gen[secp.m])
+    rakll$secp.lhet[secp.f] <- log(dat.vm$f.het.gen[secp.f])
+    ## age of secondary partner at first interval followed in cohort study
+    rakll$secp.age[secp.m] <- with(dat.vm, mage[secp.m] - (tint[secp.m] - fvis.tt[secp.m]))
+    rakll$secp.age[secp.f] <- with(dat.vm, fage[secp.f] - (tint[secp.f] - fvis.tt[secp.f]))
+    ## age of index partner at first interval followed in cohort study
+    rakll$indp.age[secp.m] <- with(dat.vm, fage[secp.m] - (tint[secp.m] - fvis.tt[secp.m]))
+    rakll$indp.age[secp.f] <- with(dat.vm, mage[secp.f] - (tint[secp.f] - fvis.tt[secp.f]))
+    ## partnership duration at first interval followed up
+    rakll$mardur <- with(dat.vm, mardur.mon - (tint-fvis.tt))
+    ## Excluded by error are couples that were observed during at least 2 visits, but with the
+    ## last observed visit being serodiscordant. Based on Wawer et al.'s methods description and
+    ## the fact that the exact same # of incident couples were followed for 1 interval as for 2
+    ## (indicating that they excluded any just followed for 1).      
+##################################################
+    ## Incident infections
+    inc.wh <- which(apply(ts.vm, 2, function(x) sum(grepl('ss',x))>0))
+    rakll$phase[inc.wh] <- 'inc'
+    last.sus <- rep(NA, ncpl)
+    last.sus[inc.wh] <- apply(ts.vm[,inc.wh], 2, function(x) max(which(x=='ss')))
+    ## those that went to ++ at some point
+    inc.wh.hh <- inc.wh[which(apply(ts.vm[,inc.wh], 2, function(x) sum(grepl('hh',x))>0))]
+    rakll$inf[inc.wh.hh] <- 1
+    ## those that went -- to ++ in one interval
+    inc.wh.hh1 <- inc.wh[ts.vm[cbind(last.sus[inc.wh]+1,inc.wh)]=='hh'] 
+    rakll$pm[inc.wh.hh1] <- interv/4
+    ## those that went -- to ++ but not in one interval
+    inc.wh.hh2 <- inc.wh.hh[!inc.wh.hh %in% inc.wh.hh1]
+    rakll$pm[inc.wh.hh2] <- apply(ts.vm[,inc.wh.hh2], 2, function(x) sum(x %in% sdcs)) * interv
+    ## those that never went to ++
+    inc.wh.nhh <- inc.wh[!inc.wh %in% inc.wh.hh]
+    ## those that never went to ++ that were only observed SDC once and were consequently probably excluded from the Wawer study
+    inc.wh.nhh.exl.err <- inc.wh.nhh[apply(ts.vm[,inc.wh.nhh], 2, function(x) sum(x %in% sdcs)==1)]
+    rakll$excl.by.err[inc.wh.nhh.exl.err] <- T
+    ## person months = (# times observed SDC -1)*interv + interv/2
+    rakll$pm[inc.wh.nhh] <- apply(ts.vm[,inc.wh.nhh], 2, function(x) sum(x %in% sdcs)-1)*interv + interv/2
+##################################################
+    ## Chronic infections
+    ch.wh <- which(apply(ts.vm, 2, function(x) { sum(grepl('ss',x) + grepl('d\\.',x))==0  | (sum(grepl('ss',x))==0 & sum(grepl('d\\.hh\\.m',x))>0 & sum(x %in% sers.ap$ff)>0) | (sum(grepl('ss',x))==0 & sum(grepl('d\\.hh\\.f',x))>0 & sum(x %in% sers.ap$mm)>0) }))
+    rakll$phase[ch.wh] <- 'prev'
+    ## those that became ++
+    ch.wh.hh <- ch.wh[which(apply(ts.vm[,ch.wh], 2, function(x) sum(grepl('hh',x))>0))]
+    ##person months = (# times observed SDC -1)*interv + interv/2 for ++
+    rakll$pm[ch.wh.hh] <- apply(ts.vm[,ch.wh.hh], 2, function(x) sum(x %in% sdcs)-1)*interv + interv/2
+    rakll$inf[ch.wh.hh] <- 1
+    ## those that stayed +-
+    ch.wh.nhh <- ch.wh[!ch.wh %in% ch.wh.hh]
+    rakll$pm[ch.wh.nhh] <- apply(ts.vm[,ch.wh.nhh], 2, function(x) sum(x %in% sdcs)-1)*interv
+##################################################
+    ## Late infections ## male death after male SDC, or vice versa
+    lt.wh <- which(apply(ts.vm, 2, function(x) {sum(grepl('d\\.mm',x) | grepl('d\\.ff',x)) > 0 | (sum(grepl('d\\.hh\\.m',x))>0 & sum(x %in% sers.ap$mm)>0) | (sum(grepl('d\\.hh\\.f',x))>0 & sum(x %in% sers.ap$ff)>0) } ))
+    ## **************************************************???
+    ## What to do with couples that are both EARLY & LATE?? for now leave them as early only
+    lt.inc.wh <- lt.wh[lt.wh %in% inc.wh]
+    print(paste(length(lt.inc.wh), 'couples were classified as both early & late. We keep them as early for the analysis, though if decont=T, they are completey excluded later'))
+    lt.wh <- lt.wh[!lt.wh %in% lt.inc.wh]
+    rakll$phase[lt.wh] <- 'late'
+    ## those that became ++ and were seen ++ at a visit *including* if only first seen ++ at the first visit after a partner's death
+    lt.wh.hh <- lt.wh[which(apply(ts.vm[,lt.wh], 2, function(x) sum(grepl('hh',x) )>0))]
+    rakll$inf[lt.wh.hh] <- 1
+    rakll$pm[lt.wh.hh] <- apply(ts.vm[,lt.wh.hh], 2, function(x) sum(x %in% sdcs)-1)*interv + interv/2
+    ## those that stayed +- up until last visit
+    lt.wh.nhh <- lt.wh[!lt.wh %in% lt.wh.hh]
+    rakll$pm[lt.wh.nhh] <- apply(ts.vm[,lt.wh.nhh], 2, function(x) sum(x %in% sdcs))*interv
+    rakll$phase <- factor(rakll$phase)
+    rakll$phase <- relevel(rakll$phase, ref = 'prev')
+##################################################
+    ## one final adjustment, Wawer compare hazards from first '5 months' post incident couples'
+    ## index partner's infection to the hazards in prevalent SDCs. So we need to truncate the
+    ## person-months observe in incident couples to 5 months for those observed for longer in
+    ## this analysis, and also need to exclude any infections that occurred after.
+    ##
+    rakll$pm.trunc <- rakll$pm
+    rakll$pm.trunc[rakll$phase=='inc' & rakll$pm.trunc>interv/2] <- interv/2
+    rakll$inf.trunc <- rakll$inf
+    rakll$inf.trunc[inc.wh.hh2] <- 0
+    ## For late couples, they excluded any interval right before death in calculations, only
+    ## analyzing the 2nd & 3rd intervals before death (also ignoring the 4th) so subtract interv
+    ## person-months from these
+    rakll$pm.trunc[rakll$phase=='late' & rakll$inf.trunc==0] <- rakll$pm.trunc[rakll$phase=='late' & rakll$inf.trunc==0] - interv
+    ## ##################################################################################################
+    ## Add variables needed for Hollingsworth et al. style analysis
+    ## ##################################################################################################
+    rakll$kk <- NA ## intervals followed (or interval of infection for late couples)
+    rakll$kkt <- NA ## for late couples total intervals between first observation & index partner death
+    ## ########
+    ## Incident Couples {ss->hh->hh} k=1; {ss->mm} k = 1; {ss->mm->mm} k =2; {ss->mm->hh->hh} k = 2:
+    ## If infected: All non-susceptible visits minus all ++ visits except one.
+    rakll$kk[inc.wh.hh] <- apply(ts.vm[,inc.wh.hh], 2, function(x) sum(x!='ss',na.rm=T) - (sum(x=='hh',na.rm=T)-1))
+    ## If uninfected:All non-susceptible visits.        
+    rakll$kk[inc.wh.nhh] <- apply(ts.vm[,inc.wh.nhh], 2, function(x) sum(x!='ss',na.rm=T))
+    ## Check that calcultions are working
+    if(verbose2) {rnd <- sample(inc.wh,10); print(ts.vm[,rnd]); print(rakll[rnd,])}
+    ## ########
+    ## Prevalent couples {mm->hh} k=1; {mm->hh->hh} k=1; {mm->mm->hh->hh} k = 2; {mm->mm->mm} k=2
+    ## If infected: All SDC visits
+    rakll$kk[ch.wh.hh] <- apply(ts.vm[,ch.wh.hh], 2, function(x) sum(x%in%sdcs, na.rm=T))
+    ## If uninfected: All SDC visits - 1
+    rakll$kk[ch.wh.nhh] <- apply(ts.vm[,ch.wh.nhh], 2, function(x) sum(x%in%sdcs, na.rm=T)) - 1
+    ## Check that calcultions are working
+    if(verbose2) {rnd <- sample(ch.wh,10); print(ts.vm[,rnd]); print(rakll[rnd,])}
+    ## ########
+    ## Late couples: more complicated because we have to account for both total follow-up
+    ## intervals & interval of infection (if second partner gets infected) which may not be the
+    ## same since we are also keeping track of time until index partner's death.
+    ## {mm->mm->hh->d.hh} k=2 (interval of infection), kkt=3 (intervals followed before death)
+    ## {mm->mm->mm->d.m} k=NA (no infection), kkt = 3
+    ## {mm->d.m} k=NA, kkt=1
+    ## {mm->mm->d.hh} k = 1 (last inteval before death), kkt=2
+    rakll$kkt[lt.wh] <- apply(ts.vm[,lt.wh], 2, function(x) sum(x %in%c(sdcs,'hh'), na.rm=T))
+    ## If infected: k = last time SDC, kkt = all non-dead observations
+    rakll$kk[lt.wh.hh] <- apply(ts.vm[,lt.wh.hh], 2, function(x) min(which(grepl('d\\.',x))) - max(which(x %in% sdcs)))
+    ## If uninfected: k = 0, because NA's screw up code later on, but this is meaningless
+    rakll$kk[lt.wh.nhh] <- 0
+    ## If uninfected or infected: kkt = all non-dead observations
+    ## remove first interval of observation for all individuals watched all 4 intervals
+    ## before death (a la Wawer's 6-25 month assumption in Table 2)
+    lt.wh.log <- 1:nrow(rakll) %in% lt.wh
+    rakll$pm.trunc[lt.wh.log & rakll$kkt==4] <- rakll$pm.trunc[lt.wh.log & rakll$kkt==4] - interv
+    ## remove individuals infected in that 4th interval before death
+    lt.wh.hh.log <- 1:nrow(rakll) %in% lt.wh.hh
+    rakll$inf.trunc[lt.wh.hh.log & rakll$kk==4] <- 0
+    return(list(rakll=rakll, inc.wh=inc.wh, inc.wh.hh=inc.wh.hh, inc.wh.nhh=inc.wh.nhh,
+                ch.wh=ch.wh, ch.wh.hh=ch.wh.hh, ch.wh.nhh=ch.wh.nhh,
+                lt.wh=lt.wh, lt.wh.hh=lt.wh.hh, lt.wh.nhh=lt.wh.nhh))
+  }
+  rakllout <- make.rakll(dat.vm = dat.vm, ts.vm = ts.vm)
+  ## ##################################################################################################
+  ## Look at contamination between phases
+  if(decont) { ## remove couples that are in wrong grouping (e.g. prevalent  couples with person-time spent in acute/late/aids phase)
+    contam <- with(rakllout, {
+      ## rand <- sample(1:ncol(ts.vm),8)
+      ## ts.vm[,rand]
+      inc.contam <- inc.wh[which(apply(ts.vm.all[,inc.wh], 2, function(x) sum(grepl('lt',x) | grepl('aids',x))>0))]
+      ch.contam.inc <- ch.wh[which(apply(ts.vm.all[,ch.wh], 2, function(x) sum(grepl('ac',x))>0))]
+      ch.contam.lt <- ch.wh[which(apply(ts.vm.all[,ch.wh], 2, function(x) sum(grepl('lt',x) | grepl('aids',x))>0))]
+      ch.contam <- unique(c(ch.contam.inc, ch.contam.lt))
+      lt.contam <- lt.wh[which(apply(ts.vm.all[,lt.wh], 2, function(x) sum(grepl('ac',x))>0))]
+      ## ts.vm.all[,inc.contam]
+      ## ts.vm.all[,ch.contam.inc]
+      ## ts.vm.all[,ch.contam.lt]
+      ## ts.vm.all[,lt.contam]
+      contam <- 1:ncol(ts.vm) %in% c(inc.contam, ch.contam, lt.contam)
+      return(contam)
+    })
+    ts.vm <- ts.vm[,!contam]
+    ts.vm.all <- ts.vm.all[,!contam]
+    dat.vm <- dat.vm[!contam,]
+    if(verbose) {
+      print('EHMs after decontaminating person-time between phases (e.g. late phase person-time in prevalent couples):')
+      print(signif(truehrs(ts.vm.all, dat.vm)$ehms,3))
+    }
+    rakllout <- make.rakll(dat.vm = dat.vm, ts.vm = ts.vm)    
+  }
+  ## ##################################################################################################
+  ## empirical hazards
+  erhs <- with(rakllout, {   
+    ehz.inc <- sum(rakll$inf.trunc[inc.wh]) / sum(rakll$pm.trunc[inc.wh])
+    ehz.ch <- sum(rakll$inf.trunc[ch.wh]) / sum(rakll$pm.trunc[ch.wh])
+    ehz.lt <- sum(rakll$inf.trunc[lt.wh]) / sum(rakll$pm.trunc[lt.wh])
+    ## empirical hazard ratio
+    e.arh <- ehz.inc/ehz.ch
+    e.lrh <- ehz.lt/ehz.ch
+    ## empirical hazards excluding couples only observed +- at one point (& excluded by error)
+    sel <- inc.wh[!inc.wh %in% which(rakll$excl.by.err)]
+    ehz.inc.err <- sum(rakll$inf.trunc[sel]) / sum(rakll$pm.trunc[sel])
+    sel <- ch.wh[!ch.wh %in% which(rakll$excl.by.err)]        
+    ehz.ch.err <- sum(rakll$inf.trunc[sel]) / sum(rakll$pm.trunc[sel])
+    sel <- lt.wh[!lt.wh %in% which(rakll$excl.by.err)]        
+    ehz.lt.err <- sum(rakll$inf.trunc[sel]) / sum(rakll$pm.trunc[sel])
+    ## empirical hazard ratio
+    e.arh.err <- ehz.inc.err/ehz.ch.err
+    e.lrh.err <- ehz.lt.err/ehz.ch.err
+    ## store empirical hazards & their ratios as a vector for output
+    erhs <- c(e.arh = e.arh, e.lrh = e.lrh, e.arh.err = e.arh.err, e.lrh.err = e.lrh.err,
+              ehz.inc = ehz.inc, ehz.ch = ehz.ch, ehz.lt = ehz.lt,
+              ehz.inc.err = ehz.inc.err, ehz.ch.err = ehz.ch.err, ehz.lt.err = ehz.lt.err)
+    return(erhs)
+  })
+  ## ##################################################################################################
+  ## Poisson Regression (ignoring any source of heterogeneity, i.e. no coital acts, GUD, age, etc)
+  ## assume coital acts are a function of person-months and use that as the offset
+  parnames <- c('bp','acute.sc','dur.ac','late.sc','dur.lt','dur.aids')
+  tracenames <- c('bp','ehm.ac','acute.sc','dur.ac','ehm.ltaids', 'ehm.lt','late.sc','dur.lt','dur.aids')
+  ## Model Processing function
+  poismod.to.tab <- function(mod) {
+    poistab <- data.frame(t(cbind(coef(mod), suppressMessages(confint(mod)))))
+    if(sum(colnames(poistab) %in% hetproxies)>0) { ## convert to years
+      poistab[,colnames(poistab) %in% hetproxies] <- poistab[,colnames(poistab) %in% hetproxies]*12 ## convert het proxy month variables to yars
+    }
+    poistab <- exp(poistab)
+    rownames(poistab) <- c('med','lci','uci')
+    poistab <- poistab[c('lci','med','uci'),]
+    poistab <- poistab[,!colnames(poistab)=='temp']
+    mainpars <- c('bp', 'acute.sc', 'late.sc')
+    colnames(poistab)[1:3] <- mainpars
+    poistab$dur.ac <- interv/2 ## Wawer et al. assumption that they're seeing 2nd partner at risk for 1/2 of interval
+    poistab$dur.lt <- interv 
+    poistab$dur.aids <- interv
+    if(sum(colnames(poistab) %in% hetproxies)>0) {
+      hp <- which(colnames(poistab) %in% hetproxies)
+      nord <- c(c(1:ncol(poistab))[-hp], hp)
+      poistab <- poistab[, nord]
+    }else{
+      poistab <- data.frame(poistab, empty = NA)
+    }
+    poistab <- cbind(poistab, ehm.ac = as.numeric((poistab[,'acute.sc']-1)*poistab[,'dur.ac']),
+                     ehm.lt = as.numeric((poistab[,'late.sc']-1)*2*interv), ## poistab[,'dur.lt']), ## assumed to be 2-3rd intervals before death
+                     ehm.ltaids = as.numeric((poistab[,'late.sc']-1)*2*interv +(0-1)*0.5*interv)) ## assumed to be last half interval before death
+    tdpars <- cbind(t(dpars[parnames]), empty = 1, ehm.ac = as.numeric((dpars['acute.sc']-1)*dpars['dur.ac']),
+                    ehm.lt = as.numeric((dpars['late.sc']-1)*dpars['dur.lt']),
+                    ehm.ltaids = as.numeric((dpars['late.sc']-1)*dpars['dur.lt'] +(0-1)*dpars['dur.aids']))
+    hetp.nm <- colnames(poistab)[colnames(tdpars)=='empty']
+    colnames(tdpars)[colnames(tdpars)=='empty'] <- hetp.nm
+    poistab <- rbind(poistab, tdpars)
+    rownames(poistab)[4] <- 'true'
+    tracenames <- c(tracenames, hetp.nm)
+    return(poistab[,tracenames])
+  }                  
+  ## ##################################################################################################
+  ## remove late couples for which we zero-ed out their person months (i.e. only observed in 4th or
+  ## 1st interval before death)
+  rtrunc <- rakllout$rakll 
+  rtrunc <- rtrunc[rtrunc$pm.trunc>0,]
+  dat.vm <- dat.vm[rtrunc$pm.trunc>0,]
+  ts.vm.all <- ts.vm.all[,rtrunc$pm.trunc>0]
+  if(verbose) {
+    print('EHMs after removing late couples not seen in the 2nd-3rd intervals prior to death')
+    print(signif(truehrs(ts.vm.all, dat.vm)$ehms,3))
+    print('EHMs when tabulating within *assigned* phase (i.e. omnitient tallying of person-months exposed to a given phase, and infections really due to that phase but *within* assigned phases')
+    inc.ac.hz <- truehrs(ts.vm.all, dat.vm, rakllout$inc.wh)$hzs['ac']
+    prev.ch.hz <- truehrs(ts.vm.all, dat.vm, rakllout$ch.wh)$hzs['ch']
+    late.lt.hz <- truehrs(ts.vm.all, dat.vm, rakllout$lt.wh)$hzs['lt']
+    ehm.ac.phase <- (inc.ac.hz/prev.ch.hz - 1)* dpars['dur.ac']
+    ehm.lt.phase <- (late.lt.hz/prev.ch.hz - 1)* dpars['dur.lt']
+    ehm.ltaids.phase <- (late.lt.hz/prev.ch.hz - 1)* dpars['dur.lt'] + (0-1)*dpars['dur.aids']    
+    print(signif(c(ehm.ac.phase, ehm.lt.phase, ehm.ltaids.phase),3))
+    print('infections by phase')
+    print(xtabs(inf.trunc ~ phase, rtrunc))
+    print('person-months by phase')    
+    print(xtabs(pm.trunc ~ phase, rtrunc))
+    print('empirical hazards by phase (not omnitient)')
+    print(xtabs(inf.trunc ~ phase, rtrunc) / xtabs(pm.trunc ~ phase, rtrunc))
+  }
+  ## Poisson Model with specified correlation with true heterogeneous variables (for feeding into mclapply)
+  do.hetmod <- function(het) {
+    if(is.na(het)) { ## if not controlling for covariates
+      formul <- formula(paste('inf.trunc ~ offset(log(pm.trunc)) + phase', '+'[hps>1], hetproxies[hps]))
+    }else{ ## controlling for covariates, create a random covariate with het amount of correlation with true underlying individual risk factors
+      temp <- rnorm(nrow(rtrunc), mean = het*rtrunc$secp.lhet, sd = sqrt(het.gen.sd^2 - het^2*het.gen.sd^2))
+      formul <- formula(paste('inf.trunc ~ offset(log(pm.trunc)) + phase + temp', '+'[hps>1], hetproxies[hps]))
+    }
+    temp.arr <- abind(poismod.to.tab(glm(formul, family = "poisson", data = rtrunc)),
+                      poismod.to.tab(glm(formul, family = "poisson", data = rtrunc, subset = !excl.by.err)),
+                      along = 3)
+    dimnames(temp.arr)[[3]] <- c('base', 'XbErr')
+    rm(list=setdiff(ls(), "temp.arr")) ## remove everything but output
+    gc() ## clean up memory
+    return(temp.arr)
+  }
+  ## Do several models
+  prop.controlled <- c(NA,seq(0, 1, by = .1)) ## amount of heteroeneity controlled for
+  obs.hets <- paste0('obs',prop.controlled) ## name variables
+  hetproxies <- c('','indp.age','secp.age','mardur') ## should we include any other proxy of heterogeneity in the model?
+  for(hps in 1:length(hetproxies)) { ## for each covariate that could be included which might be indicative of heterogeneity
+    print(paste('fitting Poisson models with heterogeneity &', hetproxies[hps]))
+    tout <- mclapply(prop.controlled, do.hetmod)
+    if(hps==1) {
+      armod <- abind(tout,along = 4)
+    }else{
+      armod <- abind(armod, abind(tout,along = 4), along = 5)
+    }
+  }
+  dimnames(armod)[[4]] <- obs.hets
+  dimnames(armod)[[5]] <- hetproxies    
+  armod['med','ehm.ac','base',,]
+  armod['true','ehm.ac',1,1,1]
+  armod['med','ehm.ltaids','base',,]
+  armod['true','ehm.ltaids',1,1,1]
+  if(verbose) { ## examine het proxies a bit
+    print(ddply(rtrunc, .(phase), summarise, mean.indiv.RH = exp(mean(secp.lhet))))
+    rtrunc <- ddply(rtrunc, .(), transform, secp.age.cat = cut(secp.age/12, seq(0,65, by = 5)),
+                    indp.age.cat = cut(indp.age/12, seq(0,65, by = 5)),
+                    mardur.cat = cut(mardur/12+1, seq(0,65, by = 5)))
+    print(ddply(rtrunc, .(secp.age.cat), summarise, mean.indiv.RH = exp(mean(secp.lhet))))
+    print(ddply(rtrunc, .(indp.age.cat), summarise, mean.indiv.RH = exp(mean(secp.lhet))))
+    print(ddply(rtrunc, .(mardur.cat), summarise, mean.indiv.RH = exp(mean(secp.lhet))))    
+  }
+  ## Check that calcultions are working
+  if(verbose2) {with(rakllout, {rnd <- sample(lt.wh,10); print(ts.vm[,rnd]); print(rakll[rnd,])})}
+  return(list(erhs = erhs, rakll = rakllout$rakll, armod = armod))
+}
 
 
 ####################################################################################################
@@ -609,8 +849,7 @@ sbmod.to.wdat <- function(sim, browse=F, excl.by.err = F) {
 ####################################################################################################
 ## Calculate Hollingsworth et al. style likelihood
 holl.lik <- function(ldpars, wtab, ## log-parms, Wawer Table 1 type tables
-                     range.dur.ac = c(.25,10),     ## to give posterior (likelihood * prior), let everything have flat priors except dur.ac which we'll
-                     ## make flat on [.25,10] months to keep things bounded
+                     range.dur.ac = c(.25,10), ##  dur.ac make flat on [.25,10] months to keep things bounded
                      range.dur.lt = c(.5,36), ## flat bounded prior on late phase
                      range.dur.aids = c(.5, 36),  ## flat bounded prior on aids phase
                      verbose = T, browse = F)
@@ -754,7 +993,7 @@ hollsampler <- function(sd.props, inits,
         ## calculate proposal par log probability
         if(verbose2)    print(vv)
         lprob.prop <- holl.lik(pars.prop, wtab, verbose = F, browse = F)
-        if(is.na(lprob.prop)) browser()
+        ##if(is.na(lprob.prop)) browser()
         if(verbose2) print(lprob.prop)
         ## holl.lik gives -log(L), so negative of that gives the log probability (assuming flat improper priors)
         lmh <- -lprob.prop + lprob.cur       # log Metropolis-Hastings ratio
@@ -816,7 +1055,7 @@ hollsbpairs <- function(posts, truepars = NULL, file.nm, width = 10, height = 10
     if(browse) browser()
     if(do.pdf) pdf(paste(file.nm, ".pdf", sep=""), width = width, height = height)
     if(do.jpeg) jpeg(paste(file.nm, ".jpeg", sep=""), width = width*100, height = height*100)
-    if(length(ranges)==0)   ranges <- apply(rbind(posts,truepars,inits.tp), 2, function(x) range(x,na.rm=T))
+    if(length(ranges)==0)   ranges <- apply(rbind(posts,truepars), 2, function(x) range(x,na.rm=T)) ## not putting inits in here, they'll only show up if in the region.
     if(length(range0)>1) ranges[1,range0] <- 0
     cis <- apply(rbind(posts,truepars), 2, function(x) quantile(x, c(.025, .975), na.rm=T))
     par(mar=rep(3,4),oma=rep(2,4),mfrow=rep(ncol(posts),2))
@@ -859,7 +1098,7 @@ procpost <- function(d.out, nll = F, nc = 12, to.plot=T, to.plot.exp=T, ldpars, 
         }
         mcmc.d.out <- mcmc.list(mcmc.d.out) # as mcmc.list
         d.aratio <- d.aratio/nc             # acceptance ratio
-        print(paste("adaptive phase aratio is", round(d.aratio,2)))
+        print(paste("acceptance ratio is", round(d.aratio,2)))
         parnames <- names(ldpars)
         if(nll) parnames <- c(parnames, 'nll')
         for(pp in parnames) assign(paste0(pp,'.vec'), unlist(mcmc.d.out[,pp])) ## pull out all chains into vectors
@@ -872,38 +1111,42 @@ procpost <- function(d.out, nll = F, nc = 12, to.plot=T, to.plot.exp=T, ldpars, 
         }
         posts <- as.data.frame(posts)
         if(nll) colnames(posts) <- c(parnames,'nll') else colnames(posts) <- parnames
-        posts$atr.month.ac <- log((exp(posts$acute.sc)-1)*exp(posts$dur.ac))
-        posts$atr.month.lt <- log((exp(posts$late.sc)-1)*exp(posts$dur.lt))
         if(nll) {
-            posts <- posts[,c('bp','atr.month.ac','acute.sc','dur.ac','atr.month.lt','late.sc','dur.lt','dur.aids','nll')]
+            posts <- posts[,c('bp','acute.sc','dur.ac','late.sc','dur.lt','dur.aids','nll')]
         }else{
-            posts <- posts[,c('bp','atr.month.ac','acute.sc','dur.ac','atr.month.lt','late.sc','dur.lt','dur.aids')] 
+            posts <- posts[,c('bp','acute.sc','dur.ac','late.sc','dur.lt','dur.aids')] 
         }
+        exposts <- posts
+        exposts[names(exposts)!='nll'] <- exp(posts[names(posts)!='nll'])
+        exposts$ehm.ac <- (exposts$acute.sc-1)*exposts$dur.ac  ## excess hazard months during acute pha
+        exposts$ehm.lt <- (exposts$late.sc-1)*exposts$dur.lt  ## excess hazard months during late phase
+        ## excess hazard months during late & AIDS phase with RH=0
+        exposts$ehm.ltaids <- (exposts$late.sc-1)*exposts$dur.lt + (0-1)*exposts$dur.aids
+        edpars <- exp(ldpars)
+        edpars <- c(edpars, ehm.ac = as.numeric((edpars['acute.sc']-1)*edpars['dur.ac']),
+                    ehm.lt = as.numeric((edpars['late.sc']-1)*edpars['dur.lt']),
+                    ehm.ltaids = as.numeric((edpars['late.sc']-1)*edpars['dur.lt'] + (0-1)*edpars['dur.aids']))
+        einits <- exp(inits)
+        einits <- cbind(einits, ehm.ac = as.numeric((einits[,'acute.sc']-1)*einits[,'dur.ac']),
+                        ehm.lt = as.numeric((einits[,'late.sc']-1)*einits[,'dur.lt']),
+                        ehm.ltaids = as.numeric((einits[,'late.sc']-1)*einits[,'dur.lt'] +(0-1)*einits[,'dur.aids']))
+        parnames <- c('bp','acute.sc','dur.ac','late.sc','dur.lt','dur.aids')
+        tracenames <- c('bp','ehm.ac','acute.sc','dur.ac','ehm.ltaids', 'ehm.lt','late.sc','dur.lt','dur.aids')
         ## Plotting
         if(to.plot) {
-            parnames <- c('bp','acute.sc','dur.ac','late.sc','dur.lt','dur.aids')
             hollsbpairs(posts[,parnames], truepars = ldpars[parnames], show.lines = T, ## plot posterior correlations after adaptive phase
                         inits.tp = inits[,parnames], file.nm = file.path(dirnm, paste0(nm,' LOG')), width = 12, height = 12,
-                        cex = 1, col = "black", nrpoints = 100, do.jpeg = T, browse=F)
+                        cex = 1, col = "black", nrpoints = 100, do.jpeg = T, browse=F)             
             if(to.plot.exp) {
-                exposts <- posts
-                exposts[names(exposts)!='nll'] <- exp(posts[names(posts)!='nll'])
-                edpars <- exp(ldpars)
-                edpars <- c(edpars, atr.month.ac = as.numeric((edpars['acute.sc']-1)*edpars['dur.ac']),
-                            atr.month.lt = as.numeric((edpars['late.sc']-1)*edpars['dur.lt']))
-                einits <- exp(inits)
-                einits <- cbind(einits, atr.month.ac = as.numeric((einits[,'acute.sc']-1)*einits[,'dur.ac']),
-                                atr.month.lt = as.numeric((einits[,'late.sc']-1)*einits[,'dur.lt']))
-                tracenames <- c('bp','atr.month.ac','acute.sc','dur.ac','atr.month.lt','late.sc','dur.lt','dur.aids')
+
                 hollsbpairs(exposts[,tracenames], truepars = edpars[tracenames], show.lines = T, 
                             inits.tp = einits[,tracenames], file.nm = file.path(dirnm, nm),
                             width = 12, height = 12,
                             cex = 1, col = "black", nrpoints = 100, do.jpeg = T, browse=F)
             }}
         sigma <- cov.wt(posts[,names(ldpars)])$cov ## posterior covariance matrix, then plot what proposal distr is gonna look like
-        gel <- gelman.diag(mcmc.d.out)
-        #print(paste0('gelman-rubin diagnostic:', gel
-        outtab <- rbind(apply(exposts[tracenames], 2, function(x) signif(quantile(x, c(.025, .5, .975),na.rm=T),3)),
+        print(gel <- gelman.diag(mcmc.d.out))
+        outtab <- rbind(apply(exposts[tracenames], 2, function(x) quantile(x, c(.025, .5, .975),na.rm=T)),
                         edpars[tracenames])
         return(list(posts = posts, exposts = exposts[,tracenames], mcmc.out=mcmc.d.out, inits = inits, sigma = sigma, gel = gel,
                     outtab = outtab))

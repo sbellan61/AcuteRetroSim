@@ -13,7 +13,10 @@
 ## cluster), runs a simulation using functions from sim fxns3.R, and then saves the output in a
 ## specified directory structure
 #################################################################################################### 
-#rm(list=ls())                           # clear workspace
+rm(list=ls(all=T))                           # clear workspace
+
+jobnum=358;simj=358;batchdirnm="results/RakAcute/Uganda";nc=12;group.ind=13;substitute=FALSE;sub.betas=FALSE;counterf.betas=FALSE;s.epic=13;s.demog=13;s.bmb=13;s.bfb=13;s.bme=13;s.bfe=13;s.bmp=13;s.bfp=13;death=TRUE;acute.sc=7;late.sc=6;aids.sc=0;dur.ac=2;dur.lt=9;dur.aids=10;bmb.sc=1;bfb.sc=1;bme.sc=1;bfe.sc=1;bmp.sc=1;bfp.sc=1;het.b=FALSE;het.b.sd=0;het.b.cor=0;het.e=FALSE;het.e.sd=0;het.e.cor=0;het.p=FALSE;het.p.sd=0;het.p.cor=0;het.gen=TRUE;het.gen.sd=0;het.gen.cor=0;het.beh=FALSE;het.beh.sd=0;het.beh.cor=0;scale.by.sd=TRUE;scale.adj=1;infl.fac=200;maxN=1e+05;sample.tmar=FALSE;psNonPar=FALSE;seed=1;tmar=(60*12):(100*12);each=100;start.rak=1994;end.rak=2000;return.ts=TRUE;one.couple=F;tint=100*12
+
 
 setwd('/home1/02413/sbellan/Rakai/SDPSimulations/')     # setwd
 args=(commandArgs(TRUE))                # load arguments from R CMD BATCH 
@@ -42,45 +45,50 @@ print(ds.nm[country])                   # Print country name.
 
 ######################################################################
 ## Transmission coefficients
-## Load parameters for acute phase assuming (acute.sc)
-pars.arr <- out.arr[,,which(in.arr[,1,2]==acute.sc),] # median and credible intervals for transmission coefficient estimates for this acute relative hazard
+## Load parameters for acute phase assuming (acute.sc==7, using .007 as within-couple transmission anyways)
+pars.arr <- out.arr[,,which(in.arr[,1,2]==7),] # median and credible intervals for transmission coefficient estimates for this acute relative hazard
 hazs <- c("bmb","bfb","bme","bfe","bmp","bfp") # six gender-route specific transmission coefficients (*b*efore-, *e*xtra-, from-*p*artner-) for *m*ale & *f*emale
 spars <- pars.arr[hazs,2,country]              # get transmission coefficients from base country
+spars[5:6] <- .007
 ## If substituting, substitute parameters/epidemic curves out for those from donor country
-if(substitute) {
-  ##  For each country substitute things from others and see how close
-  ##  it gets to the serodiscordance levels of the other country.
-######################################################################
-  ##  Epidemic curve
-  if(s.epic!=country) {     # if substituting, replce it in data (otherwise it defaults to original)
-    s.epic.nm <- ds.nm[s.epic]              # epidemic curve to use (country name)
-    s.epic.ind <- which(colnames(epicf)==s.epic.nm) # epidemic curve to use (column index of epicf/m matrices)
-    ## substitute epidemic curves into data
-    dat$epic.ind <- s.epic.ind
-    dat$epic.nm <- s.epic.nm
-  }
-  if(sub.betas) { ## substituting betas between countries
-      ##  substitute parameters from substitution (donor) country. At most two of these substitutions will change spars.
-      spars['bmb'] <- pars.arr['bmb',2,s.bmb] # pre-couple to male
-      spars['bfb'] <- pars.arr['bfb',2,s.bfb] # pre-couple to female
-      spars['bme'] <- pars.arr['bme',2,s.bme] # extra-couple to male  
-      spars['bfe'] <- pars.arr['bfe',2,s.bfe] # extra-couple to female  
-      spars['bmp'] <- pars.arr['bmp',2,s.bmp] # within-couple to male  
-      spars['bfp'] <- pars.arr['bfp',2,s.bfp] # within-couple to female  
-      ## substitute demography is just done by using parameters & epi curves from the opposite country in psrun() below.
-    }else{ ## substituting HIV transmission rate & contact coefficients
-      spars['bmb'] <- pars.arr['bmp',2,s.bmp] * pars.arr['cmb',2,s.bmb] # pre-couple to male
-      spars['bfb'] <- pars.arr['bfp',2,s.bfp] * pars.arr['cfb',2,s.bfb] # pre-couple to female
-      spars['bme'] <- pars.arr['bmp',2,s.bmp] * pars.arr['cme',2,s.bme] # extra-couple to male  
-      spars['bfe'] <- pars.arr['bfp',2,s.bfp] * pars.arr['cfe',2,s.bfe] # extra-couple to female  
-      spars['bmp'] <- pars.arr['bmp',2,s.bmp] # within-couple to male  
-      spars['bfp'] <- pars.arr['bfp',2,s.bfp] # within-couple to female  
-    }
-}else{
-  s.epic.nm <- NA # not substituting epidemic curves, this will cause rcop() to use default country epidemic curves
-  s.epic.ind <- NA  
-}
+## if(substitute) {
+##   ##  For each country substitute things from others and see how close
+##   ##  it gets to the serodiscordance levels of the other country.
+## ######################################################################
+##   ##  Epidemic curve
+##   if(s.epic!=country) {     # if substituting, replce it in data (otherwise it defaults to original)
+##     s.epic.nm <- ds.nm[s.epic]              # epidemic curve to use (country name)
+##     s.epic.ind <- which(colnames(epicf)==s.epic.nm) # epidemic curve to use (column index of epicf/m matrices)
+##     ## substitute epidemic curves into data
+##     dat$epic.ind <- s.epic.ind
+##     dat$epic.nm <- s.epic.nm
+##   }
+##   if(sub.betas) { ## substituting betas between countries
+##       ##  substitute parameters from substitution (donor) country. At most two of these substitutions will change spars.
+##       spars['bmb'] <- pars.arr['bmb',2,s.bmb] # pre-couple to male
+##       spars['bfb'] <- pars.arr['bfb',2,s.bfb] # pre-couple to female
+##       spars['bme'] <- pars.arr['bme',2,s.bme] # extra-couple to male  
+##       spars['bfe'] <- pars.arr['bfe',2,s.bfe] # extra-couple to female  
+##       spars['bmp'] <- pars.arr['bmp',2,s.bmp] # within-couple to male  
+##       spars['bfp'] <- pars.arr['bfp',2,s.bfp] # within-couple to female  
+##       ## substitute demography is just done by using parameters & epi curves from the opposite country in psrun() below.
+##     }else{ ## substituting HIV transmission rate & contact coefficients
+##       spars['bmb'] <- pars.arr['bmp',2,s.bmp] * pars.arr['cmb',2,s.bmb] # pre-couple to male
+##       spars['bfb'] <- pars.arr['bfp',2,s.bfp] * pars.arr['cfb',2,s.bfb] # pre-couple to female
+##       spars['bme'] <- pars.arr['bmp',2,s.bmp] * pars.arr['cme',2,s.bme] # extra-couple to male  
+##       spars['bfe'] <- pars.arr['bfp',2,s.bfp] * pars.arr['cfe',2,s.bfe] # extra-couple to female  
+##       spars['bmp'] <- pars.arr['bmp',2,s.bmp] # within-couple to male  
+##       spars['bfp'] <- pars.arr['bfp',2,s.bfp] # within-couple to female  
+##     }
+## }else{
+s.epic.nm <- NA # not substituting epidemic curves, this will cause rcop() to use default country epidemic curves
+s.epic.ind <- NA  
+## }
 
+
+## each <- 20
+## nc <- 12
+## source("SimulationFunctions.R")                   # load simulation functions from script
 ## Simulate couples transmission model (calling psrun() from sim fxns3.R). Output (temp) is the name of the file that is produced.
 temp <- psrun(country = country,   # what country are we 'simulating'
               s.demog = s.demog,        # what country to use for demograhy
@@ -94,6 +102,7 @@ temp <- psrun(country = country,   # what country are we 'simulating'
               return.ts = return.ts,                    # return ts?
               death = death,          # include HIV mortality in model?
               acute.sc = acute.sc, late.sc = late.sc, aids.sc = aids.sc, # relative of infectivity of different phases vs chronic phase
+              dur.ac=dur.ac, dur.lt=dur.lt, dur.aids=dur.aids,
               ##  how to scale transmission coefficients (for counterfactual analysis of how
               ##  changing these routes affects SDP, defaults to 1 for substitution analyses)
               bmb.sc = bmb.sc, bfb.sc = bfb.sc, # pre-couple 
@@ -119,6 +128,7 @@ temp <- psrun(country = country,   # what country are we 'simulating'
               nc = nc,                 # number of cores
               make.jpgs = F,           # create jpgs of results
               browse = F)              # debug
+
 
 load(temp)                              # load output of simulations
 names(output)                           # list objects summarized below
@@ -148,3 +158,5 @@ tail(output$tss)                        # columns explained below
 ## infections by gender-route combination
 print(output$pars)                      # input parameters
 print(spars)                            # inputted hazards
+
+rm(list=ls(all=T))                           # clear workspace
