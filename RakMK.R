@@ -11,11 +11,13 @@ hazs <- c('bmb','bfb','bme','bfe','bmp','bfp') #  transmission coefficient names
 nc <- 12                                       # core per simulation
 ## source('RakMK.R')
 
-## fls <- list.files(file.path('results','RakAcute','Uganda'), pattern = '.Rdata')
-## fls <- sub('Uganda-96200-','', fls)
-## fls <- sub('.Rdata','', fls)
-## fls <- as.numeric(fls)
-## fls <- fls[order(fls)]
+fls <- list.files(file.path('results','RakAcute','Uganda'), pattern = '.Rdata')
+fls <- fls[grepl('96200',fls)]
+fls <- sub('Uganda-96200-','', fls)
+fls <- sub('.Rdata','', fls)
+fls <- as.numeric(fls)
+fls <- fls[order(fls)]
+length(fls)
 
 ####################################################################################################
 ####################################################################################################
@@ -24,15 +26,19 @@ nc <- 12                                       # core per simulation
 ## 
 ####################################################################################################
 cc <- which(ds.nm=='Uganda')
-each.val <- 100 ##  number of couples per couple formation (marital) cohort
+each.val <- 200 ##  number of couples per couple formation (marital) cohort
 blocks <- expand.grid(acute.sc = c(1,2,5,7, seq(10,50,by=5)),
-                      dur.ac = seq(.5,8, by = .5),
+                      dur.ac = seq(.5,5, by = .5),
                       het.gen.sd = seq(0,3, by = .5),
-                      dur.lt = 9, dur.aids = 10, late.sc = c(2,5,10), aids.sc=0)
+                      dur.lt = c(5,10), dur.aids = 10, late.sc = c(2,5,10), aids.sc=0)
+blocks.add <- expand.grid(acute.sc = c(1,2,5,7, seq(10,50,by=5)),
+                      dur.ac = seq(.5,5, by = .5),
+                      het.gen.sd = seq(0,3, by = .5),
+                      dur.lt = c(5,10), dur.aids = 10, late.sc = 1, aids.sc=0)
+blocks <- rbind(blocks,blocks.add)
 blocks$het.gen <- blocks$het.gen.sd > 0
 blocks$jobnum <- 1:nrow(blocks)
 nn <- nrow(blocks)
-
 
 outdir <- file.path('results','RakAcute')
 if(!file.exists(outdir))      dir.create(outdir) # create directory if necessary
@@ -66,8 +72,8 @@ psNonPar <- rep(F,nn) #  use non-parametric couple pseudo-population builder?
 each <- rep(each.val, nn) # how many couples per marital (couple formation) cohort
 
 to.do <- 1:nrow(blocks)
-## to.do <- to.do[blocks$dur.ac==2]
-## to.do <- to.do [!to.do %in% fls]
+to.do <- to.do[blocks$dur.lt==10 & blocks$late.sc==1]
+to.do <- to.do[!to.do %in% fls]
 ## to.do <- to.do[!1:nrow(blocks) %in% fls]
  
 num.doing <- 0
@@ -112,3 +118,4 @@ save(blocks, file = file.path(outdir,'blocks.Rdata')) # these are country-acute 
 ####################################################################################################
 print(totn)
 print(num.doing)
+head(blocks[to.do,])

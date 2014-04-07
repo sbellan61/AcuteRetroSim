@@ -1,46 +1,26 @@
 ####################################################################################################
 ## Makes control files for each analysis within which each line giving one R CMD BATCH command line
-## to run on a cluster. For fitting SB cohort simulations across sensitivity analysis.
+## to run on a cluster.
 ####################################################################################################
 ## rm(list=ls())                                  # clear workspace
 setwd('/home1/02413/sbellan/Rakai/SDPSimulations/')     # setwd
 load("data files/ds.nm.all.Rdata") # country names
 load('data files/pars.arr.ac.Rdata')    # load acute phase relative hazards used to fit (in.arr[,,2])
-outdir <- file.path('results','RakAcute')
-load(file.path(outdir,'blocks.Rdata')) # these are country-acute phase specific blocks
+## load('data files/CFJobsToDo.Rdata') ## for finishing up jobs from last run that didn't get finished due to cluster problems.
 hazs <- c('bmb','bfb','bme','bfe','bmp','bfp') #  transmission coefficient names, for convenience
 nc <- 12                                       # core per simulation
-## source('FitRakMK.R')
+## source('HollTestFit.R')
 
-
-sb.sim <- T
-## sim.nm <- 'Uganda-48100-'
-sim.nm <- 'Uganda-96200-'
-## Find those that have already been simulated
-fls <- list.files(file.path('results','RakAcute','Uganda'), pattern = '.Rdata')
-fls <- fls[grepl(sim.nm,fls)]
-fls <- sub(sim.nm,'', fls)
-fls <- sub('.Rdata','', fls)
-fls <- as.numeric(fls)
-fls <- fls[order(fls)]
-sim.nm <- file.path('results','RakAcute','Uganda',sim.nm)
-length(fls)
-
-## Find those that have been already fit (i.e. have a fit folder)
-fit.fls <- list.files(file.path('results','RakAcute','UgandaFits','fitouts'))
-fit.fls <- sub('fitout-','', fit.fls)
-fit.fls <- sub('-ltf0.0288.Rdata','', fit.fls)
-fit.fls <- as.numeric(fit.fls)
-fit.fls <- fit.fls[order(fit.fls)]
-
-##to.do <- 1:nrow(blocks)
-to.do <- fls
-to.do <- to.do[!to.do %in% fit.fls] ## which haven't been fit yet
-##to.do <- jobnums.to.do
-
-blocks[head(fls,10),]
-blocks[with(blocks, which(acute.sc==7 & het.gen.sd==1.5 & late.sc==5 & dur.ac == 3 & dur.lt == 10)),]
-blocks[with(blocks, which(acute.sc==7 & het.gen.sd==0 & late.sc==5 & dur.ac == 3 & dur.lt == 10)),]
+sb.sim <- FALSE
+blocks <- expand.grid(acute.sc = c(1,2,5,7, seq(10,50,by=5)), late.sc = c(2,5,10),
+                      bp = .007, 
+                      dur.ac = seq(.5,5, by = .5),
+                      dur.lt = c(5,10), dur.aids = 10,  aids.sc=0)
+blocks$job <- 1:nrow(blocks)
+i.n <- 600
+p.n <- 2500
+l.n <- 120
+## hdat <- holl.mod(i.n = i.n, p.n = p.n, l.n = l.n, interv = 10,  max.vis = 4, dpars=dpars, verbose=F, browse = T)
 
 ####################################################################################################
 ####################################################################################################
@@ -48,7 +28,7 @@ blocks[with(blocks, which(acute.sc==7 & het.gen.sd==0 & late.sc==5 & dur.ac == 3
 ####################################################################################################
 ## Fitting simulated couples data with Wawer & Hollingsworth models to explore potential biases.
 ####################################################################################################
-batchdirnm <- file.path('results','RakAcute','UgandaFits')
+batchdirnm <- file.path('results','RakAcute','HollModTestFits')
 if(!file.exists(batchdirnm))      dir.create(batchdirnm) # create directory if necessary
 if(!file.exists(file.path(batchdirnm,'routs')))      dir.create(file.path(batchdirnm, 'routs')) # setup directory to store Rout files
 max.vis <- 5
@@ -70,15 +50,17 @@ nburn <- 1500
 init.jit <- .45
 nc <- 12
 
+to.do <- 1:nrow(blocks)
+
 num.doing <- 0
 totn <- 0
-sink("FitRak.txt")         # create a control file to send to the cluster
+sink("HollFitTest.txt")         # create a control file to send to the cluster
 ## ####################################################################
 for(ii in to.do) {
   jb <- ii                   # job num
   totn <- totn+1             # total jobs
-  cmd <- paste("R CMD BATCH '--args jobnum=", blocks$jobnum[ii], " simj=", ii, " batchdirnm=\"", batchdirnm, "\"", " nc=", nc,
-               " sim.nm=\"", sim.nm, blocks$jobnum[ii], ".Rdata\" simul=T sb.sim=", sb.sim, " nc=12 seed.bump=", seed.bump,
+  cmd <- paste("R CMD BATCH '--args jobnum=", blocks$job[ii], " simj=", ii, " batchdirnm=\"", batchdirnm, "\"", " nc=", nc,
+               " sim.nm=NULL", " simul=T sb.sim=", sb.sim, " i.n=", i.n, " p.n=", p.n, " l.n=", l.n, " nc=12 seed.bump=", seed.bump,
                " interv=", interv, " max.vis=", max.vis, " ltf.prob=", ltf.prob,
                " rr.ltf.ff=", rr.ltf.ff, " rr.ltf.mm=", rr.ltf.mm, " rr.ltf.hh=", rr.ltf.hh, " rr.ltf.d=", rr.ltf.d, " rr.inc.sdc=", rr.inc.sdc,
                " aniter=", aniter, " anburn=", anburn, " niter=", niter, " nburn=", nburn,
@@ -94,3 +76,4 @@ totn
 ####################################################################################################
 print(totn)
 print(num.doing)
+save(blocks, file = file.path(batchdirnm, 'blocksHollFitTest.Rdata'))

@@ -14,10 +14,7 @@
 ## specified directory structure
 #################################################################################################### 
 rm(list=ls(all=T))                           # clear workspace
-
-jobnum=358;simj=358;batchdirnm="results/RakAcute/Uganda";nc=12;group.ind=13;substitute=FALSE;sub.betas=FALSE;counterf.betas=FALSE;s.epic=13;s.demog=13;s.bmb=13;s.bfb=13;s.bme=13;s.bfe=13;s.bmp=13;s.bfp=13;death=TRUE;acute.sc=7;late.sc=6;aids.sc=0;dur.ac=2;dur.lt=9;dur.aids=10;bmb.sc=1;bfb.sc=1;bme.sc=1;bfe.sc=1;bmp.sc=1;bfp.sc=1;het.b=FALSE;het.b.sd=0;het.b.cor=0;het.e=FALSE;het.e.sd=0;het.e.cor=0;het.p=FALSE;het.p.sd=0;het.p.cor=0;het.gen=TRUE;het.gen.sd=0;het.gen.cor=0;het.beh=FALSE;het.beh.sd=0;het.beh.cor=0;scale.by.sd=TRUE;scale.adj=1;infl.fac=200;maxN=1e+05;sample.tmar=FALSE;psNonPar=FALSE;seed=1;tmar=(60*12):(100*12);each=100;start.rak=1994;end.rak=2000;return.ts=TRUE;one.couple=F;tint=100*12
-
-
+ 
 setwd('/home1/02413/sbellan/Rakai/SDPSimulations/')     # setwd
 args=(commandArgs(TRUE))                # load arguments from R CMD BATCH 
 if(length(args)>0)  {## Then cycle through each element of the list and evaluate the expressions.
@@ -85,9 +82,8 @@ s.epic.nm <- NA # not substituting epidemic curves, this will cause rcop() to us
 s.epic.ind <- NA  
 ## }
 
-
-## each <- 20
 ## nc <- 12
+## each <- 100
 ## source("SimulationFunctions.R")                   # load simulation functions from script
 ## Simulate couples transmission model (calling psrun() from sim fxns3.R). Output (temp) is the name of the file that is produced.
 temp <- psrun(country = country,   # what country are we 'simulating'
