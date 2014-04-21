@@ -7,6 +7,12 @@ if(!file.exists(outdir)) dir.create(outdir)
 load(file = file.path('results','HollingsworthAn','RealExclbyErr','workspace.Rdata'))
 
 
+fexp <- (fout$exposts)
+fexp$bp.ac <- fexp$bp * fexp$acute.sc
+quantile(fexp$bp.ac, c(0.025, .5, .975))*12
+
+
+
 fmcmc <- as.mcmc(fout$posts)
 meds <- apply(fout$exposts[,c('acute.sc','dur.ac')], 2, median)
 apply(fout$exposts[,c('acute.sc','dur.ac')], 2, function(x) quantile(x, c(.025,.975)))
@@ -17,7 +23,7 @@ test <- HPDregionplot(fmcmc, vars = c('acute.sc','dur.ac'), prob = c(.95), lims 
 pdf(file.path(outdir,'acute contour.pdf'))
 xs <- seq(0.1,150, by = 1)
 ys <- seq(0.1, 11, by = .5)
-filled.contour(log(xs), log(ys), outer(xs,ys), nlevels=10, xlim = c(0,200), ylim = c(-.3, 11))
+filled.contour(log(xs), log(ys), outer(xs-1,ys), nlevels=10, xlim = c(0,200), ylim = c(-.3, 11))
 lines(exp(test[[1]]$x), exp(test[[1]]$y))
 points(meds['acute.sc'], meds['dur.ac'], pch = 19)
 points(fout$exposts$acute.sc, fout$exposts$dur.ac, cex = .3)
@@ -33,9 +39,7 @@ xs <- seq(-.3,7.2, by = .05) ##log(seq(0.1,8, by = 1))
 ys <- seq(-2.4,2.7, by = .05) ##log(seq(0.1, 11, by = .5))
 levels <- c(0,2,5,10,25,50,70,100,200,500,1000,10000,10^5)
 cols <- colorRampPalette(c('purple','orange','red'))(length(levels)-1)
-## filled.contour(xs, ys, outer(exp(xs),exp(ys)), level = levels, xlim = c(.5,7.2), ylim = c(-2,3),
-##                col = cols, plot.axes=F)
-image(xs, ys, outer(exp(xs),exp(ys)), breaks = levels, xlim = c(-.3,7.2), ylim = c(-2.4,2.7), mgp = c(2,0,0),
+image(xs, ys, outer(exp(xs)-1,exp(ys)), breaks = levels, xlim = c(-.3,7.2), ylim = c(-2.4,2.7), mgp = c(2,0,0),
                col = cols, axes = F, xlab = expression(paste(RH['acute'])), ylab = 'acute phase duration (months)')
 xts <- c(1:9, seq(10, 90, by = 10), seq(100, 1000, by = 100))
 xsh <- c(1,5,10,50,100,500)
@@ -91,9 +95,7 @@ xs <- seq(-1,7.2, by = .05) ##log(seq(0.1,8, by = 1))
 ys <- seq(-2.4,6, by = .05) ##log(seq(0.1, 11, by = .5))
 levels <- c(0,2,5,10,25,50,70,100,200,500,1000,10000,10^5)
 cols <- colorRampPalette(c('purple','orange','red'))(length(levels)-1)
-## filled.contour(xs, ys, outer(exp(xs),exp(ys)), level = levels, xlim = c(.5,7.2), ylim = c(-2,3),
-##                col = cols, plot.axes=F)
-image(xs, ys, outer(exp(xs),exp(ys)), breaks = levels, xlim = c(-1,5.7), ylim = c(-2.4,5), mgp = c(2,0,0),
+image(xs, ys, outer(exp(xs)-1,exp(ys)), breaks = levels, xlim = c(-1,5.7), ylim = c(-2.4,5), mgp = c(2,0,0),
                col = cols, axes = F, xlab = expression(paste(RH['late'])), ylab = 'late phase duration (months)')
 xts <- c(1:9, seq(10, 90, by = 10), seq(100, 300, by = 100))
 xsh <- c(1,10,100,1000)
@@ -150,78 +152,71 @@ with(data.frame(outtab), axis(1, at = log(late.sc[c(1,3)]), lab = NA, line = -1.
 with(data.frame(outtab), axis(2, at = log(dur.aids[c(1,3)]), lab = NA, line = -1))
 dev.off()
 
+
+####################################################################################################
+## Late+AIDS phase
+fout$exposts <- ddply(fout$exposts, .(), transform, atr.month.ltaids = (late.sc-1)*(dur.lt) -dur.aids, dur.ltaids = dur.lt + dur.aids,
+                      ltaids.sc = (late.sc*dur.lt + 0*dur.aids)/(dur.lt+dur.aids))
+
+head(fout$exposts)
+posts <- fout$exposts
+posts[,c('ltaids.sc','dur.ltaids','atr.month.ltaids')] <- log(posts[,c('ltaids.sc','dur.ltaids','atr.month.ltaids')])
+
+ltp <- c('ltaids.sc','dur.ltaids')
+cont.ltaids <- HPDregionplot(posts, vars = ltp, prob = c(.95), lims = c(-1.5,10,-2,11), n = 80, h = c(.5,.1))
+meds.ltaids <- apply(posts[,ltp], 2, median)
+cis <- apply(exp(posts[,ltp]), 2, function(x) quantile(x, c(.025,.975)))
+apply(exp(posts[,ltp]), 2, range)
+
+quantile(fout$exposts$atr.month.ltaids, c(.025, .5, .975))
+
 ####################################################################################################
 ## EHM.ltaids plot
-pdf(file.path(outdir,'EHM lateaids (LOG).pdf'), w = 6.83, h = 3)
-ct <- .9
-layout(matrix(c(1:3),1,3), w = c(1,1,.25))
-## RHlate vs dur.lt
+pdf(file.path(outdir,'EHM lateaids JD (LOG).pdf'), w = 3.27, h = 3)
+ct <- .6
+layout(matrix(c(1:2),1,2), w = c(1,.25))
+## (RHlate*dur.lt + RHaids*dur.aids)/(dur.lt + dur.aids)  vs (dur.lt+dur.aids)
 par(cex.lab = ct, cex.axis = ct, cex.main = ct)
 par(mar=c(3,3,.3,0))
-xs <- seq(-1,7.2, by = .05) ##log(seq(0.1,8, by = 1))
-ys <- seq(-2.4,6, by = .05) ##log(seq(0.1, 11, by = .5))
+xs <- seq(-1,3, by = .05) ##log(seq(0.1,8, by = 1))
+ys <- seq(0,4, by = .05) ##log(seq(0.1, 11, by = .5))
 pal <- colorRamp(c('purple','orange','red'))
-rg <- range(fout$exposts$atr.month.ltaids)
-trf <- function(x) {(x - rg[1])/(rg[2]-rg[1])}
-plot(0,0, type = 'n', xlim = c(-1,5.7), ylim = c(-2.4,5), mgp = c(2,0,0),
-               col = cols, axes = F, xlab = expression(paste(RH['late'])), ylab = 'late phase duration (months)')
-cols <- apply(pal(trf(fout$exposts$atr.month.ltaids)), 1, function(x) rgb(x[1],x[2],x[3], alpha = 100, maxColorValue=255))
-points(fout$posts$late.sc, fout$posts$dur.lt, cex = .3, pch = 19, col = cols)
-xts <- c(1:9, seq(10, 90, by = 10), seq(100, 300, by = 100))
+levels <- c(-25,-10,-5,-2,0,2,5,10,25,50,70,100,200,500,1000)
+rg <- range(levels)
+cols <- colorRampPalette(c('purple','orange','red'))(length(levels)-1)
+## filled.contour(xs, ys, outer(exp(xs),exp(ys)), level = levels, xlim = c(.5,7.2), ylim = c(-2,3),
+##                col = cols, plot.axes=F)
+zs <- outer(exp(xs)-1,exp(ys))
+image(xs, ys, zs, breaks = levels, xlim = c(-.4,2.5), ylim = c(0,4), mgp = c(2,0,0),
+               col = cols, axes = F, xlab = expression(paste((RH['L']*d['L']+RH['AIDS']*d['AIDS'])/(d['L']+d['AIDS']))),
+      ylab = expression(paste((d['L']+d['AIDS']))))
+xts <- c(1:10)
 xsh <- c(1,10,100,1000)
 xls <- xts
 xls[!xls %in% xsh] <- NA
 axis(1, at = log(xts), lab = xls)
-yts <- c(seq(.1,.9, by = .1),1:9, seq(10, 100, by = 10))
+yts <- c(1:9, seq(10, 50, by = 10))
 ysh <- c(.1,1,10,100)
 yls <- yts
 yls[!yls %in% ysh] <- NA
 axis(2, at = log(yts), lab = yls, las = 2)
-lines(cont.lt[[1]]$x, cont.lt[[1]]$y)
-points(log(outtab[4,'late.sc']), log(outtab[4,'dur.lt']), pch = 15)#, col = 'points')
+lines(cont.ltaids[[1]]$x, cont.ltaids[[1]]$y)
+#with(posts, points(ltaids.sc, dur.ltaids, cex = .08, pch = 19))
+points(log(outtab[4,'ltaids.sc']), log(outtab[4,'dur.ltaids']), pch = 15, cex = .8, col = gray(.2))#, col = 'points')
 ## text(log(outtab[4,'late.sc']), log(outtab[4,'dur.lt']), 'Hollingsworth', pos=3, cex=.5)
-points(log(meds.lt['late.sc']), log(meds.lt['dur.lt']), pch = 19)#, col = 'points')
+points(meds.ltaids['ltaids.sc'], meds.ltaids['dur.ltaids'], pch = 19, cex = .8, col=gray(.3))#, col = 'points')
 ## text(log(meds.lt['late.sc']), log(meds.lt['dur.lt']), 'median', pos=1, cex=.5)
-with(data.frame(outtab), axis(1, at = log(late.sc[c(1,3)]), lab = NA, line = -1.5))
-with(data.frame(outtab), axis(2, at = log(dur.lt[c(1,3)]), lab = NA, line = -1))
-####################################################################################################
-## RHlate vs dur.aids
-par(cex.lab = ct, cex.axis = ct, cex.main = ct)
-par(mar=c(3,4,.3,0))
-xs <- seq(-1,7.2, by = .05) ##log(seq(0.1,8, by = 1))
-ys <- seq(-2.4,6, by = .05) ##log(seq(0.1, 11, by = .5))
-plot(0,0, type = 'n', xlim = c(-1,5.7), ylim = c(-2.4,5), mgp = c(2,0,0),
-               col = cols, axes = F, xlab = expression(paste(RH['late'])), ylab = 'AIDS phase duration (months)')
-cols <- apply(pal(trf(fout$exposts$atr.month.ltaids)), 1, function(x) rgb(x[1],x[2],x[3], alpha = 100, maxColorValue=255))
-points(fout$posts$late.sc, fout$posts$dur.aids, cex = .3, pch = 19, col = cols)
-xts <- c(1:9, seq(10, 90, by = 10), seq(100, 200, by = 100))
-xsh <- c(1,10,100,1000)
-xls <- xts
-xls[!xls %in% xsh] <- NA
-axis(1, at = log(xts), lab = xls)
-yts <- c(seq(.1,.9, by = .1),1:9, seq(10, 100, by = 10))
-ysh <- c(.1,1,10,100)
-yls <- yts
-yls[!yls %in% ysh] <- NA
-axis(2, at = log(yts), lab = yls, las = 2)
-lines(cont.ad[[1]]$x, cont.ad[[1]]$y)
-## points(fout$posts$late.sc, fout$posts$dur.ad, cex = .3)
-points(log(outtab[4,'late.sc']), log(outtab[4,'dur.aids']), pch = 15)#, col = 'points')
-## text(log(outtab[4,'late.sc']), log(outtab[4,'dur.aids']), 'Hollingsworth', pos=3, cex=.5)
-points(log(meds.ad['late.sc']), log(meds.ad['dur.aids']), pch = 19)#, col = 'points')
-## text(log(meds.ad['late.sc']), log(meds.ad['dur.aids']), 'median', pos=1, cex=.5)
-with(data.frame(outtab), axis(1, at = log(late.sc[c(1,3)]), lab = NA, line = -1.5))
-with(data.frame(outtab), axis(2, at = log(dur.aids[c(1,3)]), lab = NA, line = -1))
+with(data.frame(cis), axis(1, at = log(ltaids.sc[c(1,2)]), lab = NA, line = -1.5))
+with(data.frame(cis), axis(2, at = log(dur.ltaids[c(1,2)]), lab = NA, line = -1))
 ## Palette legend
 par(mar=rep(0,4), cex.lab = ct, cex.axis = ct, cex.main = ct)
 plot(0,0,type="n",axes=F, xlim = c(-.1,.2), ylim = c(-.1,.9), xlab = '', ylab = '')
-ticks <- pretty(rg, 10)
-ticks <- ticks[-length(ticks)]
-ticks[1] <- -5
-cols <- apply(pal(trf(ticks)), 1, function(x) rgb(x[1],x[2],x[3], maxColorValue=255))
+ticks <- levels#[-length(levels)]#ticks[-length(ticks)]
+#cols <- apply(pal(trf(ticks)), 1, function(x) rgb(x[1],x[2],x[3], maxColorValue=255))
 color.legend(.09,.1,.15,.8, ticks, rect.col = cols, gradient = "y", cex = ct)
-text(.025, .8, expression(paste(EHM['late'+'AIDS'])), pos = 3, cex = ct)
-dev.off()
+text(.025, .8, expression(paste(EHM['L'+'AIDS'])), pos = 3, cex = ct)
+graphics.off()
+
 
 
 
@@ -265,9 +260,7 @@ xs <- seq(-.3,7.2, by = .05) ##log(seq(0.1,8, by = 1))
 ys <- seq(-2.4,2.7, by = .05) ##log(seq(0.1, 11, by = .5))
 levels <- c(0,2,5,10,25,50,70,100,200,500,1000,10000,10^5)
 cols <- colorRampPalette(c('purple','orange','red'))(length(levels)-1)
-## filled.contour(xs, ys, outer(exp(xs),exp(ys)), level = levels, xlim = c(.5,7.2), ylim = c(-2,3),
-##                col = cols, plot.axes=F)
-image(xs, ys, outer(exp(xs),exp(ys)), breaks = levels, xlim = c(-.3,6.2), ylim = c(-2.4,2.35), mgp = c(3,0,0),
+image(xs, ys, outer(exp(xs)-1,exp(ys)), breaks = levels, xlim = c(-.3,6.2), ylim = c(-2.4,2.35), mgp = c(3,0,0),
                col = cols, axes = F, xlab = expression(paste(RH['acute'])), ylab = 'acute phase duration (months)')
 xts <- c(1:9, seq(10, 90, by = 10), seq(100, 500, by = 100))
 xsh <- c(1,10,100)

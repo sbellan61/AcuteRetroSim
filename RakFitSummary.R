@@ -1,4 +1,4 @@
-library(plyr); library(data.table); library(abind); library(multicore)
+library(mgcv);library(plyr); library(data.table); library(abind); library(multicore)
 rm(list=ls(all=T)); gc()
 ## Summarize Hollingsworth & Wawer style fits to simulated data
 setwd('/home1/02413/sbellan/Rakai/SDPSimulations/')     # setwd
@@ -45,7 +45,7 @@ wtabs <- as.data.frame(wtabs)
 colnames(wtabs) <- c('incn','prevn','laten')
 wtabs$job <- jobnums
 head(wtabs)
-apply(wtabs[,-4],2, summary)
+apply(wtabs[,-4],2, function(x) quantile(x, c(.025,.5,.975)))
 
 ## Hollingsworth Fits
 hfits <- abind(lapply(alldat, function(x) { x$outtab.h}), along = 4)
@@ -471,3 +471,181 @@ dev.off()
 exp(qnorm(.975, 0, sd = 1))
 exp(qnorm(.975, 0, sd = 2))
 exp(qnorm(.975, 0, sd = 3))
+
+
+####################################################################################################
+## Plausible confidence intervals JD style
+####################################################################################################
+## Load our fits to the real data using exact same methods as on simulated data sets (but copying Wawer & Holl)
+load(file = file.path('results','HollingsworthAn','RealExclbyErr','workspace.Rdata'))
+## Wawer RH[acute] per coital act straight from table #1 (not doing Poisson regression because cannot replicate theirs without line list data)
+w.rh.ac <- signif((10/1221)/(36/48525) * (10.2/10), 3)
+w.ehm.ac <- signif((w.rh.ac-1)*5,3)
+h.ehm.ac <- signif(outtab['50%','atr.month.ac'],3)
+
+## Do a GAM for each
+hsds <- seq(0,3, by = .5)
+for(hsd in hsds) {
+  ## Do model for this het.gen cateogry (Waw)
+  tempw <- wf[with(wf, var=='ehm.ac' & hobs=='obsNA' & cov=='' & err == 'XbErr' & het.sd==hsd),]
+  tempw$p.above <- tempw$med > w.ehm.ac
+  assign(paste0('tempw',hsd), tempw)
+  assign(paste0('modw',hsd), gam(p.above ~ s(ehm.acute), data = tempw, family = binomial('logit')))
+  ## Do model for this het.gen cateogry (Holl)
+  temph <- hf[with(hf, var=='ehm.ac' & err == 'XbErr' & het.sd==hsd),]
+  temph$p.above <- temph$med > h.ehm.ac
+  assign(paste0('temph',hsd), temph)
+  assign(paste0('modh',hsd), gam(p.above ~ s(ehm.acute), data = temph, family = binomial('logit')))
+}
+
+ci.frame <- data.frame(hsd = hsds, wmed = NA, wlci = NA, wuci = NA, hmed = NA, hlci = NA, huci = NA)
+for(hsd in hsds) {
+  x.pred <- seq(1,100, by = .01)
+  wy.pred <- as.numeric(predict(get(paste0('modw',hsd)), data.frame(ehm.acute=x.pred), type = 'response'))
+  hy.pred <- as.numeric(predict(get(paste0('modh',hsd)), data.frame(ehm.acute=x.pred), type = 'response'))  
+  ci.frame$wmed[ci.frame$hsd==hsd] <- x.pred[which.min(abs(wy.pred-.5))]
+  ci.frame$wlci[ci.frame$hsd==hsd] <- x.pred[which.min(abs(wy.pred-.025))]  
+  ci.frame$wuci[ci.frame$hsd==hsd] <- x.pred[which.min(abs(wy.pred-.975))]
+  ci.frame$hmed[ci.frame$hsd==hsd] <- x.pred[which.min(abs(hy.pred-.5))]
+  ci.frame$hlci[ci.frame$hsd==hsd] <- x.pred[which.min(abs(hy.pred-.025))]  
+  ci.frame$huci[ci.frame$hsd==hsd] <- x.pred[which.min(abs(hy.pred-.975))]
+}
+write.csv(ci.frame, file.path(outdir, 'CI data frame.csv'))
+
+ct <- 1
+pdf(file.path(outdir, 'JDCI.pdf'), w = 6.83, h = 6)
+####################################################################################################
+## Wawer
+par(mfrow = c(2,2), mar = c(4,4,4,.5), oma = c(0,3,0,0))
+for(hsd in c(0,1,2,3)) {
+  with(get(paste0('tempw',hsd)), plot(ehm.acute, jitter(as.numeric(p.above), a = .1), pch = 21, cex = .3, xlab = '',
+                                      ylab = '', bty = 'n', main = bquote(sigma[hazard]==.(hsd)),
+                                      xlim = c(0, 100), col = gray(.4), axes=F))
+  axis(1, seq(0,100, by = 10))
+  axis(2, seq(0,1, by = .2), las = 2)  
+  x.pred <- seq(1,100, by = .01)
+  y.pred <- as.numeric(predict(get(paste0('modw',hsd)), data.frame(ehm.acute=x.pred), type = 'response'))
+  lines(x.pred, y.pred)
+  segments(w.ehm.ac, -1, w.ehm.ac, .05, col = 'purple')
+  text(w.ehm.ac, .05, col = 'purple', paste0('Wawer \n estimate:\n', w.ehm.ac), pos = 3)
+  ## CI 
+  x.lci <- x.pred[which.min(abs(y.pred-.025))]
+  x.uci <- x.pred[which.min(abs(y.pred-.975))]
+  arrows(x.lci, .5, x.uci, .5, len = .05, code = 3, angle = 90, col = 'red')
+  ## text(.5*(x.lci*x.uci), .5, '95% CI', pos = 3, col = 'red')
+  text((x.lci+x.uci/2), .5, paste0(signif(x.lci,3), ' - ', signif(x.uci,3)), pos = 3, col = 'red', cex = ct)
+  abline(h = .975, col = 'red', lty = 2)
+  abline(h = .025, col = 'red', lty = 2)
+}
+mtext('simulation estimate above Rakai estimate?\n and fitted probabilities \n(points are jittered)', side = 2, adj = .5, outer = T, line = -1)
+mtext(bquote(EHM['acute']), side = 1, adj = .5, outer = T, line = -2)
+####################################################################################################
+## Holl
+par(mfrow = c(2,2), mar = c(4,4,4,.5), oma = c(0,3,0,0))
+for(hsd in c(0,1,2,3)) {
+  with(get(paste0('temph',hsd)), plot(ehm.acute, jitter(as.numeric(p.above), a = .1), pch = 21, cex = .3, xlab = '',
+                                      ylab = '', bty = 'n', main = bquote(sigma[hazard]==.(hsd)),
+                                      xlim = c(0, 100), col = gray(.4), axes=F))
+  axis(1, seq(0,100, by = 10))
+  axis(2, seq(0,1, by = .2), las = 2)  
+  x.pred <- seq(1,100, by = .01)
+  y.pred <- as.numeric(predict(get(paste0('modh',hsd)), data.frame(ehm.acute=x.pred), type = 'response'))
+  lines(x.pred, y.pred)
+  segments(h.ehm.ac, -1, h.ehm.ac, .05, col = 'purple')
+  text(h.ehm.ac, .05, col = 'purple', paste0('Hollingsworth \n estimate:\n',h.ehm.ac), pos = 3)
+  ## CI 
+  x.lci <- x.pred[which.min(abs(y.pred-.025))]
+  x.uci <- x.pred[which.min(abs(y.pred-.975))]
+  arrows(x.lci, .5, x.uci, .5, len = .05, code = 3, angle = 90, col = 'orange')
+  ## text(.5*(x.lci*x.uci), .5, '95% CI', pos = 3, col = 'orange')
+  text((x.lci+x.uci/2), .5, paste0(signif(x.lci,3), ' - ', signif(x.uci,3)), pos = 3, col = 'orange', cex = ct)
+  abline(h = .975, col = 'orange', lty = 2)
+  abline(h = .025, col = 'orange', lty = 2)
+}
+mtext('simulation estimate above Rakai estimate?\n and fitted probabilities \n(points are jittered)', side = 2, adj = .5, outer = T, line = -1)
+mtext(bquote(EHM['acute']), side = 1, adj = .5, outer = T, line = -2)
+####################################################################################################
+par(mfrow=c(1,1))
+plot(0,0, type = 'n', xlab = bquote(sigma['hazard']), ylab = bquote(EHM['acute']), main = 'simulation-based 95% CIs', bty = 'n', xlim = c(0,3), ylim = c(0,80), axes=F)
+axis(1, hsds)
+axis(2, seq(0,80, by = 10))
+for(ii in 1:length(hsds)) with(ci.frame, arrows(hsd, wlci, hsd, wuci, code = 3, len = .05, angle = 90, col = 'red'))
+for(ii in 1:length(hsds)) with(ci.frame, points(hsd, wmed, pch = 19, col = 'red'))
+for(ii in 1:length(hsds)) with(ci.frame, arrows(hsd+.05, hlci, hsd+.05, huci, code = 3, len = .05, angle = 90, col = 'orange'))
+for(ii in 1:length(hsds)) with(ci.frame, points(hsd+.05, hmed, pch = 19, col = 'orange'))
+w.ehm.ac.pub <- signif((7.25-1)*5,3)
+h.ehm.ac.pub <- signif((26-1)*2.9,3)
+segments(-1, w.ehm.ac, .5, w.ehm.ac, col = 'red', lty = 2)
+text(.5, w.ehm.ac, 'Wawer (raw per coital act RH)', col = 'red', pos = 4)
+segments(-1, h.ehm.ac, .55, h.ehm.ac, col = 'orange', lty = 2)
+text(.5, h.ehm.ac, 'Hollingsworth (our refit)', col = 'orange', pos = 4)
+segments(-1, w.ehm.ac.pub, .5, w.ehm.ac.pub, col = 'red')
+text(.5, w.ehm.ac.pub, 'Wawer (published)', col = 'red', pos = 4)
+segments(-1, h.ehm.ac.pub, .55, h.ehm.ac.pub, col = 'orange')
+text(.5, h.ehm.ac.pub, 'Hollingsworth (published', col = 'orange', pos = 4)
+graphics.off()
+ 
+pdf(file.path(outdir, 'CIs on true EHMs 2 panel.pdf'), w = 6.83, h = 2.5)
+par(mfrow=c(1,2), mar=c(4,4,0,.5))
+par('ps'=8)
+##################################################
+## show how CI's are calculated once
+hsd=2
+with(get(paste0('tempw',hsd)), plot(ehm.acute, jitter(as.numeric(p.above), a = .1), pch = 19, cex = .3, xlab = bquote(EHM['acute']),
+                                    ylab = 'simulation estimate above Rakai estimate?\n and fitted probabilities \n(points are jittered)',
+                                    bty = 'n', main = bquote(sigma[hazard]==.(hsd)),
+                                    xlim = c(0, 80), col = gray(.4), axes=F))
+axis(1, seq(0,100, by = 10))
+axis(2, seq(0,1, by = .2), las = 2)  
+x.pred <- seq(0,80, by = .01)
+y.pred <- as.numeric(predict(get(paste0('modw',hsd)), data.frame(ehm.acute=x.pred), type = 'response'))
+lines(x.pred, y.pred, lwd = 2)
+## segments(w.ehm.ac, -1, w.ehm.ac, .05, col = 'purple')
+## text(w.ehm.ac, .05, col = 'purple', paste0('Wawer estimate\n(our refit):\n',signif(w.ehm.ac,3)), pos = 3)
+## CI 
+x.med <- x.pred[which.min(abs(y.pred-.5))]
+x.lci <- x.pred[which.min(abs(y.pred-.025))]
+x.uci <- x.pred[which.min(abs(y.pred-.975))]
+arrows(x.lci, .5, x.uci, .5, len = .05, code = 3, angle = 90, col = 'orange')
+points(x.med, .5, pch = 19, cex = .7, col = 'orange')
+## text(.5*(x.lci*x.uci), .5, '95% CI', pos = 3, col = 'orange')
+text((x.lci+x.uci/2), .5, paste0(signif(x.lci,3), ' - ', signif(x.uci,3)), pos = 3, col = 'orange', cex = ct)
+segments(0,.975,80,.975, col = 'orange', lty = 2, lwd = 2)
+segments(0,.025,80,.025, col = 'orange', lty = 2, lwd = 2)
+##################################################
+plot(0,0, type = 'n', xlab = bquote(sigma['hazard']), ylab = bquote(EHM['acute']), main = '', bty = 'n', xlim = c(0,3), ylim = c(0,80), axes=F)
+axis(1, hsds)
+axis(2, seq(0,80, by = 10), las = 2)
+for(ii in 1:length(hsds)) with(ci.frame, arrows(hsd, wlci, hsd, wuci, code = 3, len = .05, angle = 90, col = 'red'))
+for(ii in 1:length(hsds)) with(ci.frame, points(hsd, wmed, pch = 19, col = 'red', cex = .7))
+for(ii in 1:length(hsds)) with(ci.frame, arrows(hsd+.05, hlci, hsd+.05, huci, code = 3, len = .05, angle = 90, col = 'orange'))
+for(ii in 1:length(hsds)) with(ci.frame, points(hsd+.05, hmed, pch = 19, col = 'orange', cex = .7))
+w.ehm.ac.pub <- (7.25-1)*5
+h.ehm.ac.pub <- (26-1)*2.9
+segments(-1, w.ehm.ac, .5, w.ehm.ac, col = 'purple', lty = 2)
+text(.5, w.ehm.ac, 'Wawer (our refit)', col = 'purple', pos = 4)
+segments(-1, h.ehm.ac, .55, h.ehm.ac, col = 'purple', lty = 2)
+text(.5, h.ehm.ac, 'Hollingsworth Model (our refit)', col = 'purple', pos = 4)
+## segments(-1, w.ehm.ac.pub, .5, w.ehm.ac.pub, col = 'red')
+## text(.5, w.ehm.ac.pub, 'Wawer (published)', col = 'red', pos = 4)
+## segments(-1, h.ehm.ac.pub, .55, h.ehm.ac.pub, col = 'orange')
+## text(.5, h.ehm.ac.pub, 'Hollingsworth (published', col = 'orange', pos = 4)
+graphics.off()
+
+####################################################################################################
+## Log-hazard distribution figure
+pdf(file.path(outdir, 'log-hazard distributions.pdf'), w = 3.27, h = 3)
+par(mar = c(4,.5,1,.5), 'ps'=8)
+plot(0,0, type = 'n', xlab = bquote(paste('multiple of ', lambda[hazard])), ylab='', main='', bty = 'nn',
+     xlim = c(10^-3,10^3), log='x',ylim = c(0,1), axes = F)
+axis(1, at = 10^(-3:3), lab = c(0.001, 0.01, 0.1, 1, 10, 100, 1000))
+cols <- rainbow(4)
+cols[1] <- 'orange'
+for(hsd in 1:3) {
+  curve(dnorm(log(x), 0,  hsd), from = 10^-3, to = 10^3, add = T, col = cols[hsd+1])
+}
+segments(1,0,1,1, col = 'orange')
+legend('topleft', leg = 0:3, lty = 1, col = cols, title = expression(sigma[hazard]))
+graphics.off()
+
+

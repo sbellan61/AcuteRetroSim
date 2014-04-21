@@ -297,7 +297,8 @@ rak.coh.fxn <- function(ts.ap, dat, interv = 10, max.vis = 5, start.rak, end.rak
 
 ####################################################################################################
 ## Wawer et al. style analysis of Rakai retrospective cohort
-rak.wawer <- function(rak.coh, verbose = F, verbose2=F, browse = F, excl.extram = T, decont=F, start.rak, het.gen.sd, late.ph) {
+rak.wawer <- function(rak.coh, verbose = F, verbose2=F, browse = F, excl.extram = T, decont=F, start.rak, het.gen.sd, late.ph,
+                      resamp=F, cov.mods=T) {
   if(browse) browser()
   ts.vm <- rak.coh$ts.rak
   ts.vm.all <- rak.coh$ts.rak.all
@@ -339,46 +340,48 @@ rak.wawer <- function(rak.coh, verbose = F, verbose2=F, browse = F, excl.extram 
     rakll$secp[secp.f] <- 'f'
     rakll$secp.lhet[secp.m] <- log(dat.vm$m.het.gen[secp.m])
     rakll$secp.lhet[secp.f] <- log(dat.vm$f.het.gen[secp.f])
-    ## age of secondary partner at first interval followed in cohort study
-    rakll$secp.age[secp.m] <- with(dat.vm, mage[secp.m] - (tint[secp.m] - fvis.tt[secp.m]))
-    rakll$secp.age[secp.f] <- with(dat.vm, fage[secp.f] - (tint[secp.f] - fvis.tt[secp.f]))
-    ## age of index partner at first interval followed in cohort study
-    rakll$indp.age[secp.m] <- with(dat.vm, fage[secp.m] - (tint[secp.m] - fvis.tt[secp.m]))
-    rakll$indp.age[secp.f] <- with(dat.vm, mage[secp.f] - (tint[secp.f] - fvis.tt[secp.f]))
-    ## partnership duration at first interval followed up
-    rakll$mardur <- with(dat.vm, mardur.mon - (tint-fvis.tt))
-    ## total sexual activity time of secondary partner at first interval followed in cohort study
-    rakll$secp.tdsa[secp.m] <- with(dat.vm, fvis.tt[secp.m] - (tms[secp.m]))
-    rakll$secp.tdsa[secp.f] <- with(dat.vm, fvis.tt[secp.f] - (tfs[secp.f]))    
-    ## pre-couple sexual activity time of secondary partner
-    rakll$secp.pdsa[secp.m] <- with(dat.vm, tmar[secp.m] - (tms[secp.m]))
-    rakll$secp.pdsa[secp.f] <- with(dat.vm, tmar[secp.f] - (tfs[secp.f]))
-    ## duration of primary partner's infection
-    rakll$indp.duri[secp.m] <- with(dat.vm, fvis.tt[secp.m] - fdoi[secp.m])
-    rakll$indp.duri[secp.f] <- with(dat.vm, fvis.tt[secp.f] - mdoi[secp.f])
-    ## ############################
-    ## hazard months 2nd partner has already been exposed to by first visit
-    rakll$secp.hazm[secp.m] <- with(dat.vm[secp.m,], fvis.tt - apply(cbind(tmar, fdoi),1, max))
-    rakll$secp.hazm[secp.f] <- with(dat.vm[secp.f,], fvis.tt - apply(cbind(tmar, mdoi),1, max))
-    ## add excess hazard months due to acute phase: those exposed to both months
-    secp.m.ac2 <- with(dat.vm[secp.m,], fdoi-tmar) >= -1
-    secp.f.ac2 <- with(dat.vm[secp.f,], mdoi-tmar) >= -1
-    rakll$secp.hazm[secp.m[secp.m.ac2]] <- rakll$secp.hazm[secp.m[secp.m.ac2]] + 2*(dpars['acute.sc']-1)
-    rakll$secp.hazm[secp.f[secp.f.ac2]] <- rakll$secp.hazm[secp.f[secp.f.ac2]] + 2*(dpars['acute.sc']-1)
-    ## those exposed to one month
-    secp.m.ac1 <- with(dat.vm[secp.m,], fdoi-tmar) == -2
-    secp.f.ac1 <- with(dat.vm[secp.f,], mdoi-tmar) == -2
-    rakll$secp.hazm[secp.m[secp.m.ac1]] <- rakll$secp.hazm[secp.m[secp.m.ac1]] + 1*(dpars['acute.sc']-1)
-    rakll$secp.hazm[secp.f[secp.f.ac1]] <- rakll$secp.hazm[secp.f[secp.f.ac1]] + 1*(dpars['acute.sc']-1)
-    ## Add total hazard exposed to by first visit, this equals equivalent hazard-months exposed to
-    ## in chronic phase plus those pre- & extra-couple
-    rakll$secp.thazm <- rakll$secp.hazm
-    rakll$secp.thazm[secp.m] <- spars['bmp'] * rakll$secp.thazm[secp.m] + 
-                                spars['bmb'] * apply(dat.vm[secp.m,c('tms','tmar')], 1, function(x) sum(epicf[x['tms']:(x['tmar']-1),epic.ind])) +
-                                spars['bme'] * apply(dat.vm[secp.m,c('fvis.tt','tmar')], 1, function(x) sum(epicf[x['tmar']:(x['fvis.tt']-1),epic.ind]))
-    rakll$secp.thazm[secp.f] <- spars['bfp'] * rakll$secp.thazm[secp.f] + 
-                                spars['bfb'] * apply(dat.vm[secp.f,c('tfs','tmar')], 1, function(x)     sum(epicm[x['tfs']: (x['tmar']-1),epic.ind])) +
-                                spars['bfe'] * apply(dat.vm[secp.f,c('fvis.tt','tmar')], 1, function(x) sum(epicm[x['tmar']:(x['fvis.tt']-1),epic.ind]))
+    if(cov.mods)  { ## if we are going to run multivariate regression models
+        ## age of secondary partner at first interval followed in cohort study
+        rakll$secp.age[secp.m] <- with(dat.vm, mage[secp.m] - (tint[secp.m] - fvis.tt[secp.m]))
+        rakll$secp.age[secp.f] <- with(dat.vm, fage[secp.f] - (tint[secp.f] - fvis.tt[secp.f]))
+        ## age of index partner at first interval followed in cohort study
+        rakll$indp.age[secp.m] <- with(dat.vm, fage[secp.m] - (tint[secp.m] - fvis.tt[secp.m]))
+        rakll$indp.age[secp.f] <- with(dat.vm, mage[secp.f] - (tint[secp.f] - fvis.tt[secp.f]))
+        ## partnership duration at first interval followed up
+        rakll$mardur <- with(dat.vm, mardur.mon - (tint-fvis.tt))
+        ## total sexual activity time of secondary partner at first interval followed in cohort study
+        rakll$secp.tdsa[secp.m] <- with(dat.vm, fvis.tt[secp.m] - (tms[secp.m]))
+        rakll$secp.tdsa[secp.f] <- with(dat.vm, fvis.tt[secp.f] - (tfs[secp.f]))    
+        ## pre-couple sexual activity time of secondary partner
+        rakll$secp.pdsa[secp.m] <- with(dat.vm, tmar[secp.m] - (tms[secp.m]))
+        rakll$secp.pdsa[secp.f] <- with(dat.vm, tmar[secp.f] - (tfs[secp.f]))
+        ## duration of primary partner's infection
+        rakll$indp.duri[secp.m] <- with(dat.vm, fvis.tt[secp.m] - fdoi[secp.m])
+        rakll$indp.duri[secp.f] <- with(dat.vm, fvis.tt[secp.f] - mdoi[secp.f])
+        ## ############################
+        ## hazard months 2nd partner has already been exposed to by first visit
+        rakll$secp.hazm[secp.m] <- with(dat.vm[secp.m,], fvis.tt - apply(cbind(tmar, fdoi),1, max))
+        rakll$secp.hazm[secp.f] <- with(dat.vm[secp.f,], fvis.tt - apply(cbind(tmar, mdoi),1, max))
+        ## add excess hazard months due to acute phase: those exposed to both months
+        secp.m.ac2 <- with(dat.vm[secp.m,], fdoi-tmar) >= -1
+        secp.f.ac2 <- with(dat.vm[secp.f,], mdoi-tmar) >= -1
+        rakll$secp.hazm[secp.m[secp.m.ac2]] <- rakll$secp.hazm[secp.m[secp.m.ac2]] + 2*(dpars['acute.sc']-1)
+        rakll$secp.hazm[secp.f[secp.f.ac2]] <- rakll$secp.hazm[secp.f[secp.f.ac2]] + 2*(dpars['acute.sc']-1)
+        ## those exposed to one month
+        secp.m.ac1 <- with(dat.vm[secp.m,], fdoi-tmar) == -2
+        secp.f.ac1 <- with(dat.vm[secp.f,], mdoi-tmar) == -2
+        rakll$secp.hazm[secp.m[secp.m.ac1]] <- rakll$secp.hazm[secp.m[secp.m.ac1]] + 1*(dpars['acute.sc']-1)
+        rakll$secp.hazm[secp.f[secp.f.ac1]] <- rakll$secp.hazm[secp.f[secp.f.ac1]] + 1*(dpars['acute.sc']-1)
+        ## Add total hazard exposed to by first visit, this equals equivalent hazard-months exposed to
+        ## in chronic phase plus those pre- & extra-couple
+        rakll$secp.thazm <- rakll$secp.hazm
+        rakll$secp.thazm[secp.m] <- spars['bmp'] * rakll$secp.thazm[secp.m] + 
+            spars['bmb'] * apply(dat.vm[secp.m,c('tms','tmar')], 1, function(x) sum(epicf[x['tms']:(x['tmar']-1),epic.ind])) +
+                spars['bme'] * apply(dat.vm[secp.m,c('fvis.tt','tmar')], 1, function(x) sum(epicf[x['tmar']:(x['fvis.tt']-1),epic.ind]))
+        rakll$secp.thazm[secp.f] <- spars['bfp'] * rakll$secp.thazm[secp.f] + 
+            spars['bfb'] * apply(dat.vm[secp.f,c('tfs','tmar')], 1, function(x)     sum(epicm[x['tfs']: (x['tmar']-1),epic.ind])) +
+                spars['bfe'] * apply(dat.vm[secp.f,c('fvis.tt','tmar')], 1, function(x) sum(epicm[x['tmar']:(x['fvis.tt']-1),epic.ind]))
+    }
     ## Excluded by error are couples that were observed during at least 2 visits, but with the
     ## last observed visit being serodiscordant. Based on Wawer et al.'s methods description and
     ## the fact that the exact same # of incident couples were followed for 1 interval as for 2
@@ -405,7 +408,7 @@ rak.wawer <- function(rak.coh, verbose = F, verbose2=F, browse = F, excl.extram 
     rakll$excl.by.err[inc.wh.nhh.exl.err] <- T
     ## person months = (# times observed SDC -1)*interv + interv/2
     rakll$pm[inc.wh.nhh] <- apply(ts.vm[,inc.wh.nhh], 2, function(x) sum(x %in% sdcs)-1)*interv + interv/2
-##################################################
+    ## ################################################
     ## Chronic infections
     ch.wh <- which(apply(ts.vm, 2, function(x) { sum(grepl('ss',x) + grepl('d\\.',x))==0  | (sum(grepl('ss',x))==0 & sum(grepl('d\\.hh\\.m',x))>0 & sum(x %in% sers.ap$ff)>0) | (sum(grepl('ss',x))==0 & sum(grepl('d\\.hh\\.f',x))>0 & sum(x %in% sers.ap$mm)>0) }))
     rakll$phase[ch.wh] <- 'prev'
@@ -417,7 +420,7 @@ rak.wawer <- function(rak.coh, verbose = F, verbose2=F, browse = F, excl.extram 
     ## those that stayed +-
     ch.wh.nhh <- ch.wh[!ch.wh %in% ch.wh.hh]
     rakll$pm[ch.wh.nhh] <- apply(ts.vm[,ch.wh.nhh], 2, function(x) sum(x %in% sdcs)-1)*interv
-##################################################
+    ## ################################################
     ## Late infections ## male death after male SDC, or vice versa
     lt.wh <- which(apply(ts.vm, 2, function(x) {sum(grepl('d\\.mm',x) | grepl('d\\.ff',x)) > 0 | (sum(grepl('d\\.hh\\.m',x))>0 & sum(x %in% sers.ap$mm)>0) | (sum(grepl('d\\.hh\\.f',x))>0 & sum(x %in% sers.ap$ff)>0) } ))
     ## **************************************************???
@@ -435,7 +438,7 @@ rak.wawer <- function(rak.coh, verbose = F, verbose2=F, browse = F, excl.extram 
     rakll$pm[lt.wh.nhh] <- apply(ts.vm[,lt.wh.nhh], 2, function(x) sum(x %in% sdcs))*interv
     rakll$phase <- factor(rakll$phase)
     rakll$phase <- relevel(rakll$phase, ref = 'prev')
-##################################################
+    ## ################################################
     ## one final adjustment, Wawer compare hazards from first '5 months' post incident couples'
     ## index partner's infection to the hazards in prevalent SDCs. So we need to truncate the
     ## person-months observe in incident couples to 5 months for those observed for longer in
@@ -868,8 +871,7 @@ ucp.lt.2 <- function(latet, dpars, browse=F) {
 }
  
  
-## turn SB simulation into Wawer style table differs from above function because not all individuals
-## are follow-ed up for same number of visits
+## turn SB simulation into Wawer style table
 sbmod.to.wdat <- function(sim, browse=F, excl.by.err = F) {    
     ## Excluding incident couples seen serodiscordant once & then never again as in Wawer 2005?
     if(browse) browser()
@@ -1244,4 +1246,3 @@ prevt <- data.frame(int = 1:4, n = c(161,129,92,45), i = c(14,9,10,3))
 latet <- data.frame(int = 4:1, n = c(22,35,31,13), i = c(2,9,8,0))
 wtab.rl <- list(inct=inct, prevt=prevt, latet=latet)
 wtab.rl.no.err <- list(inct=inct.no.err, prevt=prevt, latet=latet)
-

@@ -18,13 +18,18 @@ rr.ltf.hh <- 1
 rr.ltf.d <- 1
 rr.inc.sdc <- 1.5 ## how much faster is the rate at which incident SDC (ie who were previously -- in a survey visit) are LTF than regular SDC? .35 & 1.5 yields 50%
 
-## Parameters as used in SB simulation
-country <- which(ds.nm=='Uganda')
-epic.ind <- which(colnames(epicf)=='Uganda')
-pars.arr <- out.arr[,,which(in.arr[,1,2]==7),] # median and credible intervals for transmission coefficient estimates for this acute relative hazard
-hazs <- c("bmb","bfb","bme","bfe","bmp","bfp") # six gender-route specific transmission coefficients (*b*efore-, *e*xtra-, from-*p*artner-) for *m*ale & *f*emale
-spars <- pars.arr[hazs,2,country]              # get transmission coefficients from base country
-spars[5:6] <- .007
+## Real data parameters
+aniter=5000;anburn=1000;niter=10000;nburn=1500;init.jit=0.6
+
+if(!simul) {
+  ## Parameters as used in SB simulation
+  country <- which(ds.nm=='Uganda')
+  epic.ind <- which(colnames(epicf)=='Uganda')
+  pars.arr <- out.arr[,,which(in.arr[,1,2]==7),] # median and credible intervals for transmission coefficient estimates for this acute relative hazard
+  hazs <- c("bmb","bfb","bme","bfe","bmp","bfp") # six gender-route specific transmission coefficients (*b*efore-, *e*xtra-, from-*p*artner-) for *m*ale & *f*emale
+  spars <- pars.arr[hazs,2,country]              # get transmission coefficients from base country
+  spars[5:6] <- .007
+}
 
 args=(commandArgs(TRUE)) ## load arguments from R CMD BATCH 
 if(length(args)>0)  {## Then cycle through each element of the list and evaluate the expressions.
@@ -44,8 +49,11 @@ if(!is.null(sim.nm)) { ## if running from a qsub job
                         rr.ltf.ff = rr.ltf.ff, rr.ltf.mm = rr.ltf.mm, rr.ltf.hh = rr.ltf.hh, rr.ltf.d = rr.ltf.d, rr.inc.sdc = rr.inc.sdc,
                         verbose = T, browse = F)
   rm(output); gc() ## free up memory
-  ## reformat into wawer style line list & do Wawer style Poisson regressions, controlling
-  ## for various amounts of heterogeneity
+  if(resamp) { ## Resample simulations of 100,000 couples, to yield sample sizes equivalent to the
+               ## original Rakai retrospective cohort data reformat into wawer style line list & do
+               ## Wawer style Poisson regressions, controlling for various amounts of heterogeneity
+
+  }
   rcohsim <- rak.wawer(rak.coh = cohsim, excl.extram=excl.extram, decont=decont, start.rak = 1994,
                        het.gen.sd = het.gen.sd,
                        verbose = T, browse=F)
