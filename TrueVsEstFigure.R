@@ -11,161 +11,233 @@ west <- 36.25
 hest <- 65.4
 
 ####################################################################################################
-## True vs est 4x4 plot
-pdf(file.path(outdir, 'TrueVsEst.pdf'), w = 6.83, h = 6)
+## True vs est 6x3 plot
+pdf(file.path(outdir, 'TrueVsEst.pdf'), w = 6.83, h = 4.5)
+cols <- c('purple','red','blue','orange')
 ct <- 12
+mcex <- .8
 madj <- .5
 mln <- 2
 mlnv <- 3
-ptcol <- gray(.3)
-arcol <- gray(.5)
+ptcol <- gray(.4)
+arcol <- gray(.6)
 xmax <- 100
 ymax <- 110
 var <- 'ehm.ac'
 ## just get subsets we're interested in
-thf <- hf[hf$var==var & hf$ehm.late==40,] 
-twf <- wf[wf$var==var & wf$ehm.late==40 & wf$cov=='',]
+thf <- hf[hf$var==var ,] 
+twf <- wf[wf$var==var & wf$cov=='',]
 ## Layout 4x4 plot
-layout(matrix(c(1,11,7,2,12,8,3,5,9,4,6,10), 3, 4))
-par(mar = c(3.2,3,1,.5), ps = ct, oma = c(1,6,3,0))
-## 1) Waw, correct, het.gen = 0
-sel <-  twf$err=='base' & twf$het.sd==0 & twf$hobs=='obs0'
+layout(t(matrix(1:18, 6, 3)))
+par(mar = c(3.2,2.5,1,.1), ps = ct, oma = c(1,6,5.5,0))
+## 1) Waw, base, het.gen = 0, no late phase
+sel <-  twf$err=='base' & twf$het.sd==0 & twf$hobs=='obs0' & twf$ehm.late==10
 temp <- twf[sel,]
-plot(0,0, type='n', xlim = c(0, xmax), ylim = c(0,ymax), bty = 'n', xlab = '', ylab = '', main = expression(sigma[hazard]==0), las = 1, axes=F)
+plot(0,0, type='n', xlim = c(0, xmax), ylim = c(0,ymax), bty = 'n', xlab = '', ylab = '', main = '', las = 1, axes=F)
+abline(a=0, b=1, col = 'black', lty = 1)
 axis(2, seq(0,100, by = 20), las = 2)
 axis(1, seq(0,100, by = 20), las = 2)
-mtext('full inclusion', side = 3, adj = madj, line = mln)
-mtext('Wawer:\nno covariates', side = 2, adj = madj, line = mlnv)
+mtext('full inclusion', side = 3, adj = madj, line = mln, cex = mcex)
+mtext('Wawer Model', side = 2, adj = madj, line = mlnv, cex = mcex)
 with(temp, arrows(true , lci, true ,uci, length=.02, angle = 90, code = 3, col = arcol))
 with(temp, points(true , med, cex = .7, pch = 19, col = ptcol))
+with(temp, lines(1:100, predict(loess(med~true), 1:100), col = cols[1], lty = 3, lwd = 1.6))
+## 1) Waw, base, het.gen = 0, w/ late phase
+sel <-  twf$err=='base' & twf$het.sd==0 & twf$hobs=='obs0' & twf$ehm.late==40
+temp <- twf[sel,]
+plot(0,0, type='n', xlim = c(0, xmax), ylim = c(0,ymax), bty = 'n', xlab = '', ylab = '', main = '', las = 1, axes=F)
+mtext(bquote(sigma[hazard]==0), side = 3, line = .5, adj = .5)
 abline(a=0, b=1, col = 'black', lty = 1)
-segments(0, west, xmax, west, col = 'black', lty = 3, lwd = 2)
-## 2-4) Waw, err, het.gen = 0,1,2
-for(hh in 0:2) {
-  sel <-  twf$err=='XbErr' & twf$het.sd==hh & twf$hobs=='obs0'
+axis(2, seq(0,100, by = 20), las = 2)
+axis(1, seq(0,100, by = 20), lab = NA)
+with(temp, arrows(true , lci, true ,uci, length=.02, angle = 90, code = 3, col = arcol))
+with(temp, points(true , med, cex = .7, pch = 19, col = ptcol))
+with(temp, lines(1:100, predict(loess(med~true), 1:100), col = cols[1], lty = 2, lwd = 1.6))
+## segments(0, west, xmax, west, col = 'black', lty = 3, lwd = 2)
+## 2-4) Waw, err, het.gen = 0,1,2,3
+for(hh in 0:3) {
+  sel <-  twf$err=='XbErr' & twf$het.sd==hh & twf$hobs=='obs0' & twf$ehm.late==40
   temp <- twf[sel,]
-  plot(0,0, type='n', xlim = c(0, xmax), ylim = c(0,ymax), bty = 'n', xlab = '', ylab = '', main = bquote(sigma[hazard]==.(hh)), las = 1, axes = F)
-  axis(2, seq(0,100, by = 20), las = 2)
+  plot(0,0, type='n', xlim = c(0, xmax), ylim = c(0,ymax), bty = 'n', xlab = '', ylab = '',
+       main = '', las = 1, axes = F)
+  abline(a=0, b=1, col = 'black', lty = 1)
+  if(hh>0) mtext(bquote(sigma[hazard]==.(hh)), side = 3, line = .5, adj = .5)
+  axis(2, seq(0,100, by = 20), lab = NA)
   axis(1, seq(0,100, by = 20), las = 2)
   with(temp, arrows(true , lci, true ,uci, length=.02, angle = 90, code = 3, col = arcol))
   with(temp, points(true , med, cex = .7, pch = 19, col = ptcol))
-  abline(a=0, b=1, col = 'black', lty = 1)
-  segments(0, west, xmax, west, col = 'black', lty = 3, lwd = 2)
-  if(hh==1) mtext('excluded incident SDCs lost to follow-up', side = 3, adj = madj, line = mln)
+  with(temp, lines(1:100, predict(loess(med~true), 1:100), col = cols[hh+1], lty = 1, lwd = 1.3))
+  ## segments(0, west, xmax, west, col = 'black', lty = 3, lwd = 2)
+  if(hh==1) mtext('excluded incident SDCs lost to follow-up', side = 3, adj = madj, line = mln, cex = mcex)
 }
+mtext('elevated \nlate infectivity', side = 3, adj = .8, line = mln+1, cex = mcex, outer = T)
+mtext('no elevated \nlate infectivity', side = 3, adj = .1, line = mln+1, cex = mcex, outer = T)
+
+frame()
+mtext('Wawer Model:\n50% variance \ncontrolled \nthrough covariates', side = 2, adj = madj, line = mlnv-3, cex = mcex)
+frame()
+frame()
 ## 5-6) Waw, err, het.gen = 1,2, with 50% variance controlled
-for(hh in 1:2) {
-  sel <-  twf$err=='XbErr' & twf$het.sd==hh & twf$hobs=='obs0.7'
+for(hh in 1:3) {
+  sel <-  twf$err=='XbErr' & twf$het.sd==hh & twf$hobs=='obs0.7' & twf$ehm.late==40
   temp <- twf[sel,]
   plot(0,0, type='n', xlim = c(0, xmax), ylim = c(0,ymax), bty = 'n', xlab = '', ylab = '', main = '', las = 1, axes = F)
-  if(hh==1) mtext('Wawer:\n50% variance \ncontrolled \nthrough covariates', side = 2, adj = madj, line = mlnv+3)
-  axis(2, seq(0,100, by = 20), las = 2)
+  abline(a=0, b=1, col = 'black', lty = 1)
+  if(hh==1) axis(2, seq(0,100, by = 20), las = 2) else axis(2, seq(0,100, by = 20), lab = NA)
   axis(1, seq(0,100, by = 20), las = 2)
   with(temp, arrows(true , lci, true ,uci, length=.02, angle = 90, code = 3, col = arcol))
   with(temp, points(true , med, cex = .7, pch = 19, col = ptcol))
-  abline(a=0, b=1, col = 'black', lty = 1)
-  segments(0, west, xmax, west, col = 'black', lty = 3, lwd = 2)
+  with(temp, lines(1:100, predict(loess(med~true), 1:100), col = cols[hh+1], lty = 3, lwd = 1.6))
+  ## segments(0, west, xmax, west, col = 'black', lty = 3, lwd = 2)
 }
-## 7) Holl, correct, het.gen = 0
-sel <-  thf$err=='base' & thf$het.sd==0
+## 7) Holl, base, het.gen = 0, no late
+sel <-  thf$err=='base' & thf$het.sd==0 & thf$ehm.late==10
 temp <- thf[sel,]
 plot(0,0, type='n', xlim = c(0, xmax), ylim = c(0,ymax), bty = 'n', xlab = '', ylab = '', main = '', las = 1, axes = F)
+abline(a=0, b=1, col = 'black', lty = 1)
 axis(2, seq(0,100, by = 20), las = 2)
 axis(1, seq(0,100, by = 20), las = 2)
 with(temp, arrows(true , lci, true ,uci, length=.02, angle = 90, code = 3, col = arcol))
 with(temp, points(true , med, cex = .7, pch = 19, col = ptcol))
+with(temp, lines(1:100, predict(loess(med~true), 1:100), col = cols[1], lty = 3, lwd = 1.6))
+mtext('Hollingsworth Model', side = 2, adj = madj, line = mlnv, cex = mcex)
+## 7) Holl, base, het.gen = 0, with late
+sel <-  thf$err=='base' & thf$het.sd==0 & thf$ehm.late==40
+temp <- thf[sel,]
+plot(0,0, type='n', xlim = c(0, xmax), ylim = c(0,ymax), bty = 'n', xlab = '', ylab = '', main = '', las = 1, axes = F)
 abline(a=0, b=1, col = 'black', lty = 1)
-segments(0, hest, xmax, hest, col = 'black', lty = 3, lwd = 2)
-mtext('Hollingsworth:\nno covariates', side = 2, adj = madj, line = mlnv)
+axis(2, seq(0,100, by = 20), las = 2)
+axis(1, seq(0,100, by = 20), las = 2)
+with(temp, arrows(true , lci, true ,uci, length=.02, angle = 90, code = 3, col = arcol))
+with(temp, points(true , med, cex = .7, pch = 19, col = ptcol))
+with(temp, lines(1:100, predict(loess(med~true), 1:100), col = cols[1], lty = 2, lwd = 1.6))
+## segments(0, hest, xmax, hest, col = 'black', lty = 3, lwd = 2)
 ## 8-10) Holl, err, het.gen = 0,1,2
-for(hh in 0:2) {
+for(hh in 0:3) {
   sel <-  thf$err=='XbErr' & thf$het.sd==hh
   temp <- thf[sel,]
   plot(0,0, type='n', xlim = c(0, xmax), ylim = c(0,ymax), bty = 'n', xlab = '', ylab = '', main = '', las = 1, axes = F)
-  axis(2, seq(0,100, by = 20), las = 2)
+  abline(a=0, b=1, col = 'black', lty = 1)
+  axis(2, seq(0,100, by = 20), lab = NA)
   axis(1, seq(0,100, by = 20), las = 2)
   with(temp, arrows(true , lci, true ,uci, length=.02, angle = 90, code = 3, col = arcol))
   with(temp, points(true , med, cex = .7, pch = 19, col = ptcol))
-  abline(a=0, b=1, col = 'black', lty = 1)
-  segments(0, hest, xmax, hest, col = 'black', lty = 3, lwd = 2)
+  with(temp, lines(1:100, predict(loess(med~true), 1:100), col = cols[hh+1], lty = 1, lwd = 1.3))
+  ## segments(0, hest, xmax, hest, col = 'black', lty = 3, lwd = 2)
 }
 mtext(expression(paste('estimated ',EHM[acute])), side = 2, line = 4, adj = .5, outer = T, ps = 12)
 mtext(expression(paste('true (simulated) ',EHM[acute])), side = 1, line = 0, adj = .5, outer = T, ps = 12)
-dev.off()
+graphics.off()
+
 
 ####################################################################################################
-## function to plot LOESS for a subset
-ploes <- function(temp, err='XbErr', hsd=0, ehm.lt=40, hobs=NULL, x = 1:100, col='black', lty = 1, lwd = 1, ...) {
-  if(is.null(hobs))     sel <- with(temp, err==err & het.sd==hsd & ehm.late==ehm.lt)
-  if(!is.null(hobs))     sel <- with(temp, err==err & het.sd==hsd & hobs==hobs  & ehm.late==ehm.lt)
-  with(temp[sel,], lines(x, predict(loess(med~true, ...), x), col = col, lty = lty, lwd = lwd))
-}
-
-####################################################################################################
-## True vs est 4x4 plot: 2 panels with loess lines
+## True vs est 2X2 plot
 ##############################
-pdf(file.path(outdir, 'TrueVsEst LOESS.pdf'), w = 6.83, h = 3)
-hsds <- unique(c(twf$het.sd, thf$het.sd))
-cols <- colorRampPalette(c('purple','orange','red'))(length(hsds))
+pdf(file.path(outdir, 'TrueVsEst LOESS.pdf'), w = 6.83, h = 4.5)
+hsds <- 0:3 #unique(c(twf$het.sd, thf$het.sd))
+## cols <- colorRampPalette(c('purple','red','orange'))(length(hsds))
 ## cols <- rainbow(length(hsds))
-ct <- 8
-par(mfrow=c(1,2), mar = c(3.2,3,1,.5), pointsize = ct, oma = c(0,0,0,0))#, cex.main = ct, cex.lab = ct, cex.axis = ct)
-cex.leg <- .6
+cols <- c('purple','red','blue','orange')
+ct <- 10
+par(mfrow=c(2,2), mar = c(4,4.5,2.5,1.5), mgp=c(2.5,1,0), 'ps'=ct, oma = c(0,0,0,8))#, cex.main = ct, cex.lab = ct, cex.axis = ct)
+cex.leg <- 1
 madj <- .5
 mln <- 2
 mlnv <- 3
+####################################################################################################
+## Log-hazard distribution figure
+## pdf(file.path(outdir, 'log-hazard distributions.pdf'), w = 3, h = 3)
+## par(mar = c(4,.5,1,.5), 'ps'=8)
+plot(0,0, type = 'n', xlab = bquote(paste('multiple of ', lambda[hazard])), ylab='probability density', main='(A) Log-Hazard Distribution', bty = 'nn',
+     xlim = c(10^-3,10^3), log='x',ylim = c(0,.6), axes=F) ##xaxt='n')
+#axis(1, at = 10^(-3:3), lab = c(0.001, 0.01, 0.1, 1, 10, 100, 1000), las = 1)
+labs <- c(expression(10^-3), expression(10^-2), expression(10^-1), expression(10^0),expression(10^1), expression(10^2), expression(10^3))
+axis(1, at = 10^(-3:3), lab = labs, las = 1)
+axis(2, at = seq(0,.6, by = .2), las = 2)
+for(hsd in 1:3) {
+  curve(dnorm(log(x), 0,  hsd), from = 10^-3, to = 10^3, add = T, col = cols[hsd+1])
+}
+segments(1,0,1,1, col = cols[1])
+legend('topleft', leg = 0:3, lty = 1, col = cols, title = expression(sigma[hazard]), bty = 'n', cex = cex.leg)
+##################################################
+## ehm plots
 xmax <- 100
 ymax <- 100
 var <- 'ehm.ac'
 ## just get subsets we're interested in
-thf <- hf[hf$var==var & hf$ehm.late==40,] 
-twf <- wf[wf$var==var & wf$ehm.late==40 & wf$cov=='',]
+thf <- hf[hf$var==var,] 
+twf <- wf[wf$var==var &  wf$cov=='',]
 ## Plot layout
+ylab <- expression(paste('estimated ',EHM[acute]))
+xlab <- expression(paste('true (simulated) ',EHM[acute]))
 ## Wawer plot
 par('ps'=ct)
-plot(0,0, type='n', xlim = c(0, xmax), ylim = c(0,ymax), bty = 'n', xlab = '', ylab = '', main = '(A) Wawer Model', axes = F)
+plot(0,0, type='n', xlim = c(0, xmax), ylim = c(0,ymax), bty = 'n', xlab = xlab, ylab = ylab, main = '(B) Wawer Model', axes = F)
 abline(a=0,b=1, lwd=2)
 axis(2, seq(0,100, by = 20), las = 2)
 axis(1, seq(0,100, by = 20), las = 1)
-ploes(twf, err='base', hsd=0, hobs='obs0', lty = 2, col=cols[1]) ## Base, het=0, Wawer
+## seroincident ltf couples included EHM_late=0
+sel <- twf$err=='base' & twf$het.sd==0 & twf$hobs=='obs0' & twf$ehm.late==0
+with(twf[sel,], lines(1:100, predict(loess(med~true), 1:100), col = cols[1], lty = 3, lwd = 1))
+## seroincident ltf couples included
+sel <- twf$err=='base' & twf$het.sd==0 & twf$hobs=='obs0' & twf$ehm.late==40
+with(twf[sel,], lines(1:100, predict(loess(med~true), 1:100), col = cols[1], lty = 2, lwd = 1))
 ## Err, het=0:3, obs = 0,5 Wawer
 for(hh in 1:length(hsds)) {
-  for(bb in 1) { ## options to show multiple obs lines, do this on a separate figure though
-    hobs <- c('obs0','obs0.7')[bb]
-    ploes(twf, err='XbErr', hobs=hobs, hsd=hsds[hh], col =cols[hh], lty = bb)
-  }}
+  sel <- twf$err=='XbErr' & twf$het.sd==hsds[hh] & twf$hobs=='obs0' & twf$ehm.late==40
+  with(twf[sel,], lines(1:100, predict(loess(med~true), 1:100), col = cols[hh], lty = 1, lwd = 1))
+}
+legend('bottomright', leg = c('included','excluded'), lty = 2:1, cex = cex.leg, title='incident SDC \nlost to follow-up', bty = 'n')
 ##################################################
 ## Holl plot
-plot(0,0, type='n', xlim = c(0, xmax), ylim = c(0,ymax), bty = 'n', xlab = '', ylab = '', main = '(B) Hollingsworth Model', axes = F)
+plot(0,0, type='n', xlim = c(0, xmax), ylim = c(0,ymax), bty = 'n', xlab = xlab, ylab = ylab, main = '(C) Hollingsworth Model', axes = F)
 abline(a=0,b=1, lwd=2)
 axis(2, seq(0,100, by = 20), las = 2)
 axis(1, seq(0,100, by = 20), las = 1)
-ploes(thf, err='base', hsd=0, lty = 2, col=cols[1]) ## Base, het=0, Wawer
+## seroincident ltf couples included EHM_late=0
+sel <- thf$err=='base' & thf$het.sd==0 & thf$ehm.late==0
+with(thf[sel,], lines(1:100, predict(loess(med~true), 1:100), col = cols[1], lty = 3, lwd = 1))
+## seroincident ltf couples included
+sel <- thf$err=='base' & thf$het.sd==0 & thf$ehm.late==40
+with(thf[sel,], lines(1:100, predict(loess(med~true), 1:100), col = cols[1], lty = 2, lwd = 1))
 ## Err, het=0:3, obs = 0,5 Holl
-hsds <- unique(thf$het.sd) ## seq(0,3,by=.5)
 for(hh in 1:length(hsds)) {
-  for(bb in 1) { ## options to show multiple obs lines, do this on a separate figure though
-    hobs <- c('obs0','obs0.7')[bb]
-    ploes(thf, err='XbErr', hsd=hsds[hh], col =cols[hh], lty = bb)
-  }}
-legend('bottomright', leg = hsds, col = cols, lty = 1, bty = 'n', cex = cex.leg, title = 'degree of heterogeneity\nsigma =')
-legend('bottom', leg = c('included','excluded'), lty = 2:1, cex = cex.leg, bty = 'n', title='incident SDC \nlost to follow-up')
-##################################################
-mtext(expression(paste('estimated ',EHM[acute])), side = 2, line = -1, adj = .5, outer = T)#, ps = 12)
-mtext(expression(paste('true (simulated) ',EHM[acute])), side = 1, line = -1, adj = .5, outer = T)#, ps = 12)
+  sel <- thf$err=='XbErr' & thf$het.sd==hsds[hh] & thf$ehm.late==40
+  with(thf[sel,], lines(1:100, predict(loess(med~true), 1:100), col = cols[hh], lty = 1, lwd = 1))
+}
+####################################################################################################
+## Show how controlling for error affects things Wawer model
+cov <- c(0,.5,.7,.9)
+hobs <- paste0('obs', cov) #seq(0,1, by = .1))
+plot(0,0, type='n', xlim = c(0, xmax), ylim = c(0,ymax), bty = 'n', xlab = xlab, ylab = ylab, axes = F, main = '(D) Wawer Model (multivariate)')
+     ## main = 'Removing Heterogeneity by \nControlling for Measured Confounders',
+abline(a=0,b=1, lwd=2)
+axis(2, seq(0,100, by = 20), las = 2)
+axis(1, seq(0,100, by = 20), las = 1)
+sel <- twf$err=='XbErr' & twf$het.sd==0 & twf$hobs=='obs0' & twf$ehm.late==40
+with(twf[sel,], lines(1:100, predict(loess(med~true), 1:100), col = cols[1], lty = 1, lwd = 1))
+## Err, het=0:3, obs = 0,5 Wawer
+  for(bb in 1:length(hobs)) { ## options to show multiple obs lines, do this on a separate figure though
+    sel <- twf$err=='XbErr' & twf$het.sd==3 & twf$hobs==hobs[bb] & twf$ehm.late==40 
+    with(twf[sel,], lines(1:100, predict(loess(med~true), 1:100), col = cols[4], lty = bb, lwd = 1))
+  }
+legend('bottomright', leg = paste0(c(0,25,50,80),'%'), col = 'orange', lty = 1:4, bty = 'n', cex = cex.leg, ncol=1,
+       title = 'variance controlled')
 graphics.off()
  
 ####################################################################################################
 ## Show how controlling for error affects things
 ##############################
-pdf(file.path(outdir, 'TrueVsEst LOESS het obs.pdf'), w = 3.27, h = 3)
+pdf(file.path(outdir, 'TrueVsEst LOESS het obs.pdf'), w = 3.27, h = 2.7)
 ## cols <- rainbow(length(hsds))
 hsd <- 2 ## for this plot pick a het.gen
 cov <- c(0,.5,.7,.9)
+##cov <- seq(0,1,by=.1)
 hobs <- paste0('obs', cov) #seq(0,1, by = .1))
-cols <- colorRampPalette(c('purple','orange'))(length(hobs))
+# cols <- colorRampPalette(c('purple','orange'))(length(hobs))
+cols <- c('purple','red','blue','orange')
 ct <- 8
-par(mfrow=c(1,1), mar = c(3.2,3,1,.5), pointsize = ct, oma = c(0,0,0,0))#, cex.main = ct, cex.lab = ct, cex.axis = ct)
+par(mfrow=c(1,1), mar = c(3.2,3,1,.5), mgp = c(2.1, 1, 0), pointsize = ct, oma = c(0,0,0,0))#, cex.main = ct, cex.lab = ct, cex.axis = ct)
 cex.leg <- .8
 madj <- .5
 mln <- 2
@@ -179,21 +251,21 @@ twf <- wf[wf$var==var & wf$ehm.late==40 & wf$cov=='',]
 ## Plot layout
 ## Wawer plot
 par('ps'=ct)
-plot(0,0, type='n', xlim = c(0, xmax), ylim = c(0,ymax), bty = 'n', xlab = '', ylab = '', axes = F)
+plot(0,0, type='n', xlim = c(0, xmax), ylim = c(0,ymax), bty = 'n', xlab = xlab, ylab = ylab, axes = F)
      ## main = 'Removing Heterogeneity by \nControlling for Measured Confounders',
 abline(a=0,b=1, lwd=2)
 axis(2, seq(0,100, by = 20), las = 2)
 axis(1, seq(0,100, by = 20), las = 1)
-ploes(twf, err='XbErr', hobs='obs0', hsd=0, col =cols[1], lty = 2)
+sel <- with(twf, err=='XbErr' & het.sd==0 & hobs=='obs0')
+with(twf[sel,], lines(1:100, predict(loess(med~true), 1:100), col = cols[1], lty = 1, lwd = 1))
 ## Err, het=0:3, obs = 0,5 Wawer
   for(bb in 1:length(hobs)) { ## options to show multiple obs lines, do this on a separate figure though
-    ploes(twf, err='XbErr', hobs=hobs[bb], hsd=hsd, col =cols[bb], lty = 1)
+    sel <- twf$err=='XbErr' & twf$het.sd==hsd & twf$hobs==hobs[bb]
+    with(twf[sel,], lines(1:100, predict(loess(med~true), 1:100), col = cols[3], lty = bb, lwd = 1))
   }
-legend('bottomright', leg = cov^2, col = cols, lty = 1, bty = 'n', cex = cex.leg, ncol=2, title = 'proportion variance \ncontrolled for \nvia covariates')
-legend('topleft', leg = c('0','2'), lty = 2:1, cex = cex.leg, bty = 'n', title='sigma')
+legend('bottomright', leg = c(0,.25,.5,.8), col = 'blue', lty = 1:4, bty = 'n', cex = cex.leg, ncol=1, title = 'proportion variance \ncontrolled for \nvia covariates')
+#legend('topleft', leg = c('0','2'), lty = 2:1, cex = cex.leg, bty = 'n', title='sigma')
 ##################################################
-mtext(expression(paste('estimated ',EHM[acute])), side = 2, line = -1, adj = .5, outer = T)#, ps = 12)
-mtext(expression(paste('true (simulated) ',EHM[acute])), side = 1, line = -1, adj = .5, outer = T)#, ps = 12)
 graphics.off()
 
 ####################################################################################################
@@ -247,7 +319,6 @@ graphics.off()
 
 ####################################################################################################
 ## Get fake CI's for the real estimates using simulation
-
 ehmacp <- fout$exposts$atr.month.ac
 ## qehms <- quantile(ehmacp, c(.025,seq(.05,.95,by=.05), .975)) ## posterior quantiles
 ehm.q <- ecdf(ehmacp) ## empirical quantile function
@@ -266,5 +337,4 @@ with(twf, plot(jitter(het.sd, a = .2), true, col = col, xlim = c(-.2,3), ylim = 
 mtext(expression(paste('true ',EHM[acute])), side = 2, line = -1, adj = .5, outer = T)#, ps = 12)
 mtext(expression(paste(sigma['hazard'])), side = 1, line = -1, adj = .5, outer = T)#, ps = 12)
 dev.off()
-
 

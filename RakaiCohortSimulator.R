@@ -11,15 +11,15 @@ to.plot <- T
 
 ## jobnum=3189;simj=3189;batchdirnm="results/RakAcute/UgandaFits";nc=12;sim.nm="results/RakAcute/Uganda/Uganda-96200-3189.Rdata";simul=T;sb.sim=T;nc=12;seed.bump=0;interv=10;max.vis=5;ltf.prob=0.0693147180559945;rr.ltf.ff=1;rr.ltf.mm=1;rr.ltf.hh=1;rr.ltf.d=1;aniter=5000;anburn=1000;niter=10000;nburn=1500;init.jit=0.6;excl.extram=TRUE;decont=FALSE
 
+## Real data values
+## jobnum=1;simj=1;batchdirnm="";nc=12;sim.nm=NULL;simul=F;sb.sim=F;nc=12;seed.bump=0;interv=10;max.vis=5;ltf.prob=0;rr.ltf.ff=1;rr.ltf.mm=1;rr.ltf.hh=1;rr.ltf.d=1;aniter=10000;anburn=2000;niter=50000;nburn=2500;init.jit=0.6;excl.extram=TRUE;decont=FALSE
+
 ltf.prob <- -log(1-.35)/10 ## loss to follow-up probability of each couple, this yields 35% LOSS over 10 months as observed
 rr.ltf.ff <- 1     ## yields same 
 rr.ltf.mm <- 1     ## yields same
 rr.ltf.hh <- 1
 rr.ltf.d <- 1
 rr.inc.sdc <- 1.5 ## how much faster is the rate at which incident SDC (ie who were previously -- in a survey visit) are LTF than regular SDC? .35 & 1.5 yields 50%
-
-## Real data parameters
-aniter=5000;anburn=1000;niter=10000;nburn=1500;init.jit=0.6
 
 if(!simul) {
   ## Parameters as used in SB simulation
@@ -33,66 +33,66 @@ if(!simul) {
 
 args=(commandArgs(TRUE)) ## load arguments from R CMD BATCH 
 if(length(args)>0)  {## Then cycle through each element of the list and evaluate the expressions.
-    for(i in 1:length(args)) {
-        eval(parse(text=args[[i]]))
-    }  }
-if(!is.null(sim.nm)) { ## if running from a qsub job
-  load(sim.nm) ## load simulation
-  dpars <- output$rakpars ## Hollingsworth Model Parametes
-  output$infpm[,,3]/output$infpm[,2,3]
-  infpm <- output$infpm
-  init <- dpars
-  ldpars <- log(dpars)
-  het.gen.sd <- output$pars['het.gen.sd']
-  cohsim <- rak.coh.fxn(ts.ap = output$ts, dat = output$evout, start.rak = 1994, end.rak = 1999.5,
-                        interv = interv, max.vis = max.vis, ltf.prob = ltf.prob,
-                        rr.ltf.ff = rr.ltf.ff, rr.ltf.mm = rr.ltf.mm, rr.ltf.hh = rr.ltf.hh, rr.ltf.d = rr.ltf.d, rr.inc.sdc = rr.inc.sdc,
-                        verbose = T, browse = F)
-  rm(output); gc() ## free up memory
-  if(resamp) { ## Resample simulations of 100,000 couples, to yield sample sizes equivalent to the
-               ## original Rakai retrospective cohort data reformat into wawer style line list & do
-               ## Wawer style Poisson regressions, controlling for various amounts of heterogeneity
+  for(i in 1:length(args)) {
+    eval(parse(text=args[[i]]))
+  }  }
+  if(!is.null(sim.nm)) { ## if running from a qsub job
+    load(sim.nm) ## load simulation
+    dpars <- output$rakpars ## Hollingsworth Model Parametes
+    output$infpm[,,3]/output$infpm[,2,3]
+    infpm <- output$infpm
+    init <- dpars
+    ldpars <- log(dpars)
+    het.gen.sd <- output$pars['het.gen.sd']
+    cohsim <- rak.coh.fxn(ts.ap = output$ts, dat = output$evout, start.rak = 1994, end.rak = 1999.5,
+                          interv = interv, max.vis = max.vis, ltf.prob = ltf.prob,
+                          rr.ltf.ff = rr.ltf.ff, rr.ltf.mm = rr.ltf.mm, rr.ltf.hh = rr.ltf.hh, rr.ltf.d = rr.ltf.d, rr.inc.sdc = rr.inc.sdc,
+                          verbose = T, browse = F)
+    rm(output); gc() ## free up memory
+    if(resamp) { ## Resample simulations of 100,000 couples, to yield sample sizes equivalent to the
+      ## original Rakai retrospective cohort data reformat into wawer style line list & do
+      ## Wawer style Poisson regressions, controlling for various amounts of heterogeneity
+    }
+    rcohsim <- rak.wawer(rak.coh = cohsim, excl.extram=excl.extram, decont=decont, start.rak = 1994,
+                         het.gen.sd = het.gen.sd,
+                         verbose = T, browse=F)
+    rakll <- rcohsim$rakll
+  }else{
+    ## sim.nm <- file.path('results','RakAcute','Uganda','Uganda-48100-50.Rdata')
+    ## simulation paramters
+    hpars <- c(acute.sc = 276/10.6, late.sc = 76/10.6, bp = 10.6/1200, dur.ac = 2.9, dur.lt = 9, dur.aids = 10) ## Hollingsworth 2008 ests
+    dpars <- hpars
+    ##dpars <- c(acute.sc = 276/10.6, late.sc = 3*76/10.6, bp = 10.6/1200, dur.ac = 2.9, dur.lt = 3, dur.aids = 10) ## other values to sim
+    if(simul & !sb.sim)  {
+      load(file.path(batchdirnm, 'blocksHollFitTest.Rdata'))
+      simpars <- unlist(blocks[jobnum, names(dpars)])
+      sim <- holl.mod(i.n,p.n,l.n,dpars=simpars, verbose=F)
+      dpars <- simpars
+    }
+    ldpars <- log(dpars)
+  }
+  ## simulate using Hollingsworth et al. 2008 model (only do once)
 
-  }
-  rcohsim <- rak.wawer(rak.coh = cohsim, excl.extram=excl.extram, decont=decont, start.rak = 1994,
-                       het.gen.sd = het.gen.sd,
-                       verbose = T, browse=F)
-  rakll <- rcohsim$rakll
-}else{
-## sim.nm <- file.path('results','RakAcute','Uganda','Uganda-48100-50.Rdata')
-  ## simulation paramters
-  hpars <- c(acute.sc = 276/10.6, late.sc = 76/10.6, bp = 10.6/1200, dur.ac = 2.9, dur.lt = 9, dur.aids = 10) ## Hollingsworth 2008 ests
-  dpars <- hpars
-  ##dpars <- c(acute.sc = 276/10.6, late.sc = 3*76/10.6, bp = 10.6/1200, dur.ac = 2.9, dur.lt = 3, dur.aids = 10) ## other values to sim
-  if(simul & !sb.sim)  {
-    load(file.path(batchdirnm, 'blocksHollFitTest.Rdata'))
-    simpars <- unlist(blocks[jobnum, names(dpars)])
-    sim <- holl.mod(i.n,p.n,l.n,dpars=simpars, verbose=F)
-    dpars <- simpars
-  }
-  ldpars <- log(dpars)
-}
-## simulate using Hollingsworth et al. 2008 model (only do once)
 
 stepper <- 1
 excl.by.errs <- c(F,T) ##ifelse(sb.sim, c(F,T), F)
 for(excl.by.err in excl.by.errs) { ## Fit both with & without excluding -- to +- to LTF couples 
   if(simul) { ## simulated data
-      if(!sb.sim) { ## simulate using Hollingsworth et al. 2008 model
-          if(excl.by.err) stop(paste0("excl.by.err=T & !sb.sim: Hollingsworth simulator doesn't have any loss to follow-up"))
-          wtab.do <- sbmod.to.wdat(sim, excl.by.err = excl.by.err, browse=F)
-          print(wtab.do)
-          nm <- ifelse(excl.by.err,'sim exclErr', 'sim no exclErr')
-          ## ndirnm.bs <- file.path('results','HollingsworthAn','SimNOExclbyErr')
-          ## while(file.exists(paste0(ndirnm.bs,'-',ss))) ss <- ss+1
-          ## ndirnm <- paste0(ndirnm.bs,'-',ss)
-          ndirnm <- file.path(batchdirnm,jobnum)
-          ss <- 1
-      }else{ ## SB cohort simulated data loaded from file & converted to rakll format abovve
-        wtab.do <- sbmod.to.wdat(rakll, excl.by.err = excl.by.err, browse=F)
-        nm <- paste0('sim-',jobnum, ' Xerr'[excl.by.err], 'Xext'[excl.extram])
-        ndirnm <- file.path(batchdirnm,jobnum)
-      }
+    if(!sb.sim) { ## simulate using Hollingsworth et al. 2008 model
+      if(excl.by.err) stop(paste0("excl.by.err=T & !sb.sim: Hollingsworth simulator doesn't have any loss to follow-up"))
+      wtab.do <- sbmod.to.wdat(sim, excl.by.err = excl.by.err, browse=F)
+      print(wtab.do)
+      nm <- ifelse(excl.by.err,'sim exclErr', 'sim no exclErr')
+      ## ndirnm.bs <- file.path('results','HollingsworthAn','SimNOExclbyErr')
+      ## while(file.exists(paste0(ndirnm.bs,'-',ss))) ss <- ss+1
+      ## ndirnm <- paste0(ndirnm.bs,'-',ss)
+      ndirnm <- file.path(batchdirnm,jobnum)
+      ss <- 1
+    }else{ ## SB cohort simulated data loaded from file & converted to rakll format abovve
+      wtab.do <- sbmod.to.wdat(rakll, excl.by.err = excl.by.err, browse=F)
+      nm <- paste0('sim-',jobnum, ' Xerr'[excl.by.err], 'Xext'[excl.extram])
+      ndirnm <- file.path(batchdirnm,jobnum)
+    }
   }else{ ## real data
     if(excl.by.err) {
       wtab.do <- wtab.rl
@@ -157,22 +157,26 @@ for(excl.by.err in excl.by.errs) { ## Fit both with & without excluding -- to +-
   rm(pout, pout2, fout)
   gc()
 }
-## Save results as list
-if(sb.sim) fitout <- list(jobnum = jobnum, outtab.h = outtab, outtab.w = rcohsim$armod, erhs.w = rcohsim$erhs,
-                          wtab = wtab.do, rakll = rcohsim$rakll, gel = gel, infpm = infpm,
-                          dpars = dpars, het.gen.sd = het.gen.sd, 
-                          excl.extram = excl.extram, decont = decont,
-                          interv = interv, max.vis = max.vis, ltf.prob = ltf.prob,
-                          rr.ltf.ff = rr.ltf.ff, rr.ltf.mm = rr.ltf.mm, rr.ltf.hh = rr.ltf.hh, rr.ltf.d = rr.ltf.d)
-if(!sb.sim) fitout <- list(jobnum = jobnum, outtab.h = outtab, ## Hollingsworth-model generated data
-                          wtab = wtab.do, gel = gel, dpars = dpars, 
-                          excl.extram = excl.extram, decont = decont,
-                          interv = interv, max.vis = max.vis, ltf.prob = ltf.prob,
-                          rr.ltf.ff = rr.ltf.ff, rr.ltf.mm = rr.ltf.mm, rr.ltf.hh = rr.ltf.hh, rr.ltf.d = rr.ltf.d)
 
-if(!file.exists(file.path(batchdirnm, 'fitouts'))) dir.create(file.path(batchdirnm, 'fitouts'))
-save(fitout, file = file.path(batchdirnm, 'fitouts', paste0('fitout-',jobnum,'-ltf',signif(ltf.prob,3),'.Rdata')))
-
+if(!simul) {
+  write.csv(signif(outtab[,,'base'],3), file.path(ndirnm, 'outtab base.csv'))
+  write.csv(signif(outtab[,,'XbErr'],3), file.path(ndirnm, 'outtab XbErr.csv'))
+  save.image(file.path(ndirnm,'workspace.Rdata'))
+}else{ ## Save results as list
+  if(sb.sim) fitout <- list(jobnum = jobnum, outtab.h = outtab, outtab.w = rcohsim$armod, erhs.w = rcohsim$erhs,
+                            wtab = wtab.do, rakll = rcohsim$rakll, gel = gel, infpm = infpm,
+                            dpars = dpars, het.gen.sd = het.gen.sd, 
+                            excl.extram = excl.extram, decont = decont,
+                            interv = interv, max.vis = max.vis, ltf.prob = ltf.prob,
+                            rr.ltf.ff = rr.ltf.ff, rr.ltf.mm = rr.ltf.mm, rr.ltf.hh = rr.ltf.hh, rr.ltf.d = rr.ltf.d)
+  fitout <- list(jobnum = jobnum, outtab.h = outtab, ## Hollingsworth-model generated data
+                 wtab = wtab.do, gel = gel, dpars = dpars, 
+                 excl.extram = excl.extram, decont = decont,
+                 interv = interv, max.vis = max.vis, ltf.prob = ltf.prob,
+                 rr.ltf.ff = rr.ltf.ff, rr.ltf.mm = rr.ltf.mm, rr.ltf.hh = rr.ltf.hh, rr.ltf.d = rr.ltf.d)
+  if(!file.exists(file.path(batchdirnm, 'fitouts'))) dir.create(file.path(batchdirnm, 'fitouts'))
+  save(fitout, file = file.path(batchdirnm, 'fitouts', paste0('fitout-',jobnum,'-ltf',signif(ltf.prob,3),'.Rdata')))
+}
 #load(file.path(ndirnm,'workspace.Rdata'))
 
 

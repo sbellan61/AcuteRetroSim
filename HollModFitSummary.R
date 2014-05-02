@@ -55,39 +55,42 @@ hfh <- within(hfh, {ehm.acute <- (acute.sc - 1)*dur.ac})
 
 ## Compare these to fits of SB cohort data
 load(file=file.path('results','RakAcute','UgandaFitSummaries', 'wf.Rdata'))
-
-## Hollingsworth sensitivity analysis: showing estimates the elevated hazard months of the acute phase
-xmax <- 100
-ymax <- 150
-ct <- .7
-cols <- rep(NA,100)
-var <- 'ehm.ac'
-ehm.lates <- unique(c(hf$ehm.late,hfh$ehm.late))
-ehm.lates <- ehm.lates[order(ehm.lates)]
-cols[ehm.lates+1] <- colorRampPalette(c('purple','green','orange'))(length(ehm.lates))
-pdf(file.path(outdir,'HollAn HollMod ehm acute.pdf'), w = 6.83, h = 3.5)
-par(mfrow=c(1,2), mar = c(3.2,3,2,.5), cex.main = ct, cex.lab = ct*1.2, cex.axis = ct, oma = c(.3,0,0,0))
-mains <- paste0('(',LETTERS[1:2],') ', c('Hollingsworth', 'Bellan'), '\nData-Generation Model')
-for(jj in 1:2) { ## for Holl,SB generated data
-  dd <- c('hfh','hf')[jj]
-  temp <- get(dd)
-  temp <- temp[rev(order(temp$ehm.late)),]
-  plot(0,0, type='n', xlim = c(0, xmax), ylim = c(0,ymax), bty = 'n', xlab = '',
-       ylab = ifelse(jj==1, expression(paste('estimated ',EHM[acute])),''), main = mains[jj], mgp = c(2,1,0))
-  if(dd=='hfh') sel <- temp$var==var
-  if(dd=='hf') sel <- temp$var==var & temp$het.sd==0 & temp$err=='base'
-  with(temp[sel,],  arrows(true, lci, true,uci, length=.05, angle = 90, code = 3,col = cols[ehm.late+1]), lwd = .7)
-  with(temp[sel,],  points(true, med, col = cols[ehm.late+1], cex = .5, pch = 19))
-  ddply(temp[sel,], .(ehm.late), function(x) {lines(lowess(x$med ~ x$true), col = cols[x$ehm.late[1]+1], lwd = 2)})
-  abline(a=0, b=1, col = 'black', lty = 1)
-  segments(1, 75.4, xmax, 75.4, col = 'black', lty = 3, lwd = 2)
-  text(30, 72.4, 'Hollingsworth Estimate', pos = 3, cex = ct)
-  if(jj ==1)  legend(0,ymax, title= expression(paste(EHM[late])), ncol=2,
-         leg = ehm.lates, pch = 19, col=cols[ehm.lates+1], bty ='n', cex = .7)
-}
-mtext(expression(paste('true ',EHM[acute])), side = 1, line = -.8, adj = .5, outer = T, cex = ct*1.2)
-dev.off()
  
+## Hollingsworth sensitivity analysis: showing estimates the elevated hazard months of the acute phase
+ehm.lates <- unique(c(hf$ehm.late,hfh$ehm.late))
+ehm.lates <- ehm.lates[order(ehm.lates)] ## which ehmls exist
+ehmls <- c(10,40,90) ## which EHMlates to show (for clearer plots)
+ehmlas <- ehmls-10 ## -10 missing chronic months from AIDS phase
+xmax <- 100
+ymax <- 100
+var <- 'ehm.ac'
+cols <- c('purple','red','orange')
+pdf(file.path(outdir,'HollAn HollMod ehm acute.pdf'), w = 3.27, h = 3.5)
+par(mfrow=c(1,1), mar = c(3.5,3.5,1,.5), 'ps'=10, mgp = c(2.2,1,0))
+plot(0,0, type='n', xlim = c(0, xmax), ylim = c(0,ymax), bty = 'n', xlab = expression(paste('true ',EHM[acute])),
+     ylab = expression(paste('estimated ',EHM[acute])), main = '', asp=1)
+abline(a=0, b=1, col = gray(.4), lty = 1, lwd=2)
+for(jj in 1:2) { ## for Holl,SB generated data
+  dd <- c('hf','hfh')[jj]
+  temp <- get(dd)
+  temp <- temp[temp$ehm.late %in% ehmls,]
+  temp <- temp[rev(order(temp$ehm.late)),]
+  ## with(temp[sel,],  arrows(true, lci, true,uci, length=.05, angle = 90, code = 3,col = cols[ehm.late+1]), lwd = .7)
+  ## with(temp[sel,],  points(true, med, col = cols[ehm.late+1], cex = .5, pch = 19))
+  for(ee in length(ehmls):1) {
+      if(dd=='hfh') sel <- temp$var==var & temp$ehm.late==ehmls[ee]
+      if(dd=='hf') sel <- temp$var==var & temp$het.sd==0 & temp$err=='base' & temp$ehm.late==ehmls[ee]
+      lines(with(temp[sel,], lowess(med ~ true)), col = cols[ee], lwd = 1, lty = jj)
+  }
+  ## segments(1, 75.4, xmax, 75.4, col = 'black', lty = 3, lwd = 2)
+  ## text(30, 72.4, 'Hollingsworth Estimate', pos = 3, cex = ct)
+}
+legend(0,ymax, title= expression(paste(EHM[late+AIDS])), ncol=1,
+       leg = ehmlas, lty = 1, col=cols, bty ='n', cex = .7)
+legend('bottomright', leg = c('Hollingsworth', 'Bellan'), title='Data-Generation Model', lty = 1:2, cex = .7, bty = 'n')
+dev.off()
+
+
 ## Hollingsworth sensitivity analysis: showing estimates the elevated hazard months of the late phase
 xmax <- 100
 ymax <- 150
@@ -113,6 +116,39 @@ for(jj in 1:2) { ## for Holl,SB generated data
   if(dd=='hfh') legend(5,ymax, title= 'acute to chronic relative hazard \n(for months 20-11 prior to death)', ncol = 3,
        leg =acute.scs, pch = 19, col=cols[acute.scs], bty ='n', cex = .7)
 }
+dev.off()
+
+## Hollingsworth sensitivity analysis: showing estimates the elevated hazard months of the *LATE* phase
+ehm.acutes <- unique(c(hf$ehm.acute,hfh$ehm.acute))
+ehm.acutes <- ehm.acutes[order(ehm.acutes)] ## which ehmls exist
+ehmas <- c(0,10,30,48) ## which EHMlates to show (for clearer plots)
+xmax <- 100
+ymax <- 100
+var <- 'ehm.lt'
+cols <- c('purple','red','blue','orange')
+pdf(file.path(outdir,'HollAn HollMod ehm LATE.pdf'), w = 3.27, h = 3.5)
+par(mfrow=c(1,1), mar = c(3.5,3.5,1,.5), 'ps'=10, mgp = c(2.2,1,0))
+plot(0,0, type='n', xlim = c(0, xmax), ylim = c(0,ymax), bty = 'n', xlab = expression(paste('true ',EHM[late])),
+     ylab = expression(paste('estimated ',EHM[late])), main = '', asp=1)
+abline(a=0, b=1, col = gray(.4), lty = 1, lwd=2)
+for(jj in 1:2) { ## for Holl,SB generated data
+  dd <- c('hf','hfh')[jj]
+  temp <- get(dd)
+  temp <- temp[temp$ehm.acute %in% ehmas,]
+  temp <- temp[rev(order(temp$ehm.acute)),]
+  ## with(temp[sel,],  arrows(true, lci, true,uci, length=.05, angle = 90, code = 3,col = cols[ehm.late+1]), lwd = .7)
+  ## with(temp[sel,],  points(true, med, col = cols[ehm.late+1], cex = .5, pch = 19))
+  for(ee in length(ehmas):1) {
+      if(dd=='hfh') sel <- temp$var==var & temp$ehm.acute==ehmas[ee]
+      if(dd=='hf') sel <- temp$var==var & temp$het.sd==0 & temp$err=='base' & temp$ehm.acute==ehmas[ee]
+      lines(with(temp[sel,], lowess(med ~ true)), col = cols[ee], lwd = 1, lty = jj)
+  }
+  ## segments(1, 75.4, xmax, 75.4, col = 'black', lty = 3, lwd = 2)
+  ## text(30, 72.4, 'Hollingsworth Estimate', pos = 3, cex = ct)
+}
+legend(0,ymax, title= expression(paste(EHM[acute])), ncol=1,
+       leg = ehmas, lty = 1, col=cols, bty ='n', cex = .7)
+legend('bottomright', leg = c('Hollingsworth', 'Bellan'), title='Data-Generation Model', lty = 1:2, cex = .7, bty = 'n')
 dev.off()
 
 
