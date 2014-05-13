@@ -1,8 +1,11 @@
 
 cptime <- function(output, ## simulation output file
+                   coh = F, ## cohort
+                   ltf = F, ## ltf?
+                   retro.coh = F, ## retrospective cohort
                    ncpl = 12,    ## of couples sub-sampled for cohort-style figure
                    inf.only = F, ## only show infected couples
-                   yrmin = 1965, yrmax = 2013, ## time range
+                   yrmin = 1965, yrmax = 2000, ## time range
                    lwd = 1, lwd.cs = 4.4, ## line widths for outside couple & inside
                    col.mpre = 'black', col.fpre = 'black', ## pre-couple M & F SD couples colors
                    col.m = 'dark green', col.f = 'purple', ## M & F SD couples colors
@@ -10,12 +13,10 @@ cptime <- function(output, ## simulation output file
                    mort.pch = 4, age.pch = '|',## symbol for death
                    inf.pch.pre = 17, inf.pch.extra = 17, inf.pch.within = 17, ## symbols for outside & from-partner infections
                    inf.col.pre = 'dark gray', inf.col.extra = 'red', inf.col.within = 'blue', 
-                   ylab1 = 'example \nrelationship histories', ylab2 = 'serodiscordance proportion (SDP)',
+                   ylab1 = 'example \nrelationship histories', 
                    stacked.col = F, # depcrecated (polygons for SDP between M/F)
                    n.inf = NA, # number infected couples to have in sub-sample
-                   examp = 8,   # example couple
                    tmsd = 83*12, tfsd = 88*12, tmar = 90*12, tint = 113*12, # for example couple diagram
-                   show.bigsim = T, # show SDP line for full simulation (not just subsampled couples)
                    cex = 1, # symbol size
                    seed = 1, # random seed for sub-sampling couples
                    browse = F) # debug
@@ -41,73 +42,9 @@ cptime <- function(output, ## simulation output file
       sel <- sel[sel.ord]
     }
     ev <- evout[sel,]                   ## sub-sample data
-    layout(t(matrix(1:8,nr=2,nc=4)), hei= rep(1,4)) #c(.35,.5,.35,2.5)) ## panel layout (3 rows 1 column)
 ####################################################################################################
     ## Prevalence figures
-    epic.ind <- output$evout$epic.ind[1]
-    if(!is.na(examp)) {
-#      browser()
-      tmsd <- ev[examp,'tms']
-      tfsd <- ev[examp,'tfs']
-      tmar <- ev[examp,'tmar']
-      tint <- ev[examp,'tint']
-    }
-    ev <- rbind(ev[-examp,], ev[examp,])
-    ## female
-    for(ss in 1:2) {
-      par(mar = c(0,5,0,.5))
-#      par(xpd=F)
-      sex <- c('f','m')[ss]
-      osex <- c('m','f')[ss]
-      ymax <- c(.2, .2)
-##      sexlab <- paste('HIV prevalence in \n', c('women','men'))
-            sexlab <- c('women','men')
-      var1 <- get(paste0('epic',sex,'.all')) # no ART
-      var2 <- get(paste0('epic',sex))        # infectious prevalence
-      plot(0,0, type = 'n', xlim = c((yrmin-1900)*12, (yrmax-1900)*12), ylim = c(0, ymax[ss]),
-           axes = F, bty = 'n', xlab = '', ylab = sexlab[ss])
-      tts <- ((yrmin-1900)*12):((yrmax-1900)*12)
-      sd <- get(paste0('t',osex,'sd'))
-      predur <- sd:tmar
-      mardur <- tmar:(tint-1)
-      polygon(c(predur,rev(predur)), c(var2[predur,epic.ind],rep(0, length(predur))), col = 'dark gray', border = NA)
-      polygon(c(mardur,rev(mardur)), c(var2[mardur,epic.ind],rep(0, length(mardur))), col = 'red', border = NA)
-   #   lines(tts, var1[tts,epic.ind], col = 'black')
-      lines(tts, var2[tts,epic.ind], col = 'black', lty = 1)
-#      if(ss==2) axis(1, at = 12*(seq(yrmin, yrmax, by = 5)-1900), label = NA)
-      axis(2, at = seq(0,c(.2,.2)[ss], by = .1), las = 2)
-      if(ss==1) { ## relationship arrows
-        par(mar=c(1,5,1,.5))
-        plot(0,0, type = 'n', bty = 'n', axes = F, xlab='',ylab='', xlim = c((yrmin-1900)*12, (yrmax-1900)*12), ylim = c(-6,14))
-        par(xpd=NA)
-        mloc <- 4
-        lloc <- mloc+3.5
-        dar <- 15
-        segments(tmsd, lloc, tmar, lloc) #male ysa
-        segments(tfsd, -lloc, tmar, -lloc)#f
-        segments(tmar, -lloc, tmar, lloc)# cf
-        ## segments(tmar,mloc, tint, mloc) # mdur
-        ## segments(tmar,-mloc, tint, -mloc) #fdur
-        polygon(c(tmar,tint,tint,tmar),c(mloc,mloc,-mloc,-mloc), col = 'dark gray', border = NA)
-        arlen <- .03
-        arwd <- 1.5
-        arrows((tmar+tmsd)/2, dar, (tmar+tmsd)/2, lloc+2, col = 'dark gray', length = arlen, code = 2, lwd = arwd)
-        arrows((tmar+tint)/2, dar, (tmar+tint)/2, mloc+2, col = 'red', length = arlen, code = 2, lwd = arwd)
-        arrows((tmar+tfsd)/2, -dar, (tmar+tfsd)/2, -lloc-2, col = 'dark gray', length = arlen, code = 2, lwd = arwd)
-        arrows((tmar+tint)/2, -dar, (tmar+tint)/2, -mloc-2, col = 'red', length = arlen, code = 2, lwd = arwd)
-        arrows((tmar+tint)/2, -mloc, (tmar+tint)/2, mloc, col = 'blue', length = arlen, code = 3, lwd = arwd)
-        text((tmar+tmsd)/2, (dar + lloc + 4)/2, expression(lambda[paste('M,B')]), pos = 2, col = 'dark gray')
-        text((tmar+tfsd)/2, (-dar - lloc - 4)/2, expression(lambda[paste('F,B')]), pos = 2, col = 'dark gray')
-        text((tmar+tint)/2-8, (mloc + 7), expression(lambda[paste('M,E')]), pos = 3, col = 'red')        
-        text((tmar+tint)/2-8, (- mloc - 7), expression(lambda[paste('F,E')]), pos = 1, col = 'red')
-        text((tmar+tint)/2+30, (mloc + 2), expression(lambda[paste('M,P')]), pos = 3, col = 'blue')
-        text((tmar+tint)/2+30, (- mloc - 2), expression(lambda[paste('F,P')]), pos = 1, col = 'blue')    
-      }
-    }
-    plot(0,0, type = 'n', bty = 'n', axes = F, xlab='',ylab='', xlim = c((yrmin-1900)*12, (yrmax-1900)*12), ylim = c(-6,14),
-           pch = c(mort.pch), bty = 'n')
-    par(xpd=F)    
-    par(mar = c(4,5,0,.5), cex.axis = cex, cex.lab = cex, lend = 1)
+    par(mfrow=c(1,1), mar = c(4,3,0,.5), cex.axis = cex, cex.lab = cex, lend = 1)
     ys <- 1:ncpl        ## y-locations of each couple
     mys <- 1:ncpl + .23 ## male-specific symbol/line locations on each couple (pre-couple formation)
     fys <- 1:ncpl - .23 ## female
@@ -115,7 +52,7 @@ cptime <- function(output, ## simulation output file
     fysc <- 1:ncpl - .05
     plot(0,0, xlim = c((yrmin-1900)*12, (yrmax-1900)*12), # initialize plots
          ylim = c(0, length(sel)+4), xlab = "", ylab = ylab1, xaxt = "n", bty = "n", yaxt = "n")
-    axis(1, at = 12*(seq(yrmin, yrmax, by = 5)-1900), label = seq(yrmin, yrmax, by = 5)) ## x-axis
+    axis(1, at = 12*(seq(yrmin, yrmax, by = 1)-1900), label = seq(yrmin, yrmax, by = 1), las = 2) ## x-axis
     segments(ev$tms, mys, ev$tmar, mys, lwd = .8, col = 'black')# col.mpre) ## pre-couple durations
     segments(ev$tfs, fys, ev$tmar, fys, lwd = .8, col = 'black') # = col.fpre)
     segments(ev$tmar, mys, ev$tmar, fys, lwd = .8, col = 'black') # = col.mpre) ## couple fromation
@@ -165,6 +102,12 @@ cptime <- function(output, ## simulation output file
     ## add symbols: infections after couple formation from inside (extra-couple)                                                      
     points(ev$mdoi[ev$mdoi>ev$tmar & ev$mcoi =='p'], mys[ev$mdoi>ev$tmar & ev$mcoi =='p']+.1, pch = inf.pch.within, col = inf.col.within, cex = cex.inf.pt, crt = 180)
     points(ev$fdoi[ev$fdoi>ev$tmar & ev$fcoi =='p'], fys[ev$fdoi>ev$tmar & ev$fcoi =='p']-.2, pch = inf.pch.within, col = inf.col.within, cex = cex.inf.pt)
+    if(coh) { ## plot white blocks for dates not sampled
+      vis <- seq(94*12, 101*12, by = 10)
+      x1s <- c((yrmin-1-1900)*12, vis[-length(vis)] + 1)
+      x2s <- c(94*12, vis[-1])
+      rect(x1s, 0, x2s, length(sel)+2, col = 'white', border = NA)
+    }
     ## add symbols: deaths
     if(mort.pch == '|') {
       points(ev$mdod[ev$mdod==ev$taend], .5*(mys+fys)[ev$mdod==ev$taend], pch = mort.pch, col = col.m, cex = .8)
@@ -177,8 +120,5 @@ cptime <- function(output, ## simulation output file
     sel <- ev$mdod!=ev$taend & ev$fdod!=ev$taend & ev$taend < yrmax
     points(ev$taend[sel], ys[sel], pch = age.pch, col = 'black')#col.m)
     par(mar = c(4,5,0,.5))
-    ## legend('topleft', c('--','+-','++'), col = c(col.ccn,col.fsdc,col.ccp), bty = 'n', pch = 15, title='couple serostatus')
-    ## legend('topright', leg = c('AIDS death'), col = c('black'),
-    plot(0,0)
-    plot(0,0)    
+    legend('topleft', c('--','+-','++','AIDS death'), col = c(col.ccn,col.fsdc,col.ccp,'black'), bty = 'o', pch = c(rep(15,3),mort.pch))
   }

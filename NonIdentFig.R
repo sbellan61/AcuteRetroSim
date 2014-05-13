@@ -10,8 +10,7 @@ load(file = file.path('results','HollingsworthAn','RealExclbyErr','workspace.Rda
 fexp <- (fout$exposts)
 fexp$bp.ac <- fexp$bp * fexp$acute.sc
 quantile(fexp$bp.ac, c(0.025, .5, .975))*12
-
-
+outtab <- outtab[,,'XbErr']
 
 fmcmc <- as.mcmc(fout$posts)
 meds <- apply(fout$exposts[,c('acute.sc','dur.ac')], 2, median)
@@ -216,9 +215,6 @@ ticks <- levels#[-length(levels)]#ticks[-length(ticks)]
 color.legend(.09,.1,.15,.8, ticks, rect.col = cols, gradient = "y", cex = ct)
 text(.025, .8, expression(paste(EHM['L'+'AIDS'])), pos = 3, cex = ct)
 graphics.off()
-
-
-
 
 ####################################################################################################
 ## With conceptual plot too

@@ -8,8 +8,6 @@ setwd('/home1/02413/sbellan/Rakai/SDPSimulations/')     # setwd
 source("SimulationFunctions.R")
 source("ModDiagFxn.R")
 load('data files/epic.Rdata')
-#fs <- list.files('results/CounterFactual/Acute7/Zambia/', pattern='.Rdata', full.names = T)
-#fs <- "results/CounterFactual/Acute7/Zambia/Zambia-110600-1.Rdata"
 
 load(file = file.path('results','RakAcute','blocks.Rdata')) # these are country-acute phase specific blocks
 names(blocks)
@@ -33,21 +31,25 @@ if(!file.exists(outdir)) dir.create(outdir)      # create it
 ## subgroups & choose the best one for the paper in terms of clearly showing the concepts.
 col.sdc <- 'orange'
 col.ccp <- 'red'
-wrp <- function(run, browse=F, examp) {
+wrp <- function(run, browse=F, coh, ...) {
   print(paste0('working on run', run))
-  pdf(file.path(outdir, paste0('Figure 1-',run,'.pdf')), w = 6.83, h = 10)
-  cptime(output, ncpl = 40, inf.only = F, n.inf = 20, seed = run,  ylab2 = 'serodiscordant \nproportion',
+  pdf(file.path(outdir, paste0('Figure 1-','coh'[coh],run,'.pdf')), w = 6, h = 6)
+  cptime(output, ncpl =80, inf.only = F, n.inf = 35, seed = run,  ylab1 = 'simulated couples',
          age.pch = NA, inf.pch.pre = NA, inf.pch.extra=NA, inf.pch.within=NA,
-         yrmin = 1985, yrmax = 2000, browse = browse,
+         yrmin = 1990, yrmax = 2000, browse = browse,...,
          col.m = col.sdc,  col.msdc = col.sdc,
          col.f = col.sdc,  col.fsdc = col.sdc,
-         examp = examp,
          col.ccp = col.ccp)
   dev.off()
 }
  
 source("ModDiagFxn.R")
-wrp(1, examp = 38)
+wrp(1, coh=T)
+wrp(1, coh=F)
+
+mclapply(1, wrp)
+
+mclapply(1:30, wrp)
 
 wrp(56, browse=F)
 
