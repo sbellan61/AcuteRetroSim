@@ -4,7 +4,7 @@
 ## multivariate normal copulas to summarize multivariate correlations and simulate representative
 ## couples from each country, i.e. a pseudo-couple population.
 ####################################################################################################
-## Steve Bellan, 2013
+## Steve Bellan, 2014
 ####################################################################################################
 ## Note that age at first intercourse is given in years in the DHS
 ## (though those that were at the time of marriage may be in months
@@ -12,7 +12,7 @@
 ####################################################################################################
 rm(list=ls())                           # clear workspace
 library(graphics); library(animation); library(abind); library(mvtnorm); library(copula); library(logspline); library(actuar)
-setwd('/home1/02413/sbellan/SDPSimulations/')     # setwd
+## setwd('/home1/02413/sbellan/SDPSimulations/')     # setwd
 source("SimulationFunctions.R")                   # load simulation/fitting functions
 load("data files/epic.Rdata")                     ##  epidemic curves
 load("data files/pars.arr.ac.Rdata") # fitted transmission coefficients (out.arr) across range of acute phase RH's (in.arr)

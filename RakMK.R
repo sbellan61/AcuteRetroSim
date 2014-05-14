@@ -31,7 +31,7 @@ blocks <- expand.grid(acute.sc = c(1,2,5,7, seq(10,50,by=5)),
                       dur.ac = seq(.5,5, by = .5),
                       het.gen.sd = seq(0,3, by = .5),
                       dur.lt = c(5,10), dur.aids = 10, late.sc = c(2,5,10), aids.sc=0)
-blocks.add <- expand.grid(acute.sc = c(1,2,5,7, seq(10,50,by=5)),
+blocks.add <- expand.grid(acute.sc = c(1,2,5,7, seq(10,50,by=5)), ## added a second batch with more late.sc later
                       dur.ac = seq(.5,5, by = .5),
                       het.gen.sd = seq(0,3, by = .5),
                       dur.lt = c(5,10), dur.aids = 10, late.sc = 1, aids.sc=0)
