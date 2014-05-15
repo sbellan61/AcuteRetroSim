@@ -96,101 +96,95 @@ tab1$study <- c('based on VL', 'Wawer (raw)', 'Wawer (coital acts)', 'Wawer (ful
 hsds <- 0:3
 add.leg <- F
 x.offset <- 4
-modlab <- c('Univar','Multivar')
-for(mm in 1:2) {
-  if(mm==1) {## univar
-    cis <- wcis.univ
-    wsum <- wexsum.univ
-  }else{ ## multivar
-    cis <- wcis
-    wsum <- wexsum
-  }
-  pdf(file.path(outdir, paste0('Figure 5 - CIs Wawer ', modlab[mm], '.pdf')), w = ifelse(add.leg, 6.83, 7.5), h = ifelse(add.leg, 2.5, 4.5))
-  cols <- c('purple','red','blue','orange')
-  ## cols <- rainbow(length(hsds))
-  ylab <- expression(paste('estimated ',EHM[acute]))
-  xlab <- expression(paste('true ',EHM[acute]))
-  if(!add.leg) { ## presentations
-    to.do <- 1:6
-    mains <- c('Wawer Model', expression(paste(EHM[acute], ' estimates')))
-    par(mar=c(4,4,2,2), mgp = c(2.7,1,0),'ps'=12, oma = c(3.5,0,0,.5))
-    layout(matrix(1:2, nr=1, nc=2), w = c(1,1.3))
-    ymax <- 150
-    spc <- 1.2
-  }else{ ## publication
-    to.do <- c(1,4,5,6,7)
-    mains <- paste0('(',LETTERS[1:2],')')
-    par(mar=c(4,4,2,2), mgp = c(2.7,1,0),'ps'=13, oma = c(0,0,0,0))
-    layout(matrix(1:3, nr=1, nc=3), w = c(1,1,.6))
-    ymax <- 250
-  }
-##################################################
-  xmax <- 100
-  plot(0,0, type='n', xlim = c(0, xmax), ylim = c(0,ymax), bty = 'n', xlab = xlab, ylab = ylab, main = mains[1], las = 2)
-  ## polygon(c(0,xmax,xmax,0), rep(fexsum[c('2.5%','97.5%'),'ehm.ac'], each = 2), col = gray(.5), border = NA) ## Holl
-  ## segments(0,fexsum['50%','ehm.ac'], xmax, fexsum['50%','ehm.ac'], col = gray(.3))
-  polygon(c(0,xmax,xmax,0), rep(wsum[c(1,3)], each = 2), col = gray(.5), border = NA) ## Waw
-  segments(0,wsum[2], xmax, wsum[2], col = gray(.3))
-  abline(a=0,b=1, lwd=2)
-  for(hh in 1:length(hsds)) {
-    if(hsds[hh] %in% 0:3) {
-      ## sel <- thf$err=='XbErr' & thf$het.sd==hsds[hh] ##2
-      ## with(thf[sel,], lines(xs, predict(loess(med~true), xs), col = cols[hh], lty = 1, lwd = 1)) # holl
-      ## points(hcis[,paste0('sig',hsds[hh])], fexsum[c('2.5%','50%','97.5%'),'ehm.ac'], pch = 19, col = cols[hh], cex = .4)
-      sel <- twf$err=='XbErr' & twf$het.sd==hsds[hh] & twf$hobs=='obsNA'##2
-      with(twf[sel,], lines(xs, predict(loess(med~true), xs), col = cols[hh], lty = 1, lwd = 1)) # waw
-      points(cis[,paste0('sig',hsds[hh])], wsum, pch = 19, col = cols[hh], cex = .4)
-    }
-  }
-  par('xpd'=T)
-  arrows(xmax*1.1, wsum[3], xmax*1.1, wsum[1], code = 3, len = .05, angle = 90, col = gray(.3))
-  points(xmax*1.1, wsum[2], pch = 19, col = gray(.3))
-  if(add.leg)   text(xmax*1.1, wsum[3], '(II)', pos = 3) ## 
-  ## text(xmax+2, wsum[3]+1, 'point estimate', pos = 3)
-  ## text(xmax, wsum[2], 'point estimate', pos = 4)
-  ## text(xmax, wsum[1], '95% CI lower bound', pos = 4)
-  ## text(xmax, wsum[3], '95% CI upper bound', pos = 4)
-  ## Show all CIs
-  par(mar=c(4,5,2,0.5))
-  plot(0,0, type = 'n', xlab = '', ylab = xlab, bty = 'n',
-       main = mains[2], xlim = c(-.2,x.offset + (length(to.do)*spc)), ylim = c(0,ymax), axes=F)
-  mtext(bquote(sigma['hazard']), side =  1, line = 3, adj = .15)
-  axis(1, hsds)
-  par('xpd'=F)
-  abline(h=seq(0,ymax,by=10), col = gray(.9))
-  par('xpd'=T)
-  axis(2, seq(0,ymax, by = 50), las = 2)
-  axis(2, seq(0,ymax, by = 10), lab=NA)
-  ## Holl
-  ## for(ii in 1:length(hsds)) arrows(hsds[ii], hcis[1,ii], hsds[ii], hcis[3,ii], code = 3, len = .05, angle = 90, col = cols[ii])
-  ## for(ii in 1:length(hsds)) points(hsds[ii], hcis[2,ii], pch = 19, col = cols[ii])
-  ## Wawer
-  for(ii in 1:length(hsds)) arrows(hsds[ii], cis[1,paste0('sig',hsds[ii])], hsds[ii], cis[3,paste0('sig',hsds[ii])], code = 3, len = .05, angle = 90, col = cols[ii])
-  for(ii in 1:length(hsds)) points(hsds[ii], cis[2,paste0('sig',hsds[ii])], pch = 19, col = cols[ii])
-  for(ii in 1:length(to.do))
-    {
-      dd <- to.do[ii]
-      iid <- ii*spc
-      points(iid+x.offset, tab1[dd,'med'], pch = 19, col = gray(.3))    
-      arrows(iid+x.offset, tab1[dd,'lci'], iid+x.offset, tab1[dd,'uci'], code = 3, len = .05, angle = 90, col = gray(.3))
-      if(add.leg) text(iid+x.offset, max(tab1[dd,-1],na.rm=T), paste0('(',as.roman(ii), ')'), pos = 3)
-    }
-  if(add.leg) {
-    axis(1, c(x.offset+1, x.offset + length(to.do)), lab = NA)
-    text(x.offset + length(to.do)/2 + .5, -30, 'other estimates')
-  }else{
-    axis(1, x.offset+ 1:length(to.do)*spc, lab = tab1[to.do,'study'], las = 2)
-  }
-  if(add.leg) {
-    par(mar=rep(.5,4))
-    plot(0,0, type = 'n', xlab ='', ylab='', axes =F, bty = 'n')
-    box()
-    labs <- paste0('(',as.roman(1:length(to.do)), ') ', tab1$study[to.do])
-    mtext('Legend', side = 3, line = -1, adj = .5, cex = .6)
-    for(ii in 1:6) mtext(labs[ii], side = 3, line = -ii*2.8, adj = .5, cex = .6)
-  }
-  graphics.off()
+modlab <- c('Multivar')
+cis <- wcis
+wsum <- wexsum
+pdf(file.path(outdir, paste0('Figure 5 - CIs Wawer ', modlab[mm], '.pdf')), w = ifelse(add.leg, 6.83, 7.5), h = ifelse(add.leg, 2.5, 4.5))
+cols <- c('purple','red','blue','orange')
+## cols <- rainbow(length(hsds))
+ylab <- expression(paste('estimated ',EHM[acute]))
+xlab <- expression(paste('true ',EHM[acute]))
+if(!add.leg) { ## presentations
+  to.do <- 1:6
+  mains <- c('Wawer Model', expression(paste(EHM[acute], ' estimates')))
+  par(mar=c(4,4,2,2), mgp = c(2.7,1,0),'ps'=12, oma = c(3.5,0,0,.5))
+  layout(matrix(1:2, nr=1, nc=2), w = c(1,1.3))
+  ymax <- 150
+  spc <- 1.2
+}else{ ## publication
+  to.do <- c(1,4,5,6,7)
+  mains <- paste0('(',LETTERS[1:2],')')
+  par(mar=c(4,4,2,2), mgp = c(2.7,1,0),'ps'=13, oma = c(0,0,0,0))
+  layout(matrix(1:3, nr=1, nc=3), w = c(1,1,.6))
+  ymax <- 250
 }
+##################################################
+xmax <- 100
+plot(0,0, type='n', xlim = c(0, xmax), ylim = c(0,ymax), bty = 'n', xlab = xlab, ylab = ylab, main = mains[1], las = 2)
+## polygon(c(0,xmax,xmax,0), rep(fexsum[c('2.5%','97.5%'),'ehm.ac'], each = 2), col = gray(.5), border = NA) ## Holl
+## segments(0,fexsum['50%','ehm.ac'], xmax, fexsum['50%','ehm.ac'], col = gray(.3))
+polygon(c(0,xmax,xmax,0), rep(wsum[c(1,3)], each = 2), col = gray(.5), border = NA) ## Waw
+segments(0,wsum[2], xmax, wsum[2], col = gray(.3))
+abline(a=0,b=1, lwd=2)
+for(hh in 1:length(hsds)) {
+  if(hsds[hh] %in% 0:3) {
+    ## sel <- thf$err=='XbErr' & thf$het.sd==hsds[hh] ##2
+    ## with(thf[sel,], lines(xs, predict(loess(med~true), xs), col = cols[hh], lty = 1, lwd = 1)) # holl
+    ## points(hcis[,paste0('sig',hsds[hh])], fexsum[c('2.5%','50%','97.5%'),'ehm.ac'], pch = 19, col = cols[hh], cex = .4)
+    sel <- twf$err=='XbErr' & twf$het.sd==hsds[hh] & twf$hobs=='obsNA'##2
+    with(twf[sel,], lines(xs, predict(loess(med~true), xs), col = cols[hh], lty = 1, lwd = 1)) # waw
+    points(cis[,paste0('sig',hsds[hh])], wsum, pch = 19, col = cols[hh], cex = .4)
+  }
+}
+par('xpd'=T)
+arrows(xmax*1.1, wsum[3], xmax*1.1, wsum[1], code = 3, len = .05, angle = 90, col = gray(.3))
+points(xmax*1.1, wsum[2], pch = 19, col = gray(.3))
+if(add.leg)   text(xmax*1.1, wsum[3], '(II)', pos = 3) ## 
+## text(xmax+2, wsum[3]+1, 'point estimate', pos = 3)
+## text(xmax, wsum[2], 'point estimate', pos = 4)
+## text(xmax, wsum[1], '95% CI lower bound', pos = 4)
+## text(xmax, wsum[3], '95% CI upper bound', pos = 4)
+## Show all CIs
+par(mar=c(4,5,2,0.5))
+plot(0,0, type = 'n', xlab = '', ylab = xlab, bty = 'n',
+     main = mains[2], xlim = c(-.2,x.offset + (length(to.do)*spc)), ylim = c(0,ymax), axes=F)
+mtext(bquote(sigma['hazard']), side =  1, line = 3, adj = .15)
+axis(1, hsds)
+par('xpd'=F)
+abline(h=seq(0,ymax,by=10), col = gray(.9))
+par('xpd'=T)
+axis(2, seq(0,ymax, by = 50), las = 2)
+axis(2, seq(0,ymax, by = 10), lab=NA)
+## Holl
+## for(ii in 1:length(hsds)) arrows(hsds[ii], hcis[1,ii], hsds[ii], hcis[3,ii], code = 3, len = .05, angle = 90, col = cols[ii])
+## for(ii in 1:length(hsds)) points(hsds[ii], hcis[2,ii], pch = 19, col = cols[ii])
+## Wawer
+for(ii in 1:length(hsds)) arrows(hsds[ii], cis[1,paste0('sig',hsds[ii])], hsds[ii], cis[3,paste0('sig',hsds[ii])], code = 3, len = .05, angle = 90, col = cols[ii])
+for(ii in 1:length(hsds)) points(hsds[ii], cis[2,paste0('sig',hsds[ii])], pch = 19, col = cols[ii])
+for(ii in 1:length(to.do))
+  {
+    dd <- to.do[ii]
+    iid <- ii*spc
+    points(iid+x.offset, tab1[dd,'med'], pch = 19, col = gray(.3))    
+    arrows(iid+x.offset, tab1[dd,'lci'], iid+x.offset, tab1[dd,'uci'], code = 3, len = .05, angle = 90, col = gray(.3))
+    if(add.leg) text(iid+x.offset, max(tab1[dd,-1],na.rm=T), paste0('(',as.roman(ii), ')'), pos = 3)
+  }
+if(add.leg) {
+  axis(1, c(x.offset+1, x.offset + length(to.do)), lab = NA)
+  text(x.offset + length(to.do)/2 + .5, -30, 'other estimates')
+}else{
+  axis(1, x.offset+ 1:length(to.do)*spc, lab = tab1[to.do,'study'], las = 2)
+}
+if(add.leg) {
+  par(mar=rep(.5,4))
+  plot(0,0, type = 'n', xlab ='', ylab='', axes =F, bty = 'n')
+  box()
+  labs <- paste0('(',as.roman(1:length(to.do)), ') ', tab1$study[to.do])
+  mtext('Legend', side = 3, line = -1, adj = .5, cex = .6)
+  for(ii in 1:6) mtext(labs[ii], side = 3, line = -ii*2.8, adj = .5, cex = .6)
+}
+graphics.off()
+
   
 ####################################################################################################
 ## EHM literature estimates for presentation
