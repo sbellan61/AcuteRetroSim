@@ -1,17 +1,18 @@
 library(plyr); library(data.table); library(abind); library(multicore)
 rm(list=ls(all=T)); gc()
 ## Summarize Hollingsworth & Wawer style fits to simulated data
+## Creates Figures 3 & S4 from the manuscript
 setwd('/home1/02413/sbellan/Rakai/SDPSimulations/')     # setwd
 outdir <- file.path('results','RakAcute','UgandaFitSummaries')
 nc <- 12                                       # core per simulation
 load(file=file.path(outdir, 'wf.Rdata'))
 load(file = file.path('results','HollingsworthAn','RealExclbyErr','workspace.Rdata')) ## fit to real data
 
-west <- 36.25
-hest <- 65.4
+west <- 36.25 ## Wawer median (if plotting horizontal line to show their estimate on the plots)
+hest <- 65.4 ## Holl median (refit) (if plotting horizontal line to show their estimate on the plots)
 
 ####################################################################################################
-## True vs est 6x3 plot
+## Figure S4
 pdf(file.path(outdir, 'TrueVsEst.pdf'), w = 6.83, h = 4.5)
 cols <- c('purple','red','blue','orange')
 ct <- 12
@@ -72,7 +73,6 @@ for(hh in 0:3) {
 }
 mtext('elevated \nlate infectivity', side = 3, adj = .8, line = mln+1, cex = mcex, outer = T)
 mtext('no elevated \nlate infectivity', side = 3, adj = .1, line = mln+1, cex = mcex, outer = T)
-
 frame()
 mtext('Wawer Model:\n50% variance \ncontrolled \nthrough covariates', side = 2, adj = madj, line = mlnv-3, cex = mcex)
 frame()
@@ -131,7 +131,7 @@ graphics.off()
 
 
 ####################################################################################################
-## True vs est 2X2 plot
+## Figure 3
 ##############################
 pdf(file.path(outdir, 'TrueVsEst LOESS.pdf'), w = 6.83, h = 4.5)
 hsds <- 0:3 #unique(c(twf$het.sd, thf$het.sd))
@@ -194,7 +194,7 @@ plot(0,0, type='n', xlim = c(0, xmax), ylim = c(0,ymax), bty = 'n', xlab = xlab,
 abline(a=0,b=1, lwd=2)
 axis(2, seq(0,100, by = 20), las = 2)
 axis(1, seq(0,100, by = 20), las = 1)
-## seroincident ltf couples included EHM_late=0
+## seroincident ltf couples included EHM_late=0 
 sel <- thf$err=='base' & thf$het.sd==0 & thf$ehm.late==0
 with(thf[sel,], lines(1:100, predict(loess(med~true), 1:100), col = cols[1], lty = 3, lwd = 1))
 ## seroincident ltf couples included
@@ -224,117 +224,4 @@ with(twf[sel,], lines(1:100, predict(loess(med~true), 1:100), col = cols[1], lty
 legend('bottomright', leg = paste0(c(0,25,50,80),'%'), col = 'orange', lty = 1:4, bty = 'n', cex = cex.leg, ncol=1,
        title = 'variance controlled')
 graphics.off()
- 
-####################################################################################################
-## Show how controlling for error affects things
-##############################
-pdf(file.path(outdir, 'TrueVsEst LOESS het obs.pdf'), w = 3.27, h = 2.7)
-## cols <- rainbow(length(hsds))
-hsd <- 2 ## for this plot pick a het.gen
-cov <- c(0,.5,.7,.9)
-##cov <- seq(0,1,by=.1)
-hobs <- paste0('obs', cov) #seq(0,1, by = .1))
-# cols <- colorRampPalette(c('purple','orange'))(length(hobs))
-cols <- c('purple','red','blue','orange')
-ct <- 8
-par(mfrow=c(1,1), mar = c(3.2,3,1,.5), mgp = c(2.1, 1, 0), pointsize = ct, oma = c(0,0,0,0))#, cex.main = ct, cex.lab = ct, cex.axis = ct)
-cex.leg <- .8
-madj <- .5
-mln <- 2
-mlnv <- 3
-xmax <- 100
-ymax <- 100
-var <- 'ehm.ac'
-## just get subsets we're interested in
-thf <- hf[hf$var==var & hf$ehm.late==40,] 
-twf <- wf[wf$var==var & wf$ehm.late==40 & wf$cov=='',]
-## Plot layout
-## Wawer plot
-par('ps'=ct)
-plot(0,0, type='n', xlim = c(0, xmax), ylim = c(0,ymax), bty = 'n', xlab = xlab, ylab = ylab, axes = F)
-     ## main = 'Removing Heterogeneity by \nControlling for Measured Confounders',
-abline(a=0,b=1, lwd=2)
-axis(2, seq(0,100, by = 20), las = 2)
-axis(1, seq(0,100, by = 20), las = 1)
-sel <- with(twf, err=='XbErr' & het.sd==0 & hobs=='obs0')
-with(twf[sel,], lines(1:100, predict(loess(med~true), 1:100), col = cols[1], lty = 1, lwd = 1))
-## Err, het=0:3, obs = 0,5 Wawer
-  for(bb in 1:length(hobs)) { ## options to show multiple obs lines, do this on a separate figure though
-    sel <- twf$err=='XbErr' & twf$het.sd==hsd & twf$hobs==hobs[bb]
-    with(twf[sel,], lines(1:100, predict(loess(med~true), 1:100), col = cols[3], lty = bb, lwd = 1))
-  }
-legend('bottomright', leg = c(0,.25,.5,.8), col = 'blue', lty = 1:4, bty = 'n', cex = cex.leg, ncol=1, title = 'proportion variance \ncontrolled for \nvia covariates')
-#legend('topleft', leg = c('0','2'), lty = 2:1, cex = cex.leg, bty = 'n', title='sigma')
-##################################################
-graphics.off()
-
-####################################################################################################
-## Show how late phase affects things
-##############################
-pdf(file.path(outdir, 'TrueVsEst LOESS by ehmlate.pdf'), w = 6.83, h = 3)
-## cols <- rainbow(length(hsds))
-ehm.lates <- unique(c(hf$ehm.late,wf$ehm.late))
-ehm.lates <- ehm.lates[order(ehm.lates)]
-cols <- colorRampPalette(c('purple','orange'))(length(ehm.lates))
-ct <- 8
-par(mfrow=c(1,1), mar = c(3.2,3,1,.5), pointsize = ct, oma = c(0,0,0,0))#, cex.main = ct, cex.lab = ct, cex.axis = ct)
-cex.leg <- .8
-madj <- .5
-mln <- 2
-mlnv <- 3
-xmax <- 100
-ymax <- 100
-var <- 'ehm.ac'
-## just get subsets we're interested in
-thf <- hf[hf$var==var & hf$err=='base' ,] 
-twf <- wf[with(wf, var==var & err=='base' & cov=='' & hobs=='obs0'),]
-## Plot layout
-par('ps'=ct, mfrow=c(1,2))
-## Wawer plot
-plot(0,0, type='n', xlim = c(0, xmax), ylim = c(0,ymax), bty = 'n', xlab = '', ylab = '', axes = F)
-     ## main = 'Removing Heterogeneity by \nControlling for Measured Confounders',
-abline(a=0,b=1, lwd=2)
-axis(2, seq(0,100, by = 20), las = 2)
-axis(1, seq(0,100, by = 20), las = 1)
-## Wawer, Err, het = 0, late=0,10,40,90
-  for(bb in 1:length(ehm.lates)) { ## options to show multiple obs lines, do this on a separate figure though
-    ploes(twf, err='base', hobs='obs0', hsd=0, ehm.lt=ehm.lates[bb], col =cols[bb], lty = 1)
-  }
-##########
-## Holl plot
-plot(0,0, type='n', xlim = c(0, xmax), ylim = c(0,ymax), bty = 'n', xlab = '', ylab = '', axes = F)
-abline(a=0,b=1, lwd=2)
-axis(2, seq(0,100, by = 20), las = 2)
-axis(1, seq(0,100, by = 20), las = 1)
-## Holl, Err, het = 0, late=0,10,40,90
-  for(bb in 1:length(ehm.lates)) { ## options to show multiple obs lines, do this on a separate figure though
-    ploes(thf, err='base', hsd=0, ehm.lt=ehm.lates[bb], col =cols[bb], lty = 1)
-  }
-legend('bottomright', leg = ehm.lates, col = cols, lty = 1, bty = 'n', cex = cex.leg, ncol=2, title = expression(EHM['late']))
-##################################################
-mtext(expression(paste('estimated ',EHM[acute])), side = 2, line = -1, adj = .5, outer = T)#, ps = 12)
-mtext(expression(paste('true (simulated) ',EHM[acute])), side = 1, line = -1, adj = .5, outer = T)#, ps = 12)
-graphics.off()
-
-
-####################################################################################################
-## Get fake CI's for the real estimates using simulation
-ehmacp <- fout$exposts$atr.month.ac
-## qehms <- quantile(ehmacp, c(.025,seq(.05,.95,by=.05), .975)) ## posterior quantiles
-ehm.q <- ecdf(ehmacp) ## empirical quantile function
-## Assign a quantile to every simulation results
-twf <- wf[with(wf, var=='ehm.ac' & err=='base' & cov=='' & hobs=='obs0' & ehm.late==40),]
-head(twf)
-twf <- ddply(twf, .(), transform, rl.qnt = ehm.q(med))
-pal <- colorRamp(c('purple','orange','red'))
-twf$col <- apply(pal(abs(twf$rl.qnt-.5)*2), 1, function(x) rgb(x[1],x[2],x[3], alpha = 100, maxColorValue=255))
-
-pdf(file.path(outdir, 'fake cis.pdf'), w = 3.27, h = 3)
-ct <- 8
-par('ps'=ct, mar=c(3,3,1,1))
-with(twf, plot(jitter(het.sd, a = .2), true, col = col, xlim = c(-.2,3), ylim = c(0,100), pch = 19, cex = .2,
-               main='true values consistent with real estimates'))
-mtext(expression(paste('true ',EHM[acute])), side = 2, line = -1, adj = .5, outer = T)#, ps = 12)
-mtext(expression(paste(sigma['hazard'])), side = 1, line = -1, adj = .5, outer = T)#, ps = 12)
-dev.off()
 

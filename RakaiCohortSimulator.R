@@ -14,12 +14,11 @@ to.plot <- T
 ## Real data values
 ## jobnum=1;simj=1;batchdirnm="";nc=12;sim.nm=NULL;simul=F;sb.sim=F;nc=12;seed.bump=0;interv=10;max.vis=5;ltf.prob=0;rr.ltf.ff=1;rr.ltf.mm=1;rr.ltf.hh=1;rr.ltf.d=1;aniter=10000;anburn=2000;niter=50000;nburn=2500;init.jit=0.6;excl.extram=TRUE;decont=FALSE
 
-ltf.prob <- -log(1-.35)/10 ## loss to follow-up probability of each couple, this yields 35% LOSS over 10 months as observed
-rr.ltf.ff <- 1     ## yields same 
-rr.ltf.mm <- 1     ## yields same
-rr.ltf.hh <- 1
-rr.ltf.d <- 1
-rr.inc.sdc <- 1.5 ## how much faster is the rate at which incident SDC (ie who were previously -- in a survey visit) are LTF than regular SDC? .35 & 1.5 yields 50%
+args=(commandArgs(TRUE)) ## load arguments from R CMD BATCH 
+if(length(args)>0)  {## Then cycle through each element of the list and evaluate the expressions.
+  for(i in 1:length(args)) {
+    eval(parse(text=args[[i]]))
+  }  }
 
 if(!simul) {
   ## Parameters as used in SB simulation
@@ -31,47 +30,42 @@ if(!simul) {
   spars[5:6] <- .007
 }
 
-args=(commandArgs(TRUE)) ## load arguments from R CMD BATCH 
-if(length(args)>0)  {## Then cycle through each element of the list and evaluate the expressions.
-  for(i in 1:length(args)) {
-    eval(parse(text=args[[i]]))
-  }  }
-  if(!is.null(sim.nm)) { ## if running from a qsub job
-    load(sim.nm) ## load simulation
-    dpars <- output$rakpars ## Hollingsworth Model Parametes
-    output$infpm[,,3]/output$infpm[,2,3]
-    infpm <- output$infpm
-    init <- dpars
-    ldpars <- log(dpars)
-    het.gen.sd <- output$pars['het.gen.sd']
-    cohsim <- rak.coh.fxn(ts.ap = output$ts, dat = output$evout, start.rak = 1994, end.rak = 1999.5,
-                          interv = interv, max.vis = max.vis, ltf.prob = ltf.prob,
-                          rr.ltf.ff = rr.ltf.ff, rr.ltf.mm = rr.ltf.mm, rr.ltf.hh = rr.ltf.hh, rr.ltf.d = rr.ltf.d, rr.inc.sdc = rr.inc.sdc,
-                          verbose = T, browse = F)
-    rm(output); gc() ## free up memory
-    if(resamp) { ## Resample simulations of 100,000 couples, to yield sample sizes equivalent to the
-      ## original Rakai retrospective cohort data reformat into wawer style line list & do
-      ## Wawer style Poisson regressions, controlling for various amounts of heterogeneity
-    }
-    rcohsim <- rak.wawer(rak.coh = cohsim, excl.extram=excl.extram, decont=decont, start.rak = 1994,
-                         het.gen.sd = het.gen.sd,
-                         verbose = T, browse=F)
-    rakll <- rcohsim$rakll
-  }else{
-    ## sim.nm <- file.path('results','RakAcute','Uganda','Uganda-48100-50.Rdata')
-    ## simulation paramters
-    hpars <- c(acute.sc = 276/10.6, late.sc = 76/10.6, bp = 10.6/1200, dur.ac = 2.9, dur.lt = 9, dur.aids = 10) ## Hollingsworth 2008 ests
-    dpars <- hpars
-    ##dpars <- c(acute.sc = 276/10.6, late.sc = 3*76/10.6, bp = 10.6/1200, dur.ac = 2.9, dur.lt = 3, dur.aids = 10) ## other values to sim
-    if(simul & !sb.sim)  {
-      load(file.path(batchdirnm, 'blocksHollFitTest.Rdata'))
-      simpars <- unlist(blocks[jobnum, names(dpars)])
-      sim <- holl.mod(i.n,p.n,l.n,dpars=simpars, verbose=F)
-      dpars <- simpars
-    }
-    ldpars <- log(dpars)
+if(!is.null(sim.nm)) { ## if running from a qsub job
+  load(sim.nm) ## load simulation
+  dpars <- output$rakpars ## Hollingsworth Model Parametes
+  output$infpm[,,3]/output$infpm[,2,3]
+  infpm <- output$infpm
+  init <- dpars
+  ldpars <- log(dpars)
+  het.gen.sd <- output$pars['het.gen.sd']
+  cohsim <- rak.coh.fxn(ts.ap = output$ts, dat = output$evout, start.rak = 1994, end.rak = 1999.5,
+                        interv = interv, max.vis = max.vis, ltf.prob = ltf.prob,
+                        rr.ltf.ff = rr.ltf.ff, rr.ltf.mm = rr.ltf.mm, rr.ltf.hh = rr.ltf.hh, rr.ltf.d = rr.ltf.d, rr.inc.sdc = rr.inc.sdc,
+                        verbose = T, browse = F)
+  rm(output); gc() ## free up memory
+  if(resamp) { ## Resample simulations of 100,000 couples, to yield sample sizes equivalent to the
+    ## original Rakai retrospective cohort data reformat into wawer style line list & do
+    ## Wawer style Poisson regressions, controlling for various amounts of heterogeneity
   }
-  ## simulate using Hollingsworth et al. 2008 model (only do once)
+  rcohsim <- rak.wawer(rak.coh = cohsim, excl.extram=excl.extram, decont=decont, start.rak = 1994,
+                       het.gen.sd = het.gen.sd,
+                       verbose = T, browse=F)
+  rakll <- rcohsim$rakll
+}else{
+  ## sim.nm <- file.path('results','RakAcute','Uganda','Uganda-48100-50.Rdata')
+  ## simulation paramters
+  hpars <- c(acute.sc = 276/10.6, late.sc = 76/10.6, bp = 10.6/1200, dur.ac = 2.9, dur.lt = 9, dur.aids = 10) ## Hollingsworth 2008 ests
+  dpars <- hpars
+  ##dpars <- c(acute.sc = 276/10.6, late.sc = 3*76/10.6, bp = 10.6/1200, dur.ac = 2.9, dur.lt = 3, dur.aids = 10) ## other values to sim
+  if(simul & !sb.sim)  {
+    load(file.path(batchdirnm, 'blocksHollFitTest.Rdata'))
+    simpars <- unlist(blocks[jobnum, names(dpars)])
+    sim <- holl.mod(i.n,p.n,l.n,dpars=simpars, verbose=F)
+    dpars <- simpars
+  }
+  ldpars <- log(dpars)
+}
+## simulate using Hollingsworth et al. 2008 model (only do once)
 
 
 stepper <- 1
