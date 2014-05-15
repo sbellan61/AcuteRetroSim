@@ -4,7 +4,6 @@ rm(list=ls(all=T)); gc()
 ## Summarize Hollingsworth & Wawer style fits to simulated data.
 ## Create wf.Rdata with simulation results stored for plotting.
 ####################################################################################################
-setwd('/home1/02413/sbellan/Rakai/SDPSimulations/')     ## setwd
 outdir <- file.path('results','RakAcute','UgandaFitSummaries')
 if(!file.exists(outdir)) dir.create(outdir)
 load(file.path('results','RakAcute','blocks.Rdata')) ## these are country-acute phase specific blocks

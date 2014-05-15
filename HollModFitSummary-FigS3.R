@@ -4,7 +4,6 @@ library(plyr); library(data.table); library(abind); library(multicore)
 ## Summarize Hollingsworth Model fits to Hollingsworth simulated & Bellan simulated data.
 ## Create Figure S3.
 ####################################################################################################
-setwd('/home1/02413/sbellan/Rakai/SDPSimulations/')     ## setwd
 outdir <- file.path('results','RakAcute','HollModTestFitsSummary')
 if(!file.exists(outdir)) dir.create(outdir)
 load(file = file.path('results','RakAcute','HollModTestFits', 'blocksHollFitTest.Rdata'))

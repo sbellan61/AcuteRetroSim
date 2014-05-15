@@ -1,6 +1,5 @@
 library(mnormt);library(coda); library(stats4);library(plyr)#library(lme4)
 rm(list=ls(all=TRUE))
-setwd('/home1/02413/sbellan/Rakai/SDPSimulations/') # setwd
 source('PlotFunctions.R')                    # load functions to collect & plot results
 source('SimulationFunctions.R')                   # load simulation functions
 source('RakFunctions.R')                   # load simulation functions
@@ -8,17 +7,18 @@ load("data files/pars.arr.ac.Rdata")
 load("data files/ds.nm.all.Rdata")
 load("data files/epic.Rdata")     # infectious HIV prevalence
 to.plot <- T
-
-## jobnum=3189;simj=3189;batchdirnm="results/RakAcute/UgandaFits";nc=12;sim.nm="results/RakAcute/Uganda/Uganda-96200-3189.Rdata";simul=T;sb.sim=T;nc=12;seed.bump=0;interv=10;max.vis=5;ltf.prob=0.0693147180559945;rr.ltf.ff=1;rr.ltf.mm=1;rr.ltf.hh=1;rr.ltf.d=1;aniter=5000;anburn=1000;niter=10000;nburn=1500;init.jit=0.6;excl.extram=TRUE;decont=FALSE
+real.dat <- F ## Set this to be TRUE to run the analyses on the REAL data (just do it once manually isntead of calling from a control file)
 
 ## Real data values
-## jobnum=1;simj=1;batchdirnm="";nc=12;sim.nm=NULL;simul=F;sb.sim=F;nc=12;seed.bump=0;interv=10;max.vis=5;ltf.prob=0;rr.ltf.ff=1;rr.ltf.mm=1;rr.ltf.hh=1;rr.ltf.d=1;aniter=10000;anburn=2000;niter=50000;nburn=2500;init.jit=0.6;excl.extram=TRUE;decont=FALSE
-
-args=(commandArgs(TRUE)) ## load arguments from R CMD BATCH 
-if(length(args)>0)  {## Then cycle through each element of the list and evaluate the expressions.
-  for(i in 1:length(args)) {
-    eval(parse(text=args[[i]]))
-  }  }
+if(real.dat) {
+  jobnum=1;simj=1;batchdirnm="";nc=12;sim.nm=NULL;simul=F;sb.sim=F;nc=12;seed.bump=0;interv=10;max.vis=5;ltf.prob=0;rr.ltf.ff=1;rr.ltf.mm=1;rr.ltf.hh=1;rr.ltf.d=1;aniter=10000;anburn=2000;niter=50000;nburn=2500;init.jit=0.6;excl.extram=TRUE;decont=FALSE
+}else{
+  args=(commandArgs(TRUE)) ## load arguments from R CMD BATCH 
+  if(length(args)>0)  {## Then cycle through each element of the list and evaluate the expressions.
+    for(i in 1:length(args)) {
+      eval(parse(text=args[[i]]))
+    }  }
+}
 
 if(!simul) {
   ## Parameters as used in SB simulation

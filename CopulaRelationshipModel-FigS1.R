@@ -14,7 +14,6 @@
 ## Ugandan 2011 survey may give very slightly different results.
 rm(list=ls())                           # clear workspace
 library(graphics); library(animation); library(abind); library(mvtnorm); library(copula); library(logspline); library(actuar)
-## setwd('/home1/02413/sbellan/SDPSimulations/')     # setwd
 source("SimulationFunctions.R")                   # load simulation/fitting functions
 load("data files/epic.Rdata")                     ##  epidemic curves
 load("data files/pars.arr.ac.Rdata") ## fitted transmission coefficients (out.arr) across range of acute phase RH's (in.arr)

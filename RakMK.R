@@ -3,7 +3,6 @@
 ## R CMD BATCH command line to run on a cluster.
 ####################################################################################################
 ## rm(list=ls())                                  # clear workspace
-setwd('/home1/02413/sbellan/Rakai/SDPSimulations/')     # setwd
 load("data files/ds.nm.all.Rdata")                      ## DHS country names
 load('data files/pars.arr.ac.Rdata')   ## load hazards for each transmission route as fit to DHS data (in.arr[,,2])
 hazs <- c('bmb','bfb','bme','bfe','bmp','bfp') ##  transmission coefficient names, for convenience

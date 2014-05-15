@@ -3,7 +3,6 @@
 ## to run on a cluster. For fitting SB cohort simulations across sensitivity analysis.
 ####################################################################################################
 ## rm(list=ls())                                  # clear workspace
-setwd('/home1/02413/sbellan/Rakai/SDPSimulations/')     # setwd
 load("data files/ds.nm.all.Rdata") # country names
 load('data files/pars.arr.ac.Rdata')    # load acute phase relative hazards used to fit (in.arr[,,2])
 outdir <- file.path('results','RakAcute')

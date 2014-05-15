@@ -5,7 +5,6 @@ library(plyr)
 ####################################################################################################
 rm(list=ls(all=T)); gc()
 ## Summarize Hollingsworth & Wawer style fits to simulated data
-setwd('/home1/02413/sbellan/Rakai/SDPSimulations/')     # setwd
 outdir <- file.path('results','RakAcute','VL Profile')
 if(!file.exists(outdir)) dir.create(outdir)
 ## Donnell et al. (2010) , Attia et al. (2009), & Lingappa et al. (2010) data viral load-infectivity data

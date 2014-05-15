@@ -295,36 +295,6 @@ rak.coh.fxn <- function(ts.ap, dat, interv = 10, max.vis = 5, start.rak, end.rak
     return(rak.coh)
   }
 
-## plot.coh <- function(tsv, ncpl = 12,    ## of couples sub-sampled for cohort-style figure
-##                      inf.only = F, ## only show infected couples
-##                      n.inf = NA, # number infected couples to have in sub-sample
-##                      yrmin = 1985, yrmax = 2000, ## time range
-##                      col.mpre = 'black', col.fpre = 'black', ## pre-couple M & F SD couples colors
-##                      col.m = 'orange', col.f = 'orange', ## M & F SD couples colors
-##                      col.ccn = 'wheat2', col.msdc = 'orange', col.fsdc = 'orange', col.ccp = 'red',
-##                      mort.pch = 4, age.pch = '',## symbol for death
-##                      inf.pch.pre = NA, inf.pch.extra = NA, inf.pch.within = NA, ## symbols for outside & from-partner infections
-##                      inf.col.pre = 'dark gray', inf.col.extra = 'red', inf.col.within = 'blue', 
-##                      ylab1 = 'simulated couples', browse = F)
-##   {
-##     if(browse) browser()
-##     step <- 0
-##     set.seed(seed) # set random seed
-##     inms <- c('mm','mm.ac','mm.lt','mm.aids','ff','ff.ac','ff.lt','ff.aids','hh')
-##     if(!inf.only) {
-##       if(is.na(n.inf)) {
-##             tsv <- tsv[,sel] ## sub-sample data
-##           }else{
-##             infs <- apply(tsv, 2, function(x) { sum(x %in% inms) > 0 })
-##             infs.wh <- which(infs)
-##             ninfs.wh <- which(!infs)
-##             sel.i <- infs[sample(1:length(infs), n.inf)]
-##   }
-##     }
-##   }
-
-
-
 ####################################################################################################
 ## Wawer et al. style analysis of Rakai retrospective cohort
 rak.wawer <- function(rak.coh, verbose = F, verbose2=F, browse = F, excl.extram = T, decont=F, start.rak, het.gen.sd, late.ph,

@@ -1,7 +1,6 @@
 library(plyr); library(data.table); library(abind); library(multicore); library(coda); library(grid); library(utils)
 rm(list=ls(all=T)); gc()
 ## Summarize Hollingsworth & Wawer style fits to simulated data
-setwd('/home1/02413/sbellan/Rakai/SDPSimulations/')     # setwd
 outdir <- file.path('results','RakAcute','UgandaFitSummaries')
 nc <- 12                                       # core per simulation
 load(file=file.path(outdir, 'wf.Rdata'))

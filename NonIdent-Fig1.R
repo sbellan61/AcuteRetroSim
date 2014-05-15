@@ -4,7 +4,6 @@ rm(list=ls(all=T)); gc()
 ## Show that duration & infectivity of acute phase are not identifiable
 ## Create Figure 1.
 ####################################################################################################
-setwd('/home1/02413/sbellan/Rakai/SDPSimulations/')     # setwd
 ## Load our MCMC refit of Holl Model to the real data (with exclusion criteria error)
 load(file = file.path('results','HollingsworthAn','RealExclbyErr','workspace.Rdata'))
 outtab <- outtab[,,'XbErr']
