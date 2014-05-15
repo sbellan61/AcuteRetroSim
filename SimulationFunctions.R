@@ -1822,7 +1822,8 @@ rcop <- function(country,          ## country to simulate
                  browse = F)            ## Debug?
   {
     if(browse)  browser()               ## Debug
-    sigma <- cop.sigmas[,,country]          ## select country-specific normal copula covariance matrix (previously fitted in pscor.R)
+    ## select country-specific normal copula covariance matrix (previously fitted in pscor.R)
+    if(dim(cop.sigmas)[3]==1) sigma <- cop.sigmas[,,1] else sigma <- cop.sigmas[,,country]   ## in case only working with one country (i.e. Uganda)  
     nvar <- 5                           ## number of variables
     if(is.na(s.epic)) s.epic.nm <- NA
     if(sample.tmar)  { ## if sampling tmar, sample from it's distribution as well
