@@ -13,7 +13,7 @@ hest <- 65.4 ## Holl median (refit) (if plotting horizontal line to show their e
 
 ####################################################################################################
 ## Figure S4
-pdf(file.path(outdir, 'TrueVsEst.pdf'), w = 6.83, h = 4.5)
+pdf(file.path(outdir, 'Figure S4 - True vs estimated EHM_acute 6x3 panels.pdf'), w = 6.83, h = 4.5)
 cols <- c('purple','red','blue','orange')
 ct <- 12
 mcex <- .8
@@ -129,11 +129,10 @@ mtext(expression(paste('estimated ',EHM[acute])), side = 2, line = 4, adj = .5, 
 mtext(expression(paste('true (simulated) ',EHM[acute])), side = 1, line = 0, adj = .5, outer = T, ps = 12)
 graphics.off()
 
-
 ####################################################################################################
-## Figure 3
+## Figure 4
 ##############################
-pdf(file.path(outdir, 'TrueVsEst LOESS.pdf'), w = 6.83, h = 4.5)
+pdf(file.path(outdir, 'Figure 4 - True vs estimated EHM_acute.pdf'), w = 6.83, h = 4.5)
 hsds <- 0:3 #unique(c(twf$het.sd, thf$het.sd))
 ## cols <- colorRampPalette(c('purple','red','orange'))(length(hsds))
 ## cols <- rainbow(length(hsds))

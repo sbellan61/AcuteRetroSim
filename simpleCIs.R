@@ -31,10 +31,8 @@ wexsum.univ <- c(exp(confint(mod))['phacute',1],
                exp(confint(mod))['phacute',2])
 wexsum.univ <- (wexsum.univ-1)*5
 
-
 ####################################################################################################
 ## Do LOESS for each sigma_hazard for Waw & Holl with XbErr, then find where true CI's hit the Loess
-
 ## just get subsets we're interested in
 thf <- hf[hf$var=='ehm.ac' & hf$ehm.late==40,] 
 twf <- wf[wf$var=='ehm.ac' & wf$ehm.late==40 & wf$cov=='',]
@@ -88,9 +86,8 @@ ci.frame <- data.frame(hsds, t(hcis),t(wcis), t(wcis.univ))
 names(ci.frame) <- c('sigma','hlci','hmed','huci','wlci.m','wmed.m','wuci.m','wlci.u','wmed.u','wuci.u')
 write.csv(ci.frame, file = file.path(outdir, 'CI data frame.csv'))
 
-
 ## Literature estimate table
-tab1 <- rbind(c(NA, 4.3, NA), c(20.9, 50.2,102), c(11.9, 36.3, 96), wsum, fexsum[,'ehm.ac'], c(NA, (30.3-1)*4.8, NA), c(NA, 238, NA))
+tab1 <- rbind(c(NA, 4.3, NA), c(20.9, 50.2,102), c(11.9, 36.3, 96), wexsum, fexsum[,'ehm.ac'], c(NA, (30.3-1)*4.8, NA), c(NA, 238, NA))
 tab1 <- data.frame(study = NA, tab1)
 colnames(tab1)[-1] <- c('lci','med','uci')
 tab1$study <- c('based on VL', 'Wawer (raw)', 'Wawer (coital acts)', 'Wawer (full model)', 'Hollingsworth (refit)', 'Powers et al. 2011',
@@ -108,7 +105,7 @@ for(mm in 1:2) {
     cis <- wcis
     wsum <- wexsum
   }
-  pdf(file.path(outdir, paste0('CIs Wawer ', modlab[mm], '.pdf')), w = ifelse(add.leg, 6.83, 7.5), h = ifelse(add.leg, 2.5, 4.5))
+  pdf(file.path(outdir, paste0('Figure 5 - CIs Wawer ', modlab[mm], '.pdf')), w = ifelse(add.leg, 6.83, 7.5), h = ifelse(add.leg, 2.5, 4.5))
   cols <- c('purple','red','blue','orange')
   ## cols <- rainbow(length(hsds))
   ylab <- expression(paste('estimated ',EHM[acute]))
@@ -194,8 +191,6 @@ for(mm in 1:2) {
   }
   graphics.off()
 }
-
-
   
 ####################################################################################################
 ## EHM literature estimates for presentation
