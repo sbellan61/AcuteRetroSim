@@ -1,6 +1,5 @@
 library(mnormt);library(coda); library(stats4);library(plyr)#library(lme4)
 rm(list=ls(all=TRUE))
-source('PlotFunctions.R')                    # load functions to collect & plot results
 source('SimulationFunctions.R')                   # load simulation functions
 source('RakFunctions.R')                   # load simulation functions
 load("data files/pars.arr.ac.Rdata")
@@ -67,9 +66,9 @@ if(!is.null(sim.nm)) { ## if running from a qsub job
 }
 ## simulate using Hollingsworth et al. 2008 model (only do once)
 
-
 stepper <- 1
-excl.by.errs <- c(F,T) ##ifelse(sb.sim, c(F,T), F)
+if(sb.sim | !simul) excl.by.errs <- c(F,T)
+if(!sb.sim | simul) excl.by.errs <- FALSE
 for(excl.by.err in excl.by.errs) { ## Fit both with & without excluding -- to +- to LTF couples 
   if(simul) { ## simulated data
     if(!sb.sim) { ## simulate using Hollingsworth et al. 2008 model

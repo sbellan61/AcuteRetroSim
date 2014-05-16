@@ -704,12 +704,6 @@ b.lt <- Vectorize(b.lt.uv,'td')
 ##############################
 ## Incident Couples
 ##############################
-## NOTE that while we replicate Hollingsworth et al.'s analysis, there is a Monte Hall like problem
-## here: the probability of the index partner being infected at each time point T is not uniform on
-## the interval and depends on the second partner's infection status. Couples going from -- to ++
-## are more likely to have incident infections occuring earlier in the inteveral. Couples going from
-## -- to +- are likely to have incident infections occuring later in the interval.
-## **************************************************
 ## probability of transmitting to second partner before end of 1st interval (function of
 ## when in (-- to ++) interval index partner is infected = tt)
 cp.inc.1 <- function(tt, dpars) {
@@ -787,7 +781,6 @@ return(cp)
 
 ####################################################################################################
 ## 2) Unconditional probability of transmitting in a particular inteval
-##############################
 ####################################################################################################
 ## Incident Couples: k = interval since -- (1st, 2nd, 3rd, 4th, etc..)
 ucp.inc.2 <- function(inct,dpars) {
@@ -814,7 +807,6 @@ ucp.prev.2 <- function(prevt,dpars) {
     nll.prev <- -sum(lls)
     return(nll.prev)
 }
-
 
 ####################################################################################################
 ##############################
