@@ -298,7 +298,7 @@ rak.coh.fxn <- function(ts.ap, dat, interv = 10, max.vis = 5, start.rak, end.rak
 ####################################################################################################
 ## Wawer et al. style analysis of Rakai retrospective cohort
 rak.wawer <- function(rak.coh, verbose = F, verbose2=F, browse = F, excl.extram = T, decont=F, start.rak, het.gen.sd, late.ph,
-                      resamp=F, cov.mods=T, make.diag=F, seed = 1) {
+                      resamp=F, make.diag=F, seed = 1) {
   if(browse) browser()
   ts.vm <- rak.coh$ts.rak
   ts.vm.all <- rak.coh$ts.rak.all

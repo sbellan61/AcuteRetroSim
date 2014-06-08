@@ -67,7 +67,7 @@ xmax <- 100
 ymax <- 100
 var <- 'ehm.ac'
 cols <- c('purple','red','orange')
-pdf(file.path(outdir,'HollAn HollMod ehm acute.pdf'), w = 3.27, h = 3.5)
+pdf(file.path(outdir,'Figure S3- HollMod of SB & HollMod generated data true vs est ehmacute.pdf'), w = 3.27, h = 3)
 par(mfrow=c(1,1), mar = c(3.5,3.5,1,.5), 'ps'=10, mgp = c(2.2,1,0))
 plot(0,0, type='n', xlim = c(0, xmax), ylim = c(0,ymax), bty = 'n', xlab = expression(paste('true ',EHM[acute])),
      ylab = expression(paste('estimated ',EHM[acute])), main = '', asp=1)
@@ -77,16 +77,12 @@ for(jj in 1:2) { ## for Holl,SB generated data
   temp <- get(dd)
   ##temp <- temp[temp$ehm.late %in% ehmls,]
   temp <- temp[rev(order(temp$ehm.late)),]
-  ## with(temp[sel,],  arrows(true, lci, true,uci, length=.05, angle = 90, code = 3,col = cols[ehm.late+1]), lwd = .7)
-  ## with(temp[sel,],  points(true, med, col = cols[ehm.late+1], cex = .5, pch = 19))
   for(ee in length(ehmls):1) {
       if(dd=='hfh') sel <- temp$var==var & temp$ehm.late==ehmls[ee]
       if(dd=='hf') sel <- temp$var==var & temp$het.sd==0 & temp$err=='base' & temp$ehm.late==ehmls[ee]
-      lines(with(temp[sel,], lowess(med ~ true)), col = cols[ee], lwd = 1, lty = jj)
-## temph <- temp[sel,]
-##       head(temp[sel,])
-      
-## y2 <- with(temph,predict(loess(med~true), 1:100))
+      ## with(temp[sel,],  arrows(true, lci, true, uci, length=.05, angle = 90, code = 3,col = cols[ee]), lwd = .7)
+      ## with(temp[sel,],  points(true, med, col = cols[ee], cex = .5, pch = 19))
+      lines(1:100, with(temp[sel,], predict(loess(med ~ true), 1:100)), col = cols[ee], lwd = 1, lty = jj)
   }
   ## segments(1, 75.4, xmax, 75.4, col = 'black', lty = 3, lwd = 2)
   ## text(30, 72.4, 'Hollingsworth Estimate', pos = 3, cex = ct)
@@ -95,7 +91,3 @@ legend(0,ymax, title= expression(paste(EHM[late])), ncol=1,
        leg = ehmls, lty = 1, col=cols, bty ='n', cex = .7)
 legend('bottomright', leg = c('Hollingsworth', 'Bellan'), title='Data-Generation Model', lty = 2:1, cex = .7, bty = 'n')
 dev.off()
-
-dd=1
-ee=1
-jj=1
