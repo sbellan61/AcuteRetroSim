@@ -67,6 +67,7 @@ hf <- within(hf, {ehm.late <- (late.sc - 1)*dur.lt})
 hf <- within(hf, {ehm.acute <- (acute.sc - 1)*dur.ac})
 head(hf)
 
+
 ## this can take a long time because each simulation had 24model fits
 obs.sh <- paste0('obs',c(0,0.3,.5,.7,1))
 wfits.small <- wfits[,c('ehm.ac','acute.sc','dur.ac','ehm.lt','late.sc','dur.lt'),,,,]
@@ -254,3 +255,10 @@ legend('topleft', leg = 0:3, lty = 1, col = cols, title = expression(sigma[hazar
 graphics.off()
 
 
+####################################################################################################
+## How many couples were excluded?
+wtabs.ls <- lapply(alldat, function(x) { list(wtab = x$wtab,x$wtab$prevt[1,'n'],x$wtab$latet[nrow(x$wtab$latet),'n'])})
+wtabs <- as.data.frame(wtabs)
+colnames(wtabs) <- c('incn','prevn','laten')
+wtabs$job <- jobnums
+apply(wtabs[,-4],2, function(x) quantile(x, c(.025,.5,.975))) ## summary of sample sizes by couple classing
