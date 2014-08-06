@@ -298,7 +298,7 @@ rak.coh.fxn <- function(ts.ap, dat, interv = 10, max.vis = 5, start.rak, end.rak
 ####################################################################################################
 ## Wawer et al. style analysis of Rakai retrospective cohort
 rak.wawer <- function(rak.coh, verbose = F, verbose2=F, browse = F, excl.extram = T, decont=F, start.rak, het.gen.sd, late.ph,
-                      resamp=F, make.diag=F, seed = 1) {
+                      resamp=F, make.diag=F, seed = 1, cov.mods = F) {
   if(browse) browser()
   ts.vm <- rak.coh$ts.rak
   ts.vm.all <- rak.coh$ts.rak.all
@@ -329,7 +329,7 @@ rak.wawer <- function(rak.coh, verbose = F, verbose2=F, browse = F, excl.extram 
   ## Create line list
   sdcs <- c('mm','mm.ac','mm.lt','mm.aids','ff','ff.ac','ff.lt','ff.aids')
   sers.ap <- list(ss='ss', mm =c('mm','mm.ac','mm.lt','mm.aids'), ff = c('ff','ff.ac','ff.lt','ff.aids'), hh = 'hh')
-  make.rakll <- function(dat.vm, ts.vm) { 
+  make.rakll <- function(dat.vm, ts.vm, cov.mods = cov.mods) { 
     rakll <- data.frame(uid = dat.vm$uid, phase = NA, pm = NA, inf = 0, pm.trunc = NA, inf.trunc = NA, excl.by.err = F,
                         mcoi = dat.vm$mcoi, fcoi = dat.vm$fcoi, mcoi.phase = dat.vm$mcoi.phase, fcoi.phase = dat.vm$fcoi.phase,
                         secp = NA, secp.lhet = NA, secp.age = NA, indp.age = NA, mardur = NA,
