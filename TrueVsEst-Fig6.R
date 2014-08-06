@@ -130,16 +130,18 @@ mtext(expression(paste('true (simulated) ',EHM[acute])), side = 1, line = 0, adj
 graphics.off()
 
 ####################################################################################################
-## Figure 4
+## Figure 6
 ##############################
-pdf(file.path(outdir, 'Figure 4 - True vs estimated EHM_acute.pdf'), w = 3.27, h = 9.7)
+pdf(file.path(outdir, 'Figure 6 - True vs estimated EHM_acute.pdf'), w = 3.27, h = 9.7)
+## pdf(file.path(outdir, 'Figure 6 - True vs estimated EHM_acute.pdf'), w = 6.83, 8)
+asp <- .8
 hsds <- 0:3 #unique(c(twf$het.sd, thf$het.sd))
 ## cols <- colorRampPalette(c('purple','red','orange'))(length(hsds))
 ## cols <- rainbow(length(hsds))
 cols <- c('black','red','blue','orange')
 yx.col <- gray(.8)
 ct <- 12
-layout(mat = matrix(1:4, 4,1), hei=c(.65,1,1,1))
+layout(mat = t(matrix(1:4, 1,4)), hei=c(.65,1,1,1))
 par(mar = c(4,4.5,2.5,1.5), mgp=c(2.5,1,0), 'ps'=ct, oma = c(0,0,0,0)) #, cex.main = ct, cex.lab = ct, cex.axis = ct)
 cex.leg <- 1
 lwd.abline <- 5
@@ -160,12 +162,12 @@ axis(2, at = seq(0,.6, by = .2), las = 2)
 for(hsd in 1:3) {
   curve(dnorm(log(x), 0,  hsd), from = 10^-3, to = 10^3, add = T, col = cols[hsd+1], lwd = lwd)
 }
-segments(1,0,1,1, col = cols[1])
-legend('topleft', leg = 0:3, lty = 1, col = cols, title = expression(sigma[hazard]), bty = 'n', cex = cex.leg)
+segments(1,0,1,1, col = cols[1], lwd = lwd)
+legend('topleft', leg = 0:3, lty = 1, col = cols, title = expression(sigma[hazard]), bty = 'n', cex = cex.leg, lwd=lwd)
 ##################################################
 ## ehm plots
-xmax <- 100
-xmax.loess <- 200
+xmax <- 80
+xmax.loess <- 80
 ymax <- 100
 var <- 'ehm.ac'
 ## just get subsets we're interested in
@@ -176,7 +178,8 @@ ylab <- expression(paste('estimated ',EHM[acute]))
 xlab <- expression(paste('true ',EHM[acute]))
 ## Wawer plot
 par('ps'=ct)
-plot(0,0, type='n', xlim = c(0, xmax), ylim = c(0,ymax), bty = 'n', xlab = '', ylab = ylab, main = '(B) Wawer Model', axes = F)
+plot(0,0, type='n', xlim = c(0, xmax), ylim = c(0,ymax), bty = 'n', xlab = '', ylab = ylab, main = '(B) Wawer Model', axes = F, asp=asp)
+clip(0, xmax, 0, ymax)
 abline(a=0,b=1, lwd=lwd.abline, col=yx.col)
 axis(2, seq(0,100, by = 20), las = 2)
 axis(1, seq(0,xmax, by = 20), label = NA, las = 1)
@@ -194,7 +197,8 @@ for(hh in 1:length(hsds)) {
 ## legend('bottomright', leg = c('included','excluded'), lty = 2:1, cex = cex.leg, title='incident SDC \nlost to follow-up', bty = 'n')
 ##################################################
 ## Holl plot
-plot(0,0, type='n', xlim = c(0, xmax), ylim = c(0,ymax), bty = 'n', xlab = '', ylab = ylab, main = '(C) Hollingsworth Model', axes = F)
+plot(0,0, type='n', xlim = c(0, xmax), ylim = c(0,ymax), bty = 'n', xlab = '', ylab = ylab, main = '(C) Hollingsworth Model', axes = F, asp = asp)
+clip(0, xmax, 0, ymax)
 abline(a=0,b=1, lwd=lwd.abline, col = yx.col)
 axis(2, seq(0,100, by = 20), las = 2)
 axis(1, seq(0,xmax, by = 20), label = NA, las = 1)
@@ -213,8 +217,9 @@ for(hh in 1:length(hsds)) {
 ## Show how controlling for error affects things Wawer model
 cov <- c(0,.7,.9)
 hobs <- paste0('obs', cov) #seq(0,1, by = .1))
-plot(0,0, type='n', xlim = c(0, xmax), ylim = c(0,ymax), bty = 'n', xlab = xlab, ylab = ylab, axes = F, main = '(D) Wawer Model (multivariate)')
+plot(0,0, type='n', xlim = c(0, xmax), ylim = c(0,ymax), bty = 'n', xlab = xlab, ylab = ylab, axes = F, main = '(D) Wawer Model (multivariate)', asp = asp)
      ## main = 'Removing Heterogeneity by \nControlling for Measured Confounders',
+clip(0, xmax, 0, ymax)
 abline(a=0,b=1, lwd=lwd.abline, col = yx.col)
 axis(2, seq(0,100, by = 20), las = 2)
 axis(1, seq(0,xmax, by = 20), las = 1)
@@ -226,6 +231,6 @@ with(twf[sel,], lines(1:xmax.loess, predict(loess(med~true), 1:xmax.loess), col 
     with(twf[sel,], lines(1:xmax.loess, predict(loess(med~true), 1:xmax.loess), col = cols[4], lty = bb, lwd = lwd))
   }
 legend('bottomright', leg = paste0(c(0,50,80),'%'), col = 'orange', lty = 1:4, bty = 'n', cex = cex.leg, ncol=1,
-       title = 'variance controlled')
+       title = 'variance controlled', lwd=lwd)
 graphics.off()
 
