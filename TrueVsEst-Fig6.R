@@ -234,3 +234,90 @@ legend('bottomright', leg = paste0(c(0,50,80),'%'), col = 'orange', lty = 1:4, b
        title = 'variance controlled', lwd=lwd)
 graphics.off()
 
+
+
+####################################################################################################
+## Figure SX - show how much heterogneity Wawer must have controlled for
+##############################
+pdf(file.path(outdir, 'Figure SX - Wawer Multivariate justification of heterogeneity.pdf'), w = 3.27, h = 6.5)
+## pdf(file.path(outdir, 'Figure 6 - True vs estimated EHM_acute.pdf'), w = 6.83, 8)
+asp <- .8
+## cols <- colorRampPalette(c('purple','red','orange'))(length(hsds))
+## cols <- rainbow(length(hsds))
+cols <- c('black','red','blue','orange')
+yx.col <- gray(.8)
+ct <- 12
+layout(mat = t(matrix(1:2, 1,2)))
+par(mar = c(4,4.5,1.5,.5), mgp=c(2.5,1,0), 'ps'=ct, oma = c(0,0,0,0)) #, cex.main = ct, cex.lab = ct, cex.axis = ct)
+cex.leg <- 1
+lwd.abline <- 5
+lwd <- 2
+madj <- .5
+mln <- 2
+mlnv <- 3
+##################################################
+## ehm plots
+xmax <- 60
+xmax.loess <- 60
+ymax <- 60
+var <- 'ehm.ac'
+## just get subsets we're interested in
+thf <- hf[hf$var==var,] 
+twf <- wf[wf$var==var &  wf$cov=='',]
+## Plot layout
+ylab <- expression(paste('estimated ',EHM[acute]))
+xlab <- expression(paste('true ',EHM[acute]))
+## Wawer plot
+hsds <- c(0,2)
+par('ps'=ct)
+plot(0,0, type='n', xlim = c(0, xmax), ylim = c(0,ymax), bty = 'n', xlab = '', ylab = ylab, main = '(A) Univariate', axes = F, asp=asp)
+clip(0, xmax, 0, ymax)
+abline(a=0,b=1, lwd=lwd.abline, col=yx.col)
+axis(2, seq(0,ymax, by = 20), las = 2)
+axis(1, seq(0,xmax, by = 20), label = NA, las = 1)
+## Err, het=0:3, obs = 0,5 Wawer
+for(hh in 1:length(hsds)) {
+  sel <- twf$err=='XbErr' & twf$het.sd==hsds[hh] & twf$hobs=='obs0' & twf$ehm.late==40
+  clip(0, xmax, 0, ymax)
+  with(twf[sel,], lines(1:xmax.loess, predict(loess(med~true), 1:xmax.loess), col = cols[hh], lty = 1, lwd = lwd))
+  if(hsds[hh]==0) { ## figure out which true value gives EHM=31.3 for sigma[haz]=0
+      xseq <- seq(0,80, by = .1)
+      true.val.for.31.3 <- xseq[which.min(abs(31.3 -  with(twf[sel,], predict(loess(med~true), xseq))))]
+  }
+  if(hsds[hh]==2) { ## figure out what it's at that for sigma=2
+      biased.val.for.sigma2 <- with(twf[sel,], predict(loess(med~true), true.val.for.31.3))
+  }
+}
+arrows(true.val.for.31.3, biased.val.for.sigma2, true.val.for.31.3, 31.3, len = .05, code = 2, col = gray(.4), lwd = 2)
+#segments
+## legend('bottomright', leg = c('included','excluded'), lty = 2:1, cex = cex.leg, title='incident SDC \nlost to follow-up', bty = 'n')
+####################################################################################################
+## Show how controlling for error affects things Wawer model
+cov <- c(0,.9)
+hobs <- paste0('obs', cov) #seq(0,1, by = .1))
+plot(0,0, type='n', xlim = c(0, xmax), ylim = c(0,ymax), bty = 'n', xlab = xlab, ylab = ylab, axes = F, main = '(B) Multivariate', asp = asp)
+     ## main = 'Removing Heterogeneity by \nControlling for Measured Confounders',
+clip(0, xmax, 0, ymax)
+abline(a=0,b=1, lwd=lwd.abline, col = yx.col)
+axis(2, seq(0,ymax, by = 20), las = 2)
+axis(1, seq(0,xmax, by = 20), las = 1)
+sel <- twf$err=='XbErr' & twf$het.sd==0 & twf$hobs=='obs0' & twf$ehm.late==40
+## Err, het=0:3, obs = 0,5 Wawer
+  for(bb in 1:length(cov)) { ## options to show multiple obs lines, do this on a separate figure though
+    sel <- twf$err=='XbErr' & twf$het.sd==3 & twf$hobs==hobs[bb] & twf$ehm.late==40
+    clip(0, xmax, 0, ymax)
+    with(twf[sel,], lines(1:xmax.loess, predict(loess(med~true), 1:xmax.loess), col = cols[4], lty = bb, lwd = lwd))
+    if(cov[bb]==0) { ## figure out which true value gives EHM=31.3 for sigma[haz]=0
+        xseq <- seq(0,80, by = .1)
+        true.val.for.50.1 <- xseq[which.min(abs(50.1 -  with(twf[sel,], predict(loess(med~true), xseq))))]
+    }
+    if(cov[bb]==.9) { ## figure out what it's at that for sigma=2
+        biased.val.for.hobs.9 <- with(twf[sel,], predict(loess(med~true), true.val.for.50.1))
+    }
+  }
+arrows(true.val.for.50.1, 50.1, true.val.for.50.1, 30.3, len = .05, code = 2, col = gray(.4), lwd = 2)
+clip(0, xmax+5, -10, ymax)
+legend('bottomright', leg = paste0(c(0,80),'%'), col = 'orange', lty = 1:4, bty = 'n', cex = cex.leg, ncol=1,
+       title = 'variance \ncontrolled', lwd=lwd)
+graphics.off()
+

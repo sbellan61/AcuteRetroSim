@@ -1,5 +1,13 @@
 library(plyr)
 rm(list=ls(all=T))
+
+makeTransparent<-function(someColor, alpha=100)
+{
+  newColor<-col2rgb(someColor)
+  apply(newColor, 2, function(curcoldata){rgb(red=curcoldata[1], green=curcoldata[2],
+    blue=curcoldata[3],alpha=alpha, maxColorValue=255)})
+}
+
 ####################################################################################################
 ## Jacquez et al. 1994
 
@@ -50,7 +58,7 @@ rh.ac <- beta1/beta2
 ehm.ac <- (rh.ac-1)*dur.ac
 af.ac <- c(20,55,20,87) ## Figure 7
 type <- rep(c('100 sex acts per partner', '1 sex act per partner'), 2)
-pink <- data.frame(ms = 'Pinkerton and Abramson 1996', rh.ac, dur.ac, ehm.ac, af.ac, data = 'Jacquez', type = type, estim = 'R0 %')
+pink <- data.frame(ms = 'Pinkerton and Abramson 1996', rh.ac, dur.ac, ehm.ac, af.ac, data = 'epidemic curve', type = type, estim = 'R0 %')
 
 ####################################################################################################
 ## Koopman et al. 1997
@@ -80,7 +88,7 @@ ehm.ac <- signif((rh.ac-1)*dur.ac,3)
 ## now monotone de- creasing for model M(+/v) until in the endemic state around 65% of cases are
 ## produced by stage 1 individuals."
 af.ac <- 65
-kret <- data.frame(ms = 'Kretzschmar & Dietz 1998', rh.ac, dur.ac, ehm.ac, af.ac, data = 'Jacquez', type = '', estim = 'AF_acute')
+kret <- data.frame(ms = 'Kretzschmar & Dietz 1998', rh.ac, dur.ac, ehm.ac, af.ac, data = 'epidemic curve', type = '', estim = 'AF_acute')
 
 ####################################################################################################
 ## Xiridou, citing studies on viral load
@@ -92,7 +100,7 @@ dur.ac <- quantile(dur.ac, c(.025, .975))
 ehm.ac <- quantile(ehm.ac, c(.025, .975)) ## get 95% quantiles to match the latin hypercube thingy
 ehm.ac <- signif(ehm.ac,3)
 af.ac <- c(2.71, 24.97)
-xir <- data.frame(ms = "Xiridou et al. 2004", rh.ac, dur.ac, ehm.ac, af.ac, data = 'viral load studies', type = '', estim = 'AF_acute')
+xir <- data.frame(ms = "Xiridou et al. 2004", rh.ac, dur.ac, ehm.ac, af.ac, data = 'viral load', type = '', estim = 'AF_acute')
 
 
 ####################################################################################################
@@ -110,16 +118,16 @@ dur.ac <-  c(42,49,56)/30     ## months (49 days, varied 42-56)
 rh.ac <- c(4.2,8.1,12) ## varied 4.2-12
 ehm.ac <- (rh.ac-1)*dur.ac
 af.ac <- c(2.5, 5.5, 9) ## diagonal of Table 2
-pink2 <- data.frame(ms = 'Pinkerton 2007', rh.ac, dur.ac, ehm.ac, af.ac, data = 'Pilcher and Rapatski', type = '', estim = 'AF_acute')
+pink2 <- data.frame(ms = 'Pinkerton 2007', rh.ac, dur.ac, ehm.ac, af.ac, data = 'viral load', type = '', estim = 'AF_acute')
 
 ####################################################################################################
 ## Hollingsworth, citing Wawer
-dur.ac <- 1.9
+dur.ac <- 2.9
 rh.ac <- 26
 ehm.ac <- (rh.ac-1)*dur.ac
 af.ac <- c(9, 31)
 type <- c('serial monogamy', 'random mixing')
-holl <- data.frame(ms = 'Hollingsworth et al. 2008', rh.ac, dur.ac, ehm.ac, af.ac, data = NA, type = '', estim = 'AF_acute')
+holl <- data.frame(ms = 'Hollingsworth et al. 2008', rh.ac, dur.ac, ehm.ac, af.ac, data = 'Rakai', type = '', estim = 'AF_acute')
 
 
 ####################################################################################################
@@ -147,7 +155,7 @@ dur.ac <-  49/30
 rh.ac <- 8.1
 ehm.ac <- (rh.ac-1)*dur.ac
 af.ac <- 11.4
-prab <- data.frame(ms = 'Prabhu et al. 2009', rh.ac, dur.ac, ehm.ac, af.ac, data = 'Pinkerton', type = '', estim = 'AF_acute')
+prab <- data.frame(ms = 'Prabhu et al. 2009', rh.ac, dur.ac, ehm.ac, af.ac, data = 'viral load', type = '', estim = 'AF_acute')
 
 ####################################################################################################
 ## Powers, citing Hollingsworth
@@ -155,7 +163,7 @@ dur.ac <-  4.8
 rh.ac <- 30.3
 ehm.ac <- (rh.ac-1)*dur.ac
 af.ac <- 38.4
-powers <- data.frame(ms = 'Powers et al. 2011', rh.ac, dur.ac, ehm.ac, af.ac, data = 'Rakai', type = '', estim = 'AF_acute')
+powers <- data.frame(ms = 'Powers et al. 2011', rh.ac, dur.ac, ehm.ac, af.ac, data = 'Rakai & epidemic curve', type = '', estim = 'AF_acute')
 
 
 ####################################################################################################
@@ -166,25 +174,60 @@ ehm.ac <- (rh.ac-1)*dur.ac
 af.ac <- 2
 will <- data.frame(ms = 'Cohen et al. 2013 (Williams)', rh.ac, dur.ac, ehm.ac, af.ac, data = 'viral load', type = '', estim = 'AF_acute')
 
-out <- rbind(jacq, pink, koop, kret, xir, pink2, hayes, holl, abu, sal, prab, powers, will)
+
+####################################################################################################
+## Romero-Seveson
+dur.ac <-  2
+rh.ac <- 50
+ehm.ac <- (rh.ac-1)*dur.ac
+af.ac <- 60
+rom <- data.frame(ms = 'Romero-Severson et al. 2013', rh.ac, dur.ac, ehm.ac, af.ac, data = 'Rakai', type = '', estim = 'AF_acute')
+
+
+####################################################################################################
+## Rasmussen
+dur.ac <-  12
+rh.ac <- 20
+ehm.ac <- (rh.ac-1)*dur.ac
+af.ac <- 50
+ras <- data.frame(ms = 'Rasmussen et al. 2014', rh.ac, dur.ac, ehm.ac, af.ac, data = 'phylogenetics', type = '', estim = 'AF_acute')
+
+out <- rbind(jacq, pink, koop, kret, xir, pink2, hayes, holl, abu, sal, prab, powers, will, rom, ras)
 out$ms <- factor(out$ms)
 out$col <- makeTransparent(rainbow(nlevels(out$ms))[out$ms], 70)
 
-out <- ddply(out, .(ms), transform, tag = paste0(as.numeric(ms)[1], letters[1:length(ms)]))
 
-pdf('AF vs EHM review.pdf', w = 3.5, h=4)
-par(mar=c(4,4,1,1))
-plot(out$ehm.ac, out$af.ac, col = out$col, pch = 19, xlim = c(0, 170), ylim = c(0,50), cex = 2,
-     xlab = expression(EHM[acute]), ylab = expression(AF[acute]), bty = 'n')
-text(out$ehm.ac, out$af.ac, out$tag, cex = .6)
-##legend('topleft', leg = unique(out$ms), col = unique(out$ms), pch = 19)
-graphics.off()
-
-makeTransparent<-function(someColor, alpha=100)
-{
-  newColor<-col2rgb(someColor)
-  apply(newColor, 2, function(curcoldata){rgb(red=curcoldata[1], green=curcoldata[2],
-    blue=curcoldata[3],alpha=alpha, maxColorValue=255)})
+out$tag <- NA
+levs <- levels(out$ms)
+for(ii in 1:nlevels(out$ms)) {
+    sel <- which(levs[ii]==out$ms)
+    if(length(sel)==1) out$tag[sel] <- as.numeric(out$ms[sel])
+    if(length(sel)>1) out$tag[sel] <- paste0(as.numeric(out$ms[sel]), letters[1:length(sel)])
 }
+out <- ddply(out, .(ms), transform, study = as.numeric(ms)[1])
+
+out$pch <- NA
+out$pch[out$data=='Rakai'] <- 15
+out$pch[out$data=='epidemic curve'] <- 17
+out$pch[out$data=='viral load'] <- 16
+out$pch[out$data=='Rakai & epidemic curve'] <- 18
+out$pch[out$data=='phylogenetics'] <- 24
+
+pdf('results/RakAcute/AF vs EHM review.pdf', w = 6.5, h=4)
+layout(matrix(1:2, 1,2), w = c(1,.5))
+par(mar=c(4,4,1,1), mar = c(4,4,.5,0))
+plot(out$ehm.ac, out$af.ac, col = out$col, pch = out$pch, xlim = c(1, 1000), ylim = c(0,100), cex = 2,
+     xlab = expression(EHM[acute]), ylab = expression(AF[acute]), bty = 'n', log='x', xaxt='n')
+axis(1, c(1:9, seq(10,90,10), seq(100,1000,100)), lab = NA)
+axis(1, c(1,10,100,1000))
+text(out$ehm.ac, out$af.ac, out$tag, cex = .6)
+plot.new()
+par(mar=rep(0,4), 'ps'=8)
+leg <- ddply(out, .(ms), with,  paste0('(',study[1],') ',ms[1]))[,2]
+pchs <- ddply(out, .(ms), with,  pch[1])[,2]
+cols <- ddply(out, .(ms), with,  col[1])[,2]
+legend('topleft', leg = leg, col = cols, pch = pchs, cex = 1)
+legend('bottomright', leg = levels(out$data), pch = c(17,16,15,18,24), title = 'based on')
+graphics.off()
 
 write.csv(out, file = 'Cohen rev.csv')

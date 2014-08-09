@@ -30,8 +30,8 @@ load("data files/pars.arr.ac.Rdata")
 ## loads out.arr [parname, ci.l med ci.u, acute, country] and in.arr (describes inputs & gelman diagnostics)
 load("data files/csurv.Rdata")    #  probability of survival (row) months by age (in months) at seroconversion (column)
 load('data files/ds.nm.all.Rdata')        # load country names
-load("data files/allDHSAIS.Rdata")         # DHS data
-load("data files/dframe.Rdata")   # summary characteristics of DHS data
+load("data files/UgandaDHS2011.Rdata")         # DHS data
+#load("data files/dframe.Rdata")   # summary characteristics of DHS data
 country <- group.ind              # set country to country-group index
 out.dir <- batchdirnm #  output directory
 if(!file.exists(out.dir)) dir.create(out.dir) # create this directory if it doesn't exist

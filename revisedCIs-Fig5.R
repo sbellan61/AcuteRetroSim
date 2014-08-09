@@ -91,7 +91,6 @@ tab1 <- data.frame(study = NA, tab1)
 colnames(tab1)[-1] <- c('lci','med','uci')
 tab1$study <- c('based on VL', 'Wawer (raw)', 'Wawer (coital acts)', 'Wawer (full model)', 'Hollingsworth (refit)', 'Powers et al. 2011',
                 'Rasmussen et al. 2014')
-
 hsds <- 0:3
 add.leg <- F
 x.offset <- 4
@@ -210,3 +209,53 @@ for(ii in 1:length(to.do))
   }
 graphics.off()
 
+
+####################################################################################################
+## 95% contour for RH[acute] & d[acute]
+## Which values produced things within Wawer's 95% CI?
+
+sel <- with(twf, err=='XbErr' & het.sd==1 & hobs=='obs0', ehm.late==40)
+sum(sel)
+temp <- twf[sel,]
+temp <- temp[temp$med > wexsum[1] & temp$med < wexsum[3],c('acute.sc','dur.ac')]
+
+# FUNCTION:
+Plot_ConvexHull<-function(xcoord, ycoord, lcolor, poly=F){
+  hpts <- chull(x = xcoord, y = ycoord)
+  hpts <- c(hpts, hpts[1])
+  if(!poly) lines(xcoord[hpts], ycoord[hpts], col = lcolor)
+  if(poly) polygon(c(xcoord[hpts], rev(xcoord[hpts])), c(ycoord[hpts], rev(ycoord[hpts])), col = lcolor)
+}  
+
+library(plotrix)
+
+pdf(file=file.path(outdir,"95CI region.pdf"), w = 3.27, h = 3)
+ct <- .8
+layout(matrix(c(1:2),1,2), w = c(1,.3))
+par(mar=c(4,4,1,1))
+xs <- seq(-.3,7.2, by = .05) ##log(seq(0.1,8, by = 1))
+ys <- seq(-2.4,2.7, by = .05) ##log(seq(0.1, 11, by = .5))
+levels <- c(0,2,5,10,25,50,70,100,500,1000)
+cols <- colorRampPalette(c('purple','orange','red'))(length(levels)-1)
+image(xs, ys, outer(exp(xs)-1,exp(ys)), breaks = levels, xlim = c(-.3,log(60)), ylim = c(-2.4,2.35), mgp = c(3,0,0),
+               col = cols, axes = F, xlab = expression(paste(RH['acute'])), ylab = expression(d[acute]))
+points(log(temp[,1]), log(temp[,2]), pch = 16)
+xts <- c(1:9, seq(10, 100, by = 10))
+xsh <- c(1,10,50)
+xls <- xts
+xls[!xls %in% xsh] <- NA
+axis(1, at = log(xts), lab = xls)
+yts <- c(seq(.1,.9, by = .1),1:10)
+ysh <- c(.1,1,10)
+yls <- yts
+yls[!yls %in% ysh] <- NA
+axis(2, at = log(yts), lab = yls, las = 2)
+## Palette legend
+par(mar=rep(0,4), 'ps'=12)
+plot(0,0,type="n",axes=F, xlim = c(-.1,.2), ylim = c(-.1,.9), xlab = '', ylab = '')
+color.legend(.09,.1,.15,.8, levels, rect.col = cols, gradient = "y", cex = ct*.8)
+text(.025, .8, expression(paste(EHM['acute'])), pos = 3, cex = ct*1.2)
+graphics.off()
+
+
+write.csv(temp, file = file.path(outdir,'RHacute & dacute combos with 95CI.csv'))

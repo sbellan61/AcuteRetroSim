@@ -295,41 +295,8 @@ rak.coh.fxn <- function(ts.ap, dat, interv = 10, max.vis = 5, start.rak, end.rak
     return(rak.coh)
   }
 
-####################################################################################################
-## Wawer et al. style analysis of Rakai retrospective cohort
-rak.wawer <- function(rak.coh, verbose = F, verbose2=F, browse = F, excl.extram = T, decont=F, start.rak, het.gen.sd, late.ph,
-                      resamp=F, make.diag=F, seed = 1, cov.mods = F) {
-  if(browse) browser()
-  ts.vm <- rak.coh$ts.rak
-  ts.vm.all <- rak.coh$ts.rak.all
-  dat.vm <- rak.coh$dat.rak
-  if(verbose) {
-    print('EHMs as inputted:')
-    print(truehrs(ts.vm.all, dat.vm))
-  }
-  interv <- rak.coh$interv
-  rm(rak.coh) ## to release memory
-  if(excl.extram) { ## Remove couples where 2nd partner was infected extra-couly
-    sel <- which(apply(ts.vm, 2, function(x) sum(grepl('hh',x))>0))
-    sel.m2e <- sel[dat.vm$mcoi[sel]=='e' & dat.vm$mdoi[sel] > dat.vm$fdoi[sel]] # male 2nd
-    sel.f2e <- sel[dat.vm$fcoi[sel]=='e' & dat.vm$fdoi[sel] > dat.vm$mdoi[sel]] # female 2nd
-    sel.b2e <- sel[dat.vm$mcoi[sel]=='e' & dat.vm$fcoi[sel]=='e' & dat.vm$mdoi[sel] == dat.vm$fdoi[sel]] # both same time
-    rem <- c(sel.m2e, sel.f2e, sel.b2e)
-    rem <- 1:nrow(dat.vm) %in% rem
-    dat.vm <- dat.vm[!rem,]
-    ts.vm <- ts.vm[,!rem]
-    ts.vm.all <- ts.vm.all[,!rem]
-    if(verbose) {
-      print('EHMs after excluding couples with 2nd partner infected extra-couply:')
-      print(truehrs(ts.vm.all, dat.vm))
-    }
-  }
-  ncpl <- ncol(ts.vm)
-  ## Calculate person-months at risk for second partner in each couple group.
-  ## Create line list
-  sdcs <- c('mm','mm.ac','mm.lt','mm.aids','ff','ff.ac','ff.lt','ff.aids')
-  sers.ap <- list(ss='ss', mm =c('mm','mm.ac','mm.lt','mm.aids'), ff = c('ff','ff.ac','ff.lt','ff.aids'), hh = 'hh')
-  make.rakll <- function(dat.vm, ts.vm, cov.mods = cov.mods) { 
+## Called in below function, creates rakll from dat.vm, ts.vm
+  make.rakll <- function(dat.vm, ts.vm, cov.mods = F) { 
     rakll <- data.frame(uid = dat.vm$uid, phase = NA, pm = NA, inf = 0, pm.trunc = NA, inf.trunc = NA, excl.by.err = F,
                         mcoi = dat.vm$mcoi, fcoi = dat.vm$fcoi, mcoi.phase = dat.vm$mcoi.phase, fcoi.phase = dat.vm$fcoi.phase,
                         secp = NA, secp.lhet = NA, secp.age = NA, indp.age = NA, mardur = NA,
@@ -498,6 +465,41 @@ rak.wawer <- function(rak.coh, verbose = F, verbose2=F, browse = F, excl.extram 
                 ch.wh=ch.wh, ch.wh.hh=ch.wh.hh, ch.wh.nhh=ch.wh.nhh,
                 lt.wh=lt.wh, lt.wh.hh=lt.wh.hh, lt.wh.nhh=lt.wh.nhh))
   }
+
+####################################################################################################
+## Wawer et al. style analysis of Rakai retrospective cohort
+rak.wawer <- function(rak.coh, verbose = F, verbose2=F, browse = F, excl.extram = T, decont=F, start.rak, het.gen.sd, late.ph,
+                      resamp=F, make.diag=F, seed = 1, cov.mods = F) {
+  if(browse) browser()
+  ts.vm <- rak.coh$ts.rak
+  ts.vm.all <- rak.coh$ts.rak.all
+  dat.vm <- rak.coh$dat.rak
+  if(verbose) {
+    print('EHMs as inputted:')
+    print(truehrs(ts.vm.all, dat.vm))
+  }
+  interv <- rak.coh$interv
+  rm(rak.coh) ## to release memory
+  if(excl.extram) { ## Remove couples where 2nd partner was infected extra-couly
+    sel <- which(apply(ts.vm, 2, function(x) sum(grepl('hh',x))>0))
+    sel.m2e <- sel[dat.vm$mcoi[sel]=='e' & dat.vm$mdoi[sel] > dat.vm$fdoi[sel]] # male 2nd
+    sel.f2e <- sel[dat.vm$fcoi[sel]=='e' & dat.vm$fdoi[sel] > dat.vm$mdoi[sel]] # female 2nd
+    sel.b2e <- sel[dat.vm$mcoi[sel]=='e' & dat.vm$fcoi[sel]=='e' & dat.vm$mdoi[sel] == dat.vm$fdoi[sel]] # both same time
+    rem <- c(sel.m2e, sel.f2e, sel.b2e)
+    rem <- 1:nrow(dat.vm) %in% rem
+    dat.vm <- dat.vm[!rem,]
+    ts.vm <- ts.vm[,!rem]
+    ts.vm.all <- ts.vm.all[,!rem]
+    if(verbose) {
+      print('EHMs after excluding couples with 2nd partner infected extra-couply:')
+      print(truehrs(ts.vm.all, dat.vm))
+    }
+  }
+  ncpl <- ncol(ts.vm)
+  ## Calculate person-months at risk for second partner in each couple group.
+  ## Create line list
+  sdcs <- c('mm','mm.ac','mm.lt','mm.aids','ff','ff.ac','ff.lt','ff.aids')
+  sers.ap <- list(ss='ss', mm =c('mm','mm.ac','mm.lt','mm.aids'), ff = c('ff','ff.ac','ff.lt','ff.aids'), hh = 'hh')
   rakllout <- make.rakll(dat.vm = dat.vm, ts.vm = ts.vm)
   ## ##################################################################################################
   ## Look at contamination between phases
