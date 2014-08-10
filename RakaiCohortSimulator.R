@@ -19,15 +19,13 @@ if(real.dat) {
     }  }
 }
 
-if(!simul) {
-  ## Parameters as used in SB simulation
-  country <- which(ds.nm=='Uganda')
-  epic.ind <- which(colnames(epicf)=='Uganda')
-  pars.arr <- out.arr[,,which(in.arr[,1,2]==7),] # median and credible intervals for transmission coefficient estimates for this acute relative hazard
-  hazs <- c("bmb","bfb","bme","bfe","bmp","bfp") # six gender-route specific transmission coefficients (*b*efore-, *e*xtra-, from-*p*artner-) for *m*ale & *f*emale
-  spars <- pars.arr[hazs,2,country]              # get transmission coefficients from base country
-  spars[5:6] <- .007
-}
+## Parameters as used in SB simulation
+country <- which(ds.nm=='Uganda')
+epic.ind <- which(colnames(epicf)=='Uganda')
+pars.arr <- out.arr[,,which(in.arr[,1,2]==7),] # median and credible intervals for transmission coefficient estimates for this acute relative hazard
+hazs <- c("bmb","bfb","bme","bfe","bmp","bfp") # six gender-route specific transmission coefficients (*b*efore-, *e*xtra-, from-*p*artner-) for *m*ale & *f*emale
+spars <- pars.arr[hazs,2,country]              # get transmission coefficients from base country
+spars[5:6] <- .007
 
 if(!is.null(sim.nm)) { ## if running from a qsub job
   load(sim.nm) ## load simulation
@@ -42,10 +40,6 @@ if(!is.null(sim.nm)) { ## if running from a qsub job
                         rr.ltf.ff = rr.ltf.ff, rr.ltf.mm = rr.ltf.mm, rr.ltf.hh = rr.ltf.hh, rr.ltf.d = rr.ltf.d, rr.inc.sdc = rr.inc.sdc,
                         verbose = T, browse = F)
   rm(output); gc() ## free up memory
-  if(resamp) { ## Resample simulations of 100,000 couples, to yield sample sizes equivalent to the
-    ## original Rakai retrospective cohort data reformat into wawer style line list & do
-    ## Wawer style Poisson regressions, controlling for various amounts of heterogeneity
-  }
   rcohsim <- rak.wawer(rak.coh = cohsim, excl.extram=excl.extram, decont=decont, start.rak = 1994,
                        het.gen.sd = het.gen.sd,
                        verbose = T, browse=F)
