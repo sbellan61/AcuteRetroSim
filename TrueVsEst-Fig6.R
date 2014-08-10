@@ -2,10 +2,11 @@ library(plyr); library(data.table); library(abind); library(multicore)
 rm(list=ls(all=T)); gc()
 ## Summarize Hollingsworth & Wawer style fits to simulated data
 ## Creates Figures 3 & S4 from the manuscript
-outdir <- file.path('results','RakAcute','UgandaFitSummaries')
 nc <- 12                                       # core per simulation
+outdir <- file.path('FiguresAndTables','UgandaFitSummaries')
 load(file=file.path(outdir, 'wf.Rdata'))
 load(file = file.path('results','HollingsworthAn','RealExclbyErr','workspace.Rdata')) ## fit to real data
+outdir <- file.path('FiguresAndTables','UgandaFitSummaries') ## incase changed by workspace load
 
 west <- 36.25 ## Wawer median (if plotting horizontal line to show their estimate on the plots)
 hest <- 65.4 ## Holl median (refit) (if plotting horizontal line to show their estimate on the plots)

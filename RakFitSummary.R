@@ -4,7 +4,7 @@ rm(list=ls(all=T)); gc()
 ## Summarize Hollingsworth & Wawer style fits to simulated data.
 ## Create wf.Rdata with simulation results stored for plotting.
 ####################################################################################################
-outdir <- file.path('results','RakAcute','UgandaFitSummaries')
+outdir <- file.path('FiguresAndTables','UgandaFitSummaries')
 if(!file.exists(outdir)) dir.create(outdir)
 load(file.path('results','RakAcute','blocks.Rdata')) ## these are country-acute phase specific blocks
 hazs <- c('bmb','bfb','bme','bfe','bmp','bfp') ## transmission coefficient names, for convenience

@@ -15,7 +15,7 @@ fmcmc <- as.mcmc(fout$posts)
 meds <- apply(fout$exposts[,c('acute.sc','dur.ac')], 2, median) ## medians of these parameters
 apply(fout$exposts[,c('acute.sc','dur.ac')], 2, function(x) quantile(x, c(.025,.5,.975)))
 
-outdir <- file.path('results','HollingsworthAn','Figures')
+outdir <- file.path('FiguresAndTables','HollingsworthAn')
 if(!file.exists(outdir)) dir.create(outdir)
 
 ## Get 95% posterior contour using volume of points in that region

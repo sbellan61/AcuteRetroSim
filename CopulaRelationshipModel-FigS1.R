@@ -20,7 +20,7 @@ load("data files/pars.arr.ac.Rdata") ## fitted transmission coefficients (out.ar
 load("data files/csurv.Rdata")       ## HIV survival times
 load("data files/ds.nm.all.Rdata")   ## country names
 load("data files/UgandaDHS2011.Rdata")     ## DHS data (cleaned from previous manuscript)
-outdir <- file.path('results','Copulas')
+outdir <- file.path('FiguresAndTables','Copulas')
 if(!file.exists(outdir))        dir.create(outdir)
 ## dat <- dat[,names(aisdat)]          # only use columns in AIS too
 ## dat <- rbind(dat, aisdat)           # add data sets

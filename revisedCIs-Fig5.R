@@ -1,11 +1,12 @@
 library(plyr); library(data.table); library(abind); library(multicore); library(coda); library(grid); library(utils)
 rm(list=ls(all=T)); gc()
 ## Summarize Hollingsworth & Wawer style fits to simulated data
-outdir <- file.path('results','RakAcute','UgandaFitSummaries')
+outdir <- file.path('FiguresAndTables','UgandaFitSummaries')
 nc <- 12                                       # core per simulation
 load(file=file.path(outdir, 'wf.Rdata'))
 load(file = file.path('results','HollingsworthAn','RealExclbyErr','workspace.Rdata')) ## fit to real data
 names(fout)
+outdir <- file.path('FiguresAndTables','UgandaFitSummaries') ## incase workspace load changed it
 
 ## Get summary estimates of ehm.ac from our refit of Hollingsworth's model to Rakai data
 head(fout$exposts)
@@ -97,7 +98,7 @@ x.offset <- 4
 modlab <- c('Multivar')
 cis <- wcis
 wsum <- wexsum
-pdf(file.path(outdir, paste0('Figure 5 - CIs Wawer ', modlab[mm], '.pdf')), w = ifelse(add.leg, 6.83, 7.5), h = ifelse(add.leg, 2.5, 4.5))
+pdf(file.path(outdir, paste0('Figure 5 - CIs Wawer ', modlab, '.pdf')), w = ifelse(add.leg, 6.83, 7.5), h = ifelse(add.leg, 2.5, 4.5))
 cols <- c('purple','red','blue','orange')
 ## cols <- rainbow(length(hsds))
 ylab <- expression(paste('estimated ',EHM[acute]))
@@ -183,6 +184,7 @@ if(add.leg) {
 }
 graphics.off()
 
+
   
 ####################################################################################################
 ## EHM literature estimates for presentation
@@ -209,6 +211,44 @@ for(ii in 1:length(to.do))
   }
 graphics.off()
 
+
+## Literature estimate table
+tab1 <- rbind(c(NA, 4.3, NA), c(20.9, 50.2,102), c(11.9, 36.3, 96), wexsum, fexsum[,'ehm.ac'], c(NA, (30.3-1)*4.8, NA), c(NA, 238, NA))
+tab1 <- data.frame(study = NA, tab1)
+colnames(tab1)[-1] <- c('lci','med','uci')
+tab1$study <- c('viral load estimate', 'Wawer et al. (unadjusted)',
+                'Wawer et al. (coital acts)', 'Wawer et al. (full model)',
+                'Hollingsworth et al.', 'Powers et al.',
+                'Rasmussen et al.')
+tab1 <- rbind(tab1, c(NA, cis[,'sig1']))
+tab1$study[8] <- 'Rakai re-estimate'
+tab1 <- tab1[c(1,8,2:7),]
+
+####################################################################################################
+## Simple Fig 5
+to.do <- c(1:2,5,3,6:7)
+pdf(file.path(outdir, paste0('Fig 5 simple.pdf')), w = 6, h = 5)
+par(mar=c(10,5,.5,.5), mgp = c(2.4,1,0),'ps'=12)
+##################################################
+xmax <- 100
+ymax <- 150
+ylab <- expression(EHM[acute])
+ylab <- 'excess hazard months \nattributable to the acute phase'
+plot(0,0, type = 'n', xlab = '', ylab = ylab, bty = 'n',
+     main = '', xlim = c(1,length(to.do)), ylim = c(0,ymax), axes=F)
+axis(1, 1:length(to.do), lab = paste0('(',LETTERS[1:length(to.do)], ') ', tab1[to.do,'study']), las = 2)
+axis(2, seq(0,ymax, by = 50), las = 2)
+axis(2, seq(0,ymax, by = 10), lab=NA)
+par('xpd'=F)
+abline(h=seq(0,ymax,by=10), col = gray(.9))
+par('xpd'=T)
+for(ii in 1:length(to.do))  {
+    dd <- to.do[ii]
+    points(ii, tab1[dd,'med'], pch = 15, col = gray(.3), cex = 1.5)
+    arrows(ii, tab1[dd,'lci'], ii, tab1[dd,'uci'], code = 3, len = .05, angle = 90, col = gray(.3), lwd = 2)
+    ##text(ii, tab1[ii,'uci'], tab1[ii,'study'], pos = 3)
+  }
+graphics.off()
 
 ####################################################################################################
 ## 95% contour for RH[acute] & d[acute]

@@ -309,13 +309,14 @@ rak.wawer <- function(rak.coh, verbose = F, verbose2=F, browse = F, excl.extram 
   }
   interv <- rak.coh$interv
   rm(rak.coh) ## to release memory
+  ## Deal with extra-couply infected 2n partners
+  sel <- which(apply(ts.vm, 2, function(x) sum(grepl('hh',x))>0))
+  sel.m2e <- sel[dat.vm$mcoi[sel]=='e' & dat.vm$mdoi[sel] > dat.vm$fdoi[sel]] # male 2nd
+  sel.f2e <- sel[dat.vm$fcoi[sel]=='e' & dat.vm$fdoi[sel] > dat.vm$mdoi[sel]] # female 2nd
+  sel.b2e <- sel[dat.vm$mcoi[sel]=='e' & dat.vm$fcoi[sel]=='e' & dat.vm$mdoi[sel] == dat.vm$fdoi[sel]] # both same time
+  extram <- c(sel.m2e, sel.f2e, sel.b2e)
   if(excl.extram) { ## Remove couples where 2nd partner was infected extra-couly
-    sel <- which(apply(ts.vm, 2, function(x) sum(grepl('hh',x))>0))
-    sel.m2e <- sel[dat.vm$mcoi[sel]=='e' & dat.vm$mdoi[sel] > dat.vm$fdoi[sel]] # male 2nd
-    sel.f2e <- sel[dat.vm$fcoi[sel]=='e' & dat.vm$fdoi[sel] > dat.vm$mdoi[sel]] # female 2nd
-    sel.b2e <- sel[dat.vm$mcoi[sel]=='e' & dat.vm$fcoi[sel]=='e' & dat.vm$mdoi[sel] == dat.vm$fdoi[sel]] # both same time
-    rem <- c(sel.m2e, sel.f2e, sel.b2e)
-    rem <- 1:nrow(dat.vm) %in% rem
+    rem <- 1:nrow(dat.vm) %in% extram
     dat.vm <- dat.vm[!rem,]
     ts.vm <- ts.vm[,!rem]
     ts.vm.all <- ts.vm.all[,!rem]
@@ -323,6 +324,10 @@ rak.wawer <- function(rak.coh, verbose = F, verbose2=F, browse = F, excl.extram 
       print('EHMs after excluding couples with 2nd partner infected extra-couply:')
       print(truehrs(ts.vm.all, dat.vm))
     }
+  }else{ ## Censor couples where 2nd partner was infected extra-couply from infection forward
+      which(ts.vm[,extram]=='hh',arr.in=T)
+      ## change all ++ to NA's (this doesn't censor perfectly since we should assume infection midpoint in the interval.
+      ts.vm[,extram][which(grepl('hh', ts.vm[,extram]),arr.in=T)] <- NA
   }
   ncpl <- ncol(ts.vm)
   ## Calculate person-months at risk for second partner in each couple group.

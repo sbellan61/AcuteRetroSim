@@ -3,6 +3,7 @@ rm(list=ls(all=TRUE))
 source('SimulationFunctions.R')                   # load simulation functions
 source('RakFunctions.R')                   # load simulation functions
 load(file.path('results','RakAcute','blocks.Rdata')) ## these are country-acute phase specific blocks
+outdir <- file.path('FiguresAndTables/UgandaFitSummaries')
 
 fls <- list.files("results/RakAcute/UgandaFits/fitouts", full.names=T)
 fls.sh <- list.files("results/RakAcute/UgandaFits/fitouts")
@@ -36,15 +37,15 @@ cdat$het.gen.sd <- blocks$het.gen.sd[match(cdat$job, blocks$jobnum)]
 cdat$ehm.ac <- with(cdat, (acute.sc-1)*dur.ac)
 
 ## Only plot for plausible parameters (since this is what we should be comparing to the real data censorship rates)
-plaus.par <- read.csv("results/RakAcute/UgandaFitSummaries/RHacute & dacute combos with 95CI.csv")
+plaus.par <- read.csv(file.path(outdir, 'RHacute & dacute combos with 95CI.csv'))
 cdat$plaus <- with(cdat, paste0(acute.sc,'-',dur.ac)) %in% with(plaus.par, paste0(acute.sc, '-', dur.ac))
 
 ## Save it!
-save(cdat, wtab.base.ls, wtab.XbErr.ls, file = file.path('results/RakAcute/UgandaFitSummaries/','wtabs.Rdata'))
+save(cdat, blocks, wtab.base.ls, wtab.XbErr.ls, file = file.path(outdir,'wtabs.Rdata'))
 
 head(cdat)
 
-pdf(file.path("results/RakAcute/UgandaFitSummaries/", "Incident SD couples excluded distribution (ALL).pdf"), w = 3.27, h = 3)
+pdf(file.path(outdir, "Incident SD couples excluded distribution (ALL).pdf"), w = 3.27, h = 3)
 par('ps'=8, mar = c(4,4,.5,.5))
 hsds <- 0:3
 cols <- c("black", 'red','purple','orange')
@@ -57,7 +58,7 @@ for(ii in 4:1) {
 legend('topright', leg = 0:3, title = expression(sigma[hazard]), pch = 21, col = cols, ncol=4)
 dev.off()
 
-pdf(file.path("results/RakAcute/UgandaFitSummaries/", "Incident SD couples excluded distribution (plausible parameters).pdf"),
+pdf(file.path(outdir, "Incident SD couples excluded distribution (plausible parameters).pdf"),
     w = 3.27, h = 3)
 par('ps'=8, mar = c(4,4,.5,.5))
 hsds <- 0:3
@@ -68,8 +69,6 @@ for(ii in 2) {
     with(cdat[cdat$plaus & cdat$het==hh,], points(ehm.ac, cpls.prop, col = cols[ii], pch = 21, cex = .7))
 }
 dev.off()
-
-
 
 ## hist(cpls.excl, xlab = "# couples excluded by \n following Rakai exclusion criteria", ylab = "frequency", las = 1, col = 'black',
 ##      xlim = c(0,1000), main = '')

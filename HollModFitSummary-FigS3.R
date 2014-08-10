@@ -4,13 +4,13 @@ library(plyr); library(data.table); library(abind); library(multicore)
 ## Summarize Hollingsworth Model fits to Hollingsworth simulated & Bellan simulated data.
 ## Create Figure S3.
 ####################################################################################################
-outdir <- file.path('results','RakAcute','HollModTestFitsSummary')
+outdir <- file.path('FiguresAndTables','HollModTestFitsSummary')
 if(!file.exists(outdir)) dir.create(outdir)
 load(file = file.path('results','RakAcute','HollModTestFits', 'blocksHollFitTest.Rdata'))
 hazs <- c('bmb','bfb','bme','bfe','bmp','bfp') ##  transmission coefficient names, for convenience
 nc <- 12                                       ## core per simulation
 ## Compare these to fits of SB cohort data, load those (from SummarizeFits.R output) for comparison
-load(file=file.path('results','RakAcute','UgandaFitSummaries', 'wf.Rdata'))
+load(file=file.path('FiguresAndTables','UgandaFitSummaries', 'wf.Rdata'))
 
 ## Load fit files from Hollingsworth-Model-generated data
 fls <- list.files(file.path('results','RakAcute','HollModTestFits','fitouts'), pattern = 'fitout-', full.names=T)

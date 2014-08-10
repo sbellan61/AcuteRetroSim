@@ -40,7 +40,7 @@ if(!is.null(sim.nm)) { ## if running from a qsub job
                         rr.ltf.ff = rr.ltf.ff, rr.ltf.mm = rr.ltf.mm, rr.ltf.hh = rr.ltf.hh, rr.ltf.d = rr.ltf.d, rr.inc.sdc = rr.inc.sdc,
                         verbose = T, browse = F)
   rm(output); gc() ## free up memory
-  rcohsim <- rak.wawer(rak.coh = cohsim, excl.extram=excl.extram, decont=decont, start.rak = 1994,
+  rcohsim <- rak.wawer(rak.coh = cohsim, excl.extram=T, decont=decont, start.rak = 1994, ## exclude extra-couply infected 2nd partners
                        het.gen.sd = het.gen.sd,
                        verbose = T, browse=F)
   rakll <- rcohsim$rakll
@@ -58,8 +58,8 @@ if(!is.null(sim.nm)) { ## if running from a qsub job
   }
   ldpars <- log(dpars)
 }
-## simulate using Hollingsworth et al. 2008 model (only do once)
 
+## simulate using Hollingsworth et al. 2008 model (only do once)
 stepper <- 1
 if(sb.sim | !simul) excl.by.errs <- c(F,T)
 if(!sb.sim | simul) excl.by.errs <- FALSE
@@ -162,24 +162,9 @@ if(!simul) {
                  interv = interv, max.vis = max.vis, ltf.prob = ltf.prob,
                  rr.ltf.ff = rr.ltf.ff, rr.ltf.mm = rr.ltf.mm, rr.ltf.hh = rr.ltf.hh, rr.ltf.d = rr.ltf.d)
   if(!file.exists(file.path(batchdirnm, 'fitouts'))) dir.create(file.path(batchdirnm, 'fitouts'))
-  save(fitout, file = file.path(batchdirnm, 'fitouts', paste0('fitout-',jobnum,'-ltf',signif(ltf.prob,3),'.Rdata')))
+  save(fitout, file = file.path(batchdirnm, 'fitouts', paste0('fitout-',jobnum,'-ltf',signif(ltf.prob,3),'-extram'[!excl.extram], '.Rdata')))
 }
 #load(file.path(ndirnm,'workspace.Rdata'))
 
-
-  ## excl.by.err <- F
-  ## wtab.do <- sbmod.to.wdat(rcohsim$rakll, excl.by.err = excl.by.err, browse=F)
-  ## print(wtab.do)
-  ## rc <- rcohsim
-  ## rc$erhs
-  ## with(rc,    {print(armod[,'ehm.ac',,]); print(armod['true value','ehm.ac',1,1])})
-  ## with(rc,    {print(armod['50 %','ehm.ac',,]); print(armod['true value','ehm.ac',1,1])})
-  ## with(rc,    {print(armod['50 %','late.sc',,]); print(armod['true value','late.sc',1,1])})
-  ## with(rc,    {print(armod['50 %','dur.lt',,]); print(armod['true value','dur.lt',1,1])})          
-  ## with(rc,    {print(armod['50 %','ehm.ltaids',,]); print(armod['true value','ehm.ltaids',1,1])})
-  ## with(rc,    {print(armod['50 %','ehm.lt',,]); print(armod['true value','ehm.lt',1,1])})      
-  ## with(rc,    {print(armod['50 %','bp',,]); print(armod['true value','bp',1,1])})
-
-    ## pdf(file.path(batchdirnm, 'test.pdf'))
 
     

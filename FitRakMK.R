@@ -6,7 +6,7 @@
 load("data files/ds.nm.all.Rdata") # country names
 load('data files/pars.arr.ac.Rdata')    # load acute phase relative hazards used to fit (in.arr[,,2])
 outdir <- file.path('results','RakAcute')
-load(file.path(outdir,'blocks.Rdata')) # these are country-acute phase specific blocks
+load(file.path(outdir,'blocks.Rdata')) # these are country-acute phase specific blocks describing simulations
 hazs <- c('bmb','bfb','bme','bfe','bmp','bfp') #  transmission coefficient names, for convenience
 nc <- 12                                       # core per simulation
 ## source('FitRakMK.R')
@@ -34,7 +34,8 @@ fit.fls <- fit.fls[order(fit.fls)]
 
 ##to.do <- 1:nrow(blocks)
 to.do <- fls
-to.do <- to.do[!to.do %in% fit.fls] ## which haven't been fit yet
+to.do <- with(blocks, which(dur.lt==10 & late.sc==5))
+##to.do <- to.do[!to.do %in% fit.fls] ## which haven't been fit yet
 ##to.do <- jobnums.to.do
 
 blocks[head(fls,10),]
@@ -47,7 +48,7 @@ blocks[with(blocks, which(acute.sc==7 & het.gen.sd==0 & late.sc==5 & dur.ac == 3
 ####################################################################################################
 ## Fitting simulated couples data with Wawer & Hollingsworth models to explore potential biases.
 ####################################################################################################
-batchdirnm <- file.path('results','RakAcute','UgandaFits')
+batchdirnm <- file.path('results','RakAcute','UgandaFitsExtram')
 if(!file.exists(batchdirnm))      dir.create(batchdirnm) # create directory if necessary
 if(!file.exists(file.path(batchdirnm,'routs')))      dir.create(file.path(batchdirnm, 'routs')) # setup directory to store Rout files
 max.vis <- 5
@@ -59,7 +60,7 @@ rr.ltf.hh <- 1 ## if ++?
 rr.ltf.d <- 1 ## if dead?
 rr.inc.sdc <- 1.5 ## how much faster is the rate at which incident SDC (ie who were previously -- in a survey visit) are LTF than regular SDC?
 
-excl.extram <- T ## exclude couples with 2nd partner infected extra-couply?
+excl.extram <- F ## exclude couples with 2nd partner infected extra-couply?
 decont <- F      ## decontaminate? (remove prevalent couples with person-time exposed to acute/late partners etc)
 seed.bump <- 0
 aniter <- 5000
