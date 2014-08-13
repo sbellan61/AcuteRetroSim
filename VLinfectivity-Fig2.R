@@ -36,7 +36,7 @@ dat$ltran <- with(dat, log(Transmission))
 ## Figure 3 with Robb 2012 data
 pdf(file.path(outdir, 'Figure 3 - RH transmission profile Robb Lingappa.pdf'), w = 6.83, h = 3.5)
 layout(matrix(c(1,1,2,3),2,2), w = c(.8,1))
-par(mar=c(4,4,1,.5), 'ps'=8)#, mfrow = c(1,2))
+par(mar=c(4,4,1,.5), 'ps'=10)#, mfrow = c(1,2))
 with(dat[grepl('Ling',dat$Study),], {
   plot(1,1, type='n', xlim = c(2,7), ylim = c(.1,23), xlab = 'HIV RNA (copies/ml)', ylab = 'hazard (per = 100 person-years)',
        axes=F, bty='n', log='y', main = '(A)')#, main = cat[1])
@@ -58,27 +58,45 @@ vl.ticks <- c(expression(10^2),expression(10^3),expression(10^4),expression(10^5
 axis(2, at=2:7, lab = vl.ticks, las = 2)
 title(xlab='days since first RNA positive', line = 2)
 title(ylab='HIV RNA (copies/ml)', line = 2)
+## Redo Lingappa's model for plotting purposes
 mod <- with(dat[grepl('Ling',dat$Study),],lm(ltran ~ lv)) # Lingappa model
 ys.t <- exp(predict(mod, newdata=data.frame(lv = rbaf$logvl, Transmission = NA)))
 ys.t <- ys.t/ys.t[length(ys.t)] ## relative to chronic
 rbaf$rh <- ys.t
-plot(rbaf$days, ys.t, ylab='', xlab = '', type = 'n', bty = 'n', ylim = c(0,10), main = '(C)', las = 1)
+## Use Lingappa's actual results to get the EHM calculation (since it accounts for different #'s of individual in each VL strata)
+## Get CI's on EHM
+vl.inf50 <- c(.97,.74,.6) ## Lingappa's necessary reduction of logVL to achieve a 50% reduction in infectivity
+vl.inf <- exp(log(2)/vl.inf50) ## to get increase in infectivity per log10 increase in VL
+## Now use these to get CI on EHM.acute
+rbaf$logvlabove.ch <- rbaf$logvl-rbaf$logvl[nrow(rbaf)]
+rbaf$rh.lci <- vl.inf[1]^rbaf$logvlabove.ch
+rbaf$rh.med <- vl.inf[2]^rbaf$logvlabove.ch
+rbaf$rh.uci <- vl.inf[3]^rbaf$logvlabove.ch
+plot(rbaf$days, rbaf$rh.med, ylab='', xlab = '', type = 'n', bty = 'n', ylim = c(0,10), main = '(C)', las = 1)
 title(xlab='days since first RNA positive', line = 2)
 title(ylab='relative hazard \n(versus chronic phase)', line = 2)
 sel <- nrow(rbaf)
 polygon(c(rbaf$days[-sel],rev(rbaf$days[-sel])), c(ys.t[-sel], rep(0, length(ys.t)-1)), col = 'purple', border = NA)
 sel <- (nrow(rbaf)-1):nrow(rbaf)
 polygon(c(rbaf$days[sel],rev(rbaf$days[sel])), c(rep(ys.t[nrow(rbaf)],2),0,0), col = 'orange', border = NA)
-polygon(c(rbaf$days[1], rbaf$days[sel][1], rbaf$days[sel][1], rbaf$days[1]),c(rep(ys.t[nrow(rbaf)],2),0,0), col = 'orange', density = 70, angle = 45, border=NA)
+polygon(c(rbaf$days[1], rbaf$days[sel][1], rbaf$days[sel][1], rbaf$days[1]),c(rep(ys.t[nrow(rbaf)],2),0,0), col = 'orange', angle = 45, border=NA)
 ## Trapezoidal rule for getting area under acute phase curve
-durs <- rbaf$days[-1]-rbaf$days[-nrow(rbaf)]
-hms <- .5*(rbaf$rh[-sel]+rbaf$rh[-c(1,nrow(rbaf))])*durs[-length(durs)]/30 ## hazard months
-hms <- sum(hms)
-hms.expected <- 1*sum(durs[-length(durs)])/30
-ehms <- hms - hms.expected ## excess hazard-months
-ehms
-text(45, 3.5, paste0('excess hazard months = ',signif(ehms,3)), pos = 4)
+ehms <- numeric(4)
+names(ehms) <- c('digitized','lci','med','uci')
+for(ii in 1:4) { ## median and CI on ehm acute
+    rh.temp <- rbaf[,c('rh','rh.lci','rh.med','rh.uci')[ii]]
+    durs <- rbaf$days[-1]-rbaf$days[-nrow(rbaf)]
+    hms <- .5*(rh.temp[-sel]+rh.temp[-c(1,nrow(rbaf))])*durs[-length(durs)]/30 ## hazard months
+    hms <- sum(hms)
+    hms.expected <- 1*sum(durs[-length(durs)])/30
+    ehms[ii] <- hms - hms.expected ## excess hazard-months
+}
+ehms.vl <- ehms
+ehms.vl
+text(45, 3.5, paste0('excess hazard months = ',signif(ehms['med'],3),' (',signif(ehms['lci'],3),'-', signif(ehms['uci'],3),')'), pos = 4)
 graphics.off()
+
+save(ehms.vl, file=file.path(outdir, 'ehms.vl.Rdata'))
 
 ####################################################################################################
 ## Figure S5

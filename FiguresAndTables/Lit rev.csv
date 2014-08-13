@@ -1,34 +1,34 @@
 "","ms","rh.ac","dur.ac","ehm.ac","af.ac","data","type","estim","col","tag","study","pch"
-"1","Jacquez et al. 1994",80,2,158,25.1,"epidemic curve","homogenous","R0 %","#FF000064","1a",1,17
-"2","Jacquez et al. 1994",100,2,198,29.5,"epidemic curve","homogenous","R0 %","#FF000064","1b",1,17
-"3","Jacquez et al. 1994",120,2,238,33.4,"epidemic curve","homogenous","R0 %","#FF000064","1c",1,17
-"4","Jacquez et al. 1994",140,2,278,36.9,"epidemic curve","homogenous","R0 %","#FF000064","1d",1,17
-"5","Jacquez et al. 1994",100,2,198,18.41,"epidemic curve","three risk groups","R0 %","#FF000064","1e",1,17
-"6","Jacquez et al. 1994",150,2,298,24.6,"epidemic curve","three risk groups","R0 %","#FF000064","1f",1,17
-"7","Jacquez et al. 1994",200,2,398,29.6,"epidemic curve","three risk groups","R0 %","#FF000064","1g",1,17
-"8","Jacquez et al. 1994",250,2,498,33.84,"epidemic curve","three risk groups","R0 %","#FF000064","1h",1,17
-"9","Pinkerton and Abramson 1996",50,2,98,20,"epidemic curve","100 sex acts per partner","R0 %","#FF660064","2a",2,17
-"10","Pinkerton and Abramson 1996",300,2,598,55,"epidemic curve","1 sex act per partner","R0 %","#FF660064","2b",2,17
-"11","Pinkerton and Abramson 1996",50,2,98,20,"epidemic curve","100 sex acts per partner","R0 %","#FF660064","2c",2,17
-"12","Pinkerton and Abramson 1996",300,2,598,87,"epidemic curve","1 sex act per partner","R0 %","#FF660064","2d",2,17
-"13","Koopman et al. 1997",200,1.5,298.5,36,"epidemic curve","homogenous contact","R0 %","#FFCC0064","3a",3,17
-"14","Koopman et al. 1997",200,1.5,298.5,47.4,"epidemic curve","age-peaked contact rate","R0 %","#FFCC0064","3b",3,17
-"15","Kretzschmar & Dietz 1998",300,1.64383561643836,492,65,"epidemic curve","","AF_acute","#CCFF0064","4",4,17
-"16","Xiridou et al. 2004",5.76907534507336,1.09917437129188,10,2.71,"viral load","","AF_acute","#66FF0064","5a",5,16
-"17","Xiridou et al. 2004",34.2543460995657,4.89831264284439,139,24.97,"viral load","","AF_acute","#66FF0064","5b",5,16
-"18","Pinkerton 2007",4.2,1.4,4.48,2.5,"viral load","","AF_acute","#00FF0064","6a",6,16
-"19","Pinkerton 2007",8.1,1.63333333333333,11.5966666666667,5.5,"viral load","","AF_acute","#00FF0064","6b",6,16
-"20","Pinkerton 2007",12,1.86666666666667,20.5333333333333,9,"viral load","","AF_acute","#00FF0064","6c",6,16
-"21","Hayes et al. 2006",7.25,5,31.25,41,"Rakai","","crude","#00FF6664","7a",7,15
-"22","Hayes et al. 2006",7.25,5,31.25,23,"Rakai","","crude","#00FF6664","7b",7,15
-"23","Hollingsworth et al. 2008",26,2.9,72.5,9,"Rakai","","AF_acute","#00FFCC64","8a",8,15
-"24","Hollingsworth et al. 2008",26,2.9,72.5,31,"Rakai","","AF_acute","#00FFCC64","8b",8,15
-"25","Abu-Raddad et al. 2008",13.375,2.5,30.9375,17,"Rakai","","AF_acute","#00CCFF64","9a",9,15
-"26","Abu-Raddad et al. 2008",13.375,2.5,30.9375,25,"Rakai","","AF_acute","#00CCFF64","9b",9,15
-"27","Salomon & Hogan 2008",8.2,4,28.8,41,"Rakai","","AF_acute","#0066FF64","10a",10,15
-"28","Salomon & Hogan 2008",8.2,4,28.8,23,"Rakai","","AF_acute","#0066FF64","10b",10,15
-"29","Prabhu et al. 2009",8.1,1.63333333333333,11.5966666666667,11.4,"viral load","","AF_acute","#0000FF64","11",11,16
-"30","Powers et al. 2011",30.3,4.8,140.64,38.4,"Rakai & epidemic curve","","AF_acute","#6600FF64","12",12,18
-"31","Cohen et al. 2013 (Williams)",3,1,2,2,"viral load","","AF_acute","#CC00FF64","13",13,16
-"32","Romero-Severson et al. 2013",50,2,98,60,"Rakai","","AF_acute","#FF00CC64","14",14,15
-"33","Rasmussen et al. 2014",20,12,228,50,"phylogenetics","","AF_acute","#FF006664","15",15,24
+"1","Jacquez et al. 1994",80,2,158,25.1,"epidemic curve","homogenous","R0 %","#FF000078","1a",1,17
+"2","Jacquez et al. 1994",100,2,198,29.5,"epidemic curve","homogenous","R0 %","#FF000078","1b",1,17
+"3","Jacquez et al. 1994",120,2,238,33.4,"epidemic curve","homogenous","R0 %","#FF000078","1c",1,17
+"4","Jacquez et al. 1994",140,2,278,36.9,"epidemic curve","homogenous","R0 %","#FF000078","1d",1,17
+"5","Jacquez et al. 1994",100,2,198,18.41,"epidemic curve","three risk groups","R0 %","#FF000078","1e",1,17
+"6","Jacquez et al. 1994",150,2,298,24.6,"epidemic curve","three risk groups","R0 %","#FF000078","1f",1,17
+"7","Jacquez et al. 1994",200,2,398,29.6,"epidemic curve","three risk groups","R0 %","#FF000078","1g",1,17
+"8","Jacquez et al. 1994",250,2,498,33.84,"epidemic curve","three risk groups","R0 %","#FF000078","1h",1,17
+"9","Pinkerton and Abramson 1996",50,2,98,20,"epidemic curve","100 sex acts per partner","R0 %","#FF660078","2a",2,17
+"10","Pinkerton and Abramson 1996",300,2,598,55,"epidemic curve","1 sex act per partner","R0 %","#FF660078","2b",2,17
+"11","Pinkerton and Abramson 1996",50,2,98,20,"epidemic curve","100 sex acts per partner","R0 %","#FF660078","2c",2,17
+"12","Pinkerton and Abramson 1996",300,2,598,87,"epidemic curve","1 sex act per partner","R0 %","#FF660078","2d",2,17
+"13","Koopman et al. 1997",200,1.5,298.5,36,"epidemic curve","homogenous contact","R0 %","#FFCC0078","3a",3,17
+"14","Koopman et al. 1997",200,1.5,298.5,47.4,"epidemic curve","age-peaked contact rate","R0 %","#FFCC0078","3b",3,17
+"15","Kretzschmar & Dietz 1998",300,1.64383561643836,492,65,"epidemic curve","","AF_acute","#CCFF0078","4",4,17
+"16","Xiridou et al. 2004",5.73716567544034,1.10015027481131,9.74,2.71,"viral load","","AF_acute","#66FF0078","5a",5,16
+"17","Xiridou et al. 2004",34.260205562925,4.90054069657344,139,24.97,"viral load","","AF_acute","#66FF0078","5b",5,16
+"18","Pinkerton 2007",4.2,1.4,4.48,2.5,"viral load","","AF_acute","#00FF0078","6a",6,16
+"19","Pinkerton 2007",8.1,1.63333333333333,11.5966666666667,5.5,"viral load","","AF_acute","#00FF0078","6b",6,16
+"20","Pinkerton 2007",12,1.86666666666667,20.5333333333333,9,"viral load","","AF_acute","#00FF0078","6c",6,16
+"21","Hayes et al. 2006",7.25,5,31.25,41,"Rakai","","crude","#00FF6678","7a",7,15
+"22","Hayes et al. 2006",7.25,5,31.25,23,"Rakai","","crude","#00FF6678","7b",7,15
+"23","Hollingsworth et al. 2008",26,2.9,72.5,9,"Rakai","","AF_acute","#00FFCC78","8a",8,15
+"24","Hollingsworth et al. 2008",26,2.9,72.5,31,"Rakai","","AF_acute","#00FFCC78","8b",8,15
+"25","Abu-Raddad et al. 2008",13.375,2.5,30.9375,17,"Rakai","","AF_acute","#00CCFF78","9a",9,15
+"26","Abu-Raddad et al. 2008",13.375,2.5,30.9375,25,"Rakai","","AF_acute","#00CCFF78","9b",9,15
+"27","Salomon & Hogan 2008",8.2,4,28.8,41,"Rakai","","AF_acute","#0066FF78","10a",10,15
+"28","Salomon & Hogan 2008",8.2,4,28.8,23,"Rakai","","AF_acute","#0066FF78","10b",10,15
+"29","Prabhu et al. 2009",8.1,1.63333333333333,11.5966666666667,11.4,"viral load","","AF_acute","#0000FF78","11",11,16
+"30","Powers et al. 2011",30.3,4.8,140.64,38.4,"Rakai & epidemic curve","","AF_acute","#6600FF78","12",12,18
+"31","Cohen et al. 2013 (Williams)",3,1,2,2,"viral load","","AF_acute","#CC00FF78","13",13,16
+"32","Romero-Severson et al. 2013",50,2,98,60,"Rakai","","AF_acute","#FF00CC78","14",14,15
+"33","Rasmussen et al. 2014",20,12,228,50,"phylogenetics","","AF_acute","#FF006678","15",15,24

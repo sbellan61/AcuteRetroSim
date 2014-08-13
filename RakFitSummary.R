@@ -16,10 +16,10 @@ length(fls)
 jobnums <-  as.numeric(sapply(fls, function(x) as.numeric(strsplit(x,'-')[[1]][2])))
 fls <- fls[order(jobnums)]
 jobnums <- jobnums[order(jobnums)]
-load(file=file.path(outdir, 'jtd.Rdata'))
 
-fls <- fls[!jobnums %in% jobnums.to.do]
-jobnums <- jobnums[!jobnums %in% jobnums.to.do]
+## load(file=file.path(outdir, 'jtd.Rdata'))
+## fls <- fls[!jobnums %in% jobnums.to.do]
+## jobnums <- jobnums[!jobnums %in% jobnums.to.do]
 
 ## Load & label files by jobnum (fitout1, fitout2, etc...)
 system.time(alldat <- mclapply(fls, function(x) { jobnum <- as.numeric(strsplit(x,'-')[[1]][2]); load(x)
@@ -66,7 +66,6 @@ hf <- hf[order(hf$err,hf$var,hf$job),]
 hf <- within(hf, {ehm.late <- (late.sc - 1)*dur.lt})
 hf <- within(hf, {ehm.acute <- (acute.sc - 1)*dur.ac})
 head(hf)
-
 
 ## this can take a long time because each simulation had 24model fits
 obs.sh <- paste0('obs',c(0,0.3,.5,.7,1))

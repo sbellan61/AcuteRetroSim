@@ -62,7 +62,7 @@ if(!is.null(sim.nm)) { ## if running from a qsub job
 ## simulate using Hollingsworth et al. 2008 model (only do once)
 stepper <- 1
 if(sb.sim | !simul) excl.by.errs <- c(F,T)
-if(!sb.sim | simul) excl.by.errs <- FALSE
+## if(!sb.sim | simul) excl.by.errs <- FALSE
 for(excl.by.err in excl.by.errs) { ## Fit both with & without excluding -- to +- to LTF couples 
   if(simul) { ## simulated data
     if(!sb.sim) { ## simulate using Hollingsworth et al. 2008 model
@@ -156,15 +156,12 @@ if(!simul) {
                             excl.extram = excl.extram, decont = decont,
                             interv = interv, max.vis = max.vis, ltf.prob = ltf.prob,
                             rr.ltf.ff = rr.ltf.ff, rr.ltf.mm = rr.ltf.mm, rr.ltf.hh = rr.ltf.hh, rr.ltf.d = rr.ltf.d)
-  fitout <- list(jobnum = jobnum, outtab.h = outtab, ## Hollingsworth-model generated data
-                 wtab = wtab.do, gel = gel, dpars = dpars, 
-                 excl.extram = excl.extram, decont = decont,
-                 interv = interv, max.vis = max.vis, ltf.prob = ltf.prob,
-                 rr.ltf.ff = rr.ltf.ff, rr.ltf.mm = rr.ltf.mm, rr.ltf.hh = rr.ltf.hh, rr.ltf.d = rr.ltf.d)
+  if(!sb.sim)   fitout <- list(jobnum = jobnum, outtab.h = outtab, ## Hollingsworth-model generated data
+                               wtab = wtab.do, gel = gel, dpars = dpars, 
+                               excl.extram = excl.extram, decont = decont,
+                               interv = interv, max.vis = max.vis, ltf.prob = ltf.prob,
+                               rr.ltf.ff = rr.ltf.ff, rr.ltf.mm = rr.ltf.mm, rr.ltf.hh = rr.ltf.hh, rr.ltf.d = rr.ltf.d)
   if(!file.exists(file.path(batchdirnm, 'fitouts'))) dir.create(file.path(batchdirnm, 'fitouts'))
   save(fitout, file = file.path(batchdirnm, 'fitouts', paste0('fitout-',jobnum,'-ltf',signif(ltf.prob,3),'-extram'[!excl.extram], '.Rdata')))
 }
-#load(file.path(ndirnm,'workspace.Rdata'))
-
-
-    
+                                        #load(file.path(ndirnm,'workspace.Rdata'))

@@ -86,8 +86,9 @@ ci.frame <- data.frame(hsds, t(hcis),t(wcis), t(wcis.univ))
 names(ci.frame) <- c('sigma','hlci','hmed','huci','wlci.m','wmed.m','wuci.m','wlci.u','wmed.u','wuci.u')
 write.csv(ci.frame, file = file.path(outdir, 'CI data frame.csv'))
 
+load('FiguresAndTables/VL Profile/ehms.vl.Rdata')
 ## Literature estimate table
-tab1 <- rbind(c(NA, 4.3, NA), c(20.9, 50.2,102), c(11.9, 36.3, 96), wexsum, fexsum[,'ehm.ac'], c(NA, (30.3-1)*4.8, NA), c(NA, 238, NA))
+tab1 <- rbind(ehms.vl[-1], c(20.9, 50.2,102), c(11.9, 36.3, 96), wexsum, fexsum[,'ehm.ac'], c(NA, (30.3-1)*4.8, NA), c(NA, 238, NA))
 tab1 <- data.frame(study = NA, tab1)
 colnames(tab1)[-1] <- c('lci','med','uci')
 tab1$study <- c('based on VL', 'Wawer (raw)', 'Wawer (coital acts)', 'Wawer (full model)', 'Hollingsworth (refit)', 'Powers et al. 2011',
@@ -213,7 +214,7 @@ graphics.off()
 
 
 ## Literature estimate table
-tab1 <- rbind(c(NA, 4.3, NA), c(20.9, 50.2,102), c(11.9, 36.3, 96), wexsum, fexsum[,'ehm.ac'], c(NA, (30.3-1)*4.8, NA), c(NA, 238, NA))
+tab1 <- rbind(ehms.vl[-1], c(20.9, 50.2,102), c(11.9, 36.3, 96), wexsum, fexsum[,'ehm.ac'], c(NA, (30.3-1)*4.8, NA), c(NA, 238, NA))
 tab1 <- data.frame(study = NA, tab1)
 colnames(tab1)[-1] <- c('lci','med','uci')
 tab1$study <- c('viral load estimate', 'Wawer et al. (unadjusted)',
@@ -226,29 +227,44 @@ tab1 <- tab1[c(1,8,2:7),]
 
 ####################################################################################################
 ## Simple Fig 5
-to.do <- c(1:2,5,3,6:7)
-pdf(file.path(outdir, paste0('Fig 5 simple.pdf')), w = 6, h = 5)
-par(mar=c(10,5,.5,.5), mgp = c(2.4,1,0),'ps'=12)
+for(do.log in 0:1) {
+    to.do <- c(1:2,5,3,6:7)
+    pdf(file.path(outdir, paste0('Fig 5 simple', 'log'[do.log], '.pdf')), w = 6, h = 5)
+    par(mar=c(10,5,.5,.5), mgp = c(2.4,1,0),'ps'=12)
 ##################################################
-xmax <- 100
-ymax <- 150
-ylab <- expression(EHM[acute])
-ylab <- 'excess hazard months \nattributable to the acute phase'
-plot(0,0, type = 'n', xlab = '', ylab = ylab, bty = 'n',
-     main = '', xlim = c(1,length(to.do)), ylim = c(0,ymax), axes=F)
-axis(1, 1:length(to.do), lab = paste0('(',LETTERS[1:length(to.do)], ') ', tab1[to.do,'study']), las = 2)
-axis(2, seq(0,ymax, by = 50), las = 2)
-axis(2, seq(0,ymax, by = 10), lab=NA)
-par('xpd'=F)
-abline(h=seq(0,ymax,by=10), col = gray(.9))
-par('xpd'=T)
-for(ii in 1:length(to.do))  {
-    dd <- to.do[ii]
-    points(ii, tab1[dd,'med'], pch = 15, col = gray(.3), cex = 1.5)
-    arrows(ii, tab1[dd,'lci'], ii, tab1[dd,'uci'], code = 3, len = .05, angle = 90, col = gray(.3), lwd = 2)
-    ##text(ii, tab1[ii,'uci'], tab1[ii,'study'], pos = 3)
-  }
-graphics.off()
+    xmax <- 100
+    ymax <- 150
+    ylab <- expression(EHM[acute])
+    ylab <- 'excess hazard months \nattributable to the acute phase'
+    if(do.log) {
+        plog <- 'y'
+        ylim <- c(1,ymax)
+    }else{
+        plog <- ''
+        ylim <- c(0,ymax)
+    }
+    plot(0,0, type = 'n', xlab = '', ylab = ylab, bty = 'n', log = plog,
+         main = '', xlim = c(1,length(to.do)), ylim = ylim, axes=F)
+    axis(1, 1:length(to.do), lab = paste0('(',LETTERS[1:length(to.do)], ') ', tab1[to.do,'study']), las = 2)
+    if(!do.log) {
+        axis(2, seq(0,ymax, by = 50), las = 2)
+        axis(2, seq(0,ymax, by = 10), lab=NA)
+    }else{
+        axis(2, c(1,5, 10, 50, 100, 150), las = 2)
+        axis(2, c(1:9, seq(10,100,10)), lab=NA)
+    }
+    par('xpd'=F)
+    abline(h=seq(0,ymax,by=10), col = gray(.9))
+    par('xpd'=T)
+    for(ii in 1:length(to.do))  {
+        dd <- to.do[ii]
+        if(ii<3) col <- 'black' else col <- gray(.6)
+        points(ii, tab1[dd,'med'], pch = 15, col = col, cex = ifelse(do.log, 1.5,1))
+        arrows(ii, tab1[dd,'lci'], ii, tab1[dd,'uci'], code = 3, len = .05, angle = 90, col = col, lwd = 2)
+        ##text(ii, tab1[ii,'uci'], tab1[ii,'study'], pos = 3)
+    }
+    graphics.off()
+}
 
 ####################################################################################################
 ## 95% contour for RH[acute] & d[acute]

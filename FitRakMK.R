@@ -11,7 +11,6 @@ hazs <- c('bmb','bfb','bme','bfe','bmp','bfp') #  transmission coefficient names
 nc <- 12                                       # core per simulation
 ## source('FitRakMK.R')
 
-
 sb.sim <- T
 ## sim.nm <- 'Uganda-48100-'
 sim.nm <- 'Uganda-96200-'
@@ -26,16 +25,17 @@ sim.nm <- file.path('results','RakAcute','Uganda',sim.nm)
 length(fls)
 
 ## Find those that have been already fit (i.e. have a fit folder)
-fit.fls <- list.files(file.path('results','RakAcute','UgandaFits','fitouts'))
+fit.fls <- list.files(file.path('results','RakAcute','UgandaFitsExtram','fitouts'))
 fit.fls <- sub('fitout-','', fit.fls)
 fit.fls <- sub('-ltf0.0288.Rdata','', fit.fls)
 fit.fls <- as.numeric(fit.fls)
 fit.fls <- fit.fls[order(fit.fls)]
 
+excl.extram <- F ## exclude couples with 2nd partner infected extra-couply?
 ##to.do <- 1:nrow(blocks)
 to.do <- fls
-to.do <- with(blocks, which(dur.lt==10 & late.sc==5))
-##to.do <- to.do[!to.do %in% fit.fls] ## which haven't been fit yet
+to.do <- with(blocks, which(dur.lt==10 & late.sc==1 & het.gen.sd %in% 0:3))
+to.do <- to.do[!to.do %in% fit.fls] ## which haven't been fit yet
 ##to.do <- jobnums.to.do
 
 blocks[head(fls,10),]
@@ -48,7 +48,7 @@ blocks[with(blocks, which(acute.sc==7 & het.gen.sd==0 & late.sc==5 & dur.ac == 3
 ####################################################################################################
 ## Fitting simulated couples data with Wawer & Hollingsworth models to explore potential biases.
 ####################################################################################################
-batchdirnm <- file.path('results','RakAcute','UgandaFitsExtram')
+batchdirnm <- file.path('results','RakAcute',paste0('UgandaFits','Extram'[!excl.extram]))
 if(!file.exists(batchdirnm))      dir.create(batchdirnm) # create directory if necessary
 if(!file.exists(file.path(batchdirnm,'routs')))      dir.create(file.path(batchdirnm, 'routs')) # setup directory to store Rout files
 max.vis <- 5
@@ -60,7 +60,7 @@ rr.ltf.hh <- 1 ## if ++?
 rr.ltf.d <- 1 ## if dead?
 rr.inc.sdc <- 1.5 ## how much faster is the rate at which incident SDC (ie who were previously -- in a survey visit) are LTF than regular SDC?
 
-excl.extram <- F ## exclude couples with 2nd partner infected extra-couply?
+
 decont <- F      ## decontaminate? (remove prevalent couples with person-time exposed to acute/late partners etc)
 seed.bump <- 0
 aniter <- 5000
