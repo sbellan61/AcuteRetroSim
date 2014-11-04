@@ -15,11 +15,6 @@
 rm(list=ls())                           # clear workspace
 library(graphics); library(animation); library(abind); library(mvtnorm); library(copula); library(logspline); library(actuar)
 source("SimulationFunctions.R")                   # load simulation/fitting functions
-load("data files/epic.Rdata")                     ##  epidemic curves
-load("data files/pars.arr.ac.Rdata") ## fitted transmission coefficients (out.arr) across range of acute phase RH's (in.arr)
-load("data files/csurv.Rdata")       ## HIV survival times
-load("data files/ds.nm.all.Rdata")   ## country names
-load("data files/UgandaDHS2011.Rdata")     ## DHS data (cleaned from previous manuscript)
 outdir <- file.path('FiguresAndTables','Copulas')
 if(!file.exists(outdir))        dir.create(outdir)
 ## dat <- dat[,names(aisdat)]          # only use columns in AIS too
@@ -213,8 +208,6 @@ sigmas <- abind(tempcwt$cov, along = 3)
 cop.sigmas <- sigmas ## rename so as not to conflict with 'sigmas' corresponding to MCMC multivariate block sampling
 save(cop.sigmas, cnames, pnames, cams, cafs, cmdur, cfdur, ctmar, ## save everything into data files directory
      pams, pafs, pmdur, pfdur, ptmar, vars, labs, file = file.path('data files',"copula sigmas.Rdata"))
-save.image(file = file.path(outdir,"copula workspace.Rdata"))
-####################################################################################################
 
 ####################################################################################################
 ## Plot fitted copula models along with DHS data: do it as a function and send countries to
@@ -286,3 +279,8 @@ sec.fxn <- function(country) {
     }
 }
 sec.fxn(ug) ## looks ok
+
+## Create pseudopop to sample from so don't have to do ever again
+psdatMarriageCohort <- rcop(ug, NN = 5*10^5, sample.tmar = F, tmar = (60*12):(100*12), each=200, tint=100*12, browse = F)
+save.image(file = file.path(outdir,"copula workspace.Rdata"))
+save(psdatMarriageCohort, file=file.path(outdir,"UgandaSimulatedRelationships.Rdata"))

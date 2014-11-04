@@ -1,4 +1,13 @@
 library(graphics); library(abind); library(mvtnorm); library(multicore); library(lme4) # load necessary libraries
+load("data files/copula sigmas.Rdata")  # multivariate copula covariance matrix for simulating couple pseudopopulations
+load("data files/epic.Rdata")     # infectious HIV prevalence
+##  transmission parameters fit to DHS across the range of a acute phase relative hazards
+load("data files/pars.arr.ac.Rdata")
+## loads out.arr [parname, ci.l med ci.u, acute, country] and in.arr (describes inputs & gelman diagnostics)
+load("data files/csurv.Rdata")    #  probability of survival (row) months by age (in months) at seroconversion (column)
+load('data files/ds.nm.all.Rdata')        # load country names
+load("data files/UgandaDHS2011.Rdata")         # DHS data
+load("FiguresAndTables/Copulas/UgandaSimulatedRelationships.Rdata")
 ## Functions needed to simulate transmission in a couples cohort. Called by SimulationStarter.R.
 
 ## Age-at-seroconversion dependent Weibull survival times fit to
@@ -15,32 +24,31 @@ ageweib <- function(age, death = T) {
 
 ## Create a simulated couple population and simulate transmission therein with an event driven
 ## simulator. Then compile output into a couple-level timeseries. Calls event.fn() (see below)
-psrun <- function(country, s.demog = NA, # country to simulate;  country whose relationship patterns are to be used in simulation
+psrun <- function(country=13, s.demog = country, # country to simulate;  country whose relationship patterns are to be used in simulation
                   seed = 1,              ## seed to set for random number generation
                   maxN = 10^4, ## maximum simulated couple population size (sample inflated pop) to avoid memory problems
+                  ## Condition on Rakai retrospecive cohort sample sizes
+                  condRakai = FALSE, RakSamp = c(inc = 23, prev = 161, late = 51), ## 
                   ## non-parametric approach to generate couple simulated population
                   infl.fac = 4, ##  simulated population inflation factor (for non-parametric couple generator, NOT USED)
                   last.int = F, ##  set interview dates to be the latest one for all individuals
                   psNonPar = F, ## use non-parametric simulated population generator?
-                  pars,         ## transmission parameters to use
+                  pars = c(bmb=0.009259789, bfb=0.021657899, bme=0.003787767, bfe=0.004677159, ## DHS estimates
+                      bmp=36/48525*10, bfp=36/48525*10), ## Wawer estimates
                   sample.tmar = T,  ## sample marriage time too?
                   ## for parametric approach to generate couple simulated population
-                  tmar, each, tint,    ## marriage times, # at each marriage time & interview time
-                  start.rak, end.rak, ## years of retrospective cohort analysis for Rakai style acute phase study
+                  start.rak = 1994, end.rak = 2000, ## years of retrospective cohort analysis for Rakai style acute phase study
                   return.ts = F,      ## return couple-level time series? (big matrix)
                   death = T,             ##  include AIDS mortality?
-                  acute.sc, dur.ac, late.sc, dur.lt, aids.sc, dur.aids, ##  relative hazards of HIV phases compared to chronic phase
+                  acute.sc=5, dur.ac=4, late.sc=5, dur.lt=10, aids.sc=0, dur.aids=10, 
+                  het.gen = F, het.gen.sd = 0, het.gen.cor = 0, ## risk factor for all 3 routes
                   ##  next three lines scale transmission coefficients by the following values (set to 1 in this project, i.e. NOT USED)
-                  bmb.sc = 1, bfb.sc = 1, ##  pre-couple 
-                  bme.sc = 1, bfe.sc = 1, ##  extra-couple                 
-                  bmp.sc = 1, bfp.sc = 1, ##  within-couple
-                  counterf.betas = F,     ## NOT USED IN THIS PROJECT
+                  bmb.sc = 1, bfb.sc = 1, bme.sc = 1, bfe.sc = 1, bmp.sc = 1, bfp.sc = 1, counterf.betas = F, subst = F, ## NOT USED
                   ##  Route-specific heterogeneity parameters {do this type of heterogeneity?;
                   ##  standard deviation of lognormal risk deviate; inter-partner correlation}
                   het.b = F, het.b.sd = 0, het.b.cor = 0, ##  pre-couple   NOT USED IN THIS PROJECT
                   het.e = F, het.e.sd = 0, het.e.cor = 0, ##  extra-couple NOT USED IN THIS PROJECT
                   het.p = F, het.p.sd = 0, het.p.cor = 0, ##  within-coupleNOT USED IN THIS PROJECT
-                  het.gen = F, het.gen.sd = 0, het.gen.cor = 0, ## same for genetic heterogeneity ( same lognormal risk deviate for all three routes) *USED*
                   het.beh = F, het.beh.sd = 0, het.beh.cor = 0, ## same for behavioral heterogeneity NOT USED IN THIS PROJECT
                   ## individual suscepbitility constant through life is either HIGH or LOW risk,
                   ## proportion high risk (phigh) are at rrhigh times higher risk
@@ -50,10 +58,10 @@ psrun <- function(country, s.demog = NA, # country to simulate;  country whose r
                   one.couple = F, ## for debugging, repeat one couple married in 1990, 100,000 times
                   ## processing & visualizations
                   nc = 12,               ## number of cores
-                  out.dir,               ## output directory
-                  make.jpgs = T,         ## make some pictures of results
+                  out.dir=file.path('results','testDir'),               ## output directory
+                  make.jpgs = F,         ## make some pictures of results
                   early.yr = 1985,       ## earliest year to show in timeseries plots
-                  plot.pdfs = T,         ## make some PDFs of results
+                  plot.pdfs = F,         ## make some PDFs of results
                   save.new = F,          ## always save as a new file (don't overwrite)
                   vfreq = 100,           ## progress update frequency
                   mdcol = "dark green",  ## male discordant color
@@ -61,172 +69,175 @@ psrun <- function(country, s.demog = NA, # country to simulate;  country whose r
                   sscol = "dark gray",   ## concordant negative color
                   cccol = "red",         ## concordant positive color
                   browse = F)            ## debug
-  {
-    set.seed(seed)                      ## set RNG seed
-    start.time1 <- Sys.time()           ## track computation time
-    odat <- dat                         ## store original data set workspace
-    if(browse) browser()                ## debug
-    ## calculate pre-couple duration (earliest sexual debut to couple formation) 
-    odat$bd <- apply(cbind(odat$tmar-odat$tms,odat$tmar-odat$tfs), 1, max) 
-    ##  calculate couple duration
-    odat$cd <- odat$tint - odat$tmar
-    dat <- odat[odat$group==ds.nm[s.demog],]
-    ##  male and female durations of sex before marriage, just to see how
-    ##  they affect output later on.
-    dat$mds <- dat$tmar - dat$tms
-    dat$fds <- dat$tmar - dat$tfs
-    ## ###################################### 
-    ## Generate Simulated Population
-    ## ######################################
-    if(psNonPar) { ## NON-Parametric APPROACH:Inflate observed couples times their inverse
-      ## probability of having survived to be observed. First, simulate with state
-      ## probability model to get inflation factors for each couple based on
-      ## probability of survival
-      sim <- pcalc(pars, dat, sim = T, survive = T, browse = F, trace = F) ## Use Markov State Probability model to get survival probabilities
-      surp <- rowSums(sim$pser.a) ## survival probabilities =  probability couples are in one of the alive states at DHS interview
-      infl <- 1/surp              ## infl fator = 1 / survival probabilities
-      ## Generate pseudocouple data set based on infl.fac X ## of couples per infl couple (infl.fac
-      ## just allows us to create bigger pseudopopulations).
-      numb <- rpois(rep(1,nrow(dat)),infl.fac*infl) ## poisson RNG for # of pseudocouples per real couple
-      psdat <- dat[rep(1:nrow(dat), numb),]
-      ## Reduce pseudopopulation to maximum psuedopopulation size desired
-      if(nrow(psdat) > maxN) {
-        smp <- sample(1:nrow(psdat), maxN)
-        smp <- smp[order(smp)]
-        psdat <- psdat[smp,]
-      }
-      ## make interview dates all the last interview date so we don't truncate some couple's simulations
-      psdat$tint <- max(psdat$tint)
-    }else{ ## Parametric Approach: use normal copulas fitted to relationship history patterns for each country to simulate simulated population.
-      psdat <- rcop(s.demog, NN = maxN, sample.tmar = sample.tmar, tmar = tmar, each = each, tint = tint, one.couple = one.couple, browse = F)
-    }
-    ## Plots simulated population distributions for exploration later.
-    psdat.add <- add.vars(psdat) ## Append extra variables (see psdat.add() below) to simulated population
-    real <- add.vars(dat)       ## Append extra variables (see psdat.add() below) to real population
-    rgs <- apply(rbind(real[,vars],psdat.add[,vars]), 2 , range) ## get full range for all variables
-    sz <- 800                                                    ## JPG dimensions
-    if(make.jpgs) {                                              ##  show copula fits
-      ## Secular trends of simulated data
-      jpeg(file.path(out.dir,paste(ds.nm[country], "sec trend SIM.jpg", sep = "")), width = sz, height = sz)
-      par(mfrow=c(2,2))
-      for(vv in 1:4) {                ## for each variable
-        scatter.smooth(psdat.add$tmar, psdat.add[,vars[vv]], xlab = "couple formation date",
-                       ylab = labs[vv], bty = "n", pch = 19, cex = .5, ylim = rgs[,vv])
-        abline(lm(psdat.add[,vars[vv]]~psdat.add$tmar), col = "red", lwd = 3)
-        mtext(paste(ds.nm[country],"nonpar"[psNonPar],"smpTmar"[sample.tmar], "synthCoh"[!psNonPar & !sample.tmar]),
-              side = 3, line = 0, outer = T, cex = 2)        
-      }
-      legend("topleft", c("linear fit", "loess fit"), col = c("red","black"), lty = 1, lwd = 1, bty = "n")    
-      dev.off()
-      ## Secular trends of real data for comparison
-      jpeg(file.path(out.dir,paste(ds.nm[country], "sec trend Real.jpg", sep = "")), width = sz, height = sz)
-      par(mfrow=c(2,2))
-      for(vv in 1:4) {                ## for each variable
-        scatter.smooth(real$tmar, real[,vars[vv]], xlab = "couple formation date", ylab = labs[vv], bty = "n", pch = 19, cex = .5, ylim = rgs[,vv])
-        abline(lm(real[,vars[vv]]~real$tmar), col = "red", lwd = 3)
-        mtext(paste(ds.nm[country],"real data"), side = 3, line = 0, outer = T, cex = 2)        
-      }
-      legend("topleft", c("linear fit", "loess fit"), col = c("red","black"), lty = 1, lwd = 1, bty = "n")        
-      dev.off()
-      ## 5D multivariate distribution
-      sz <- 1200
-      ## Simulated data
-      jpeg(file.path(out.dir,paste(ds.nm[country], "N-", maxN,"-distr-SIM.jpg", sep = "")), w = sz, h = sz)
-      ## lims & breaks chosen from multi-countyr comparison code (pscor.R)
-      ylim <- data.frame(l = rep(0,5), u = c(.02, .04, .25, .3, .01))
-      breaks <- list(seq(0,60*12, by = 12), seq(0,60*12, by = 12), seq(0,60*12, by = 1), seq(0,60*12, by = 1), ## for histograms below
-                     seq(600, 1600, by = 12))
-      ##  pairwise scatterplots of simulated data
-      sbpairs(psdat.add[,vars], browse = F, do.pdf = F, do.jpeg = F, rgs = rgs, hist.freq = F, yrg = ylim, breaks = breaks)
-      mtext(paste(ds.nm[country],"nonpar"[psNonPar],"smpTmar"[sample.tmar], "synthCoh"[!psNonPar & !sample.tmar]), side = 3, line = 0, outer = T, cex = 2)
-      dev.off()
-      ## pairwise scatterplots of real data
-      jpeg(file.path(out.dir,paste(ds.nm[country], "N-", nrow(dat),"-distr-REAL.jpg", sep = "")), w = sz, h = sz)
-      sbpairs(real[,vars], browse = F, do.pdf = F, do.jpeg = F, rgs = rgs, hist.freq = F, yrg = ylim, breaks = breaks)
-      mtext(paste(ds.nm[country],"actual data"), side = 3, line = 0, outer = T, cex = 2)
-      dev.off()
-    }
-    ## ####################################################################
-    ## Simulate couple transmission model with simulated population
-    ## ####################################################################
-    ## Scale extra-couple parameters
-    print('Running simulation')
-    cpars <- pars
-    if(counterf.betas) { ## change betas in counterfactuals
-      cpars["bmb"] <- cpars["bmb"]*bmb.sc
-      cpars["bfb"] <- cpars["bfb"]*bfb.sc   
-      cpars["bme"] <- cpars["bme"]*bme.sc
-      cpars["bfe"] <- cpars["bfe"]*bfe.sc   
-      cpars["bmp"] <- cpars["bmp"]*bmp.sc
-      cpars["bfp"] <- cpars["bfp"]*bfp.sc
-    }else{ ## change HIV transmission rate (beta_within) & contact coefficients (c's) in counterfactuals
-      cpars["bmb"] <- cpars["bmb"]*bmb.sc*bmp.sc
-      cpars["bfb"] <- cpars["bfb"]*bfb.sc*bfp.sc
-      cpars["bme"] <- cpars["bme"]*bme.sc*bmp.sc
-      cpars["bfe"] <- cpars["bfe"]*bfe.sc*bfp.sc
-      cpars["bmp"] <- cpars["bmp"]*bmp.sc
-      cpars["bfp"] <- cpars["bfp"]*bfp.sc
-    }
-    ##  call event-driven simulation
-    evout.all <- event.fn(cpars, psdat, vfreq = 100, death = death, nc = nc,
-                          acute.sc = acute.sc, dur.ac = dur.ac,
-                          late.sc = late.sc, dur.lt = dur.lt,
-                          aids.sc = aids.sc, dur.aids = dur.aids, 
-                          het.b = het.b, het.b.sd = het.b.sd, het.b.cor = het.b.cor,
-                          het.e = het.e, het.e.sd = het.e.sd, het.e.cor = het.e.cor,
-                          het.p = het.p, het.p.sd = het.p.sd, het.p.cor = het.p.cor, 
-                          het.gen = het.gen, het.gen.sd = het.gen.sd, het.gen.cor = het.gen.cor,
-                          het.beh = het.beh, het.beh.sd = het.beh.sd, het.beh.cor = het.beh.cor,
-                          hilo = hilo, phigh.m = phigh.m, phigh.f = phigh.f, rrhigh.m = rrhigh.m, rrhigh.f = rrhigh.f,
-                          scale.by.sd = scale.by.sd, scale.adj = scale.adj,
-                          browse=F)
-    evout <- evout.all$dat
-    ts <- NA ## so there's something to return if not keeping it in next line
-    temptsout <- ts.fxn(evout, nc = nc, return.ts = return.ts, start.rak = start.rak, end.rak = end.rak,
-                        dur.ac=dur.ac, dur.lt=dur.lt, dur.aids=dur.aids)     ##  convert line lists to population timeseries
-    tss <- temptsout[['tss']]      ## grab tss
-    if(return.ts)       ts <- temptsout[['ts']] ## ; ts.ap <- temptsout[['ts.ap']]
+    {
+        set.seed(seed)                      ## set RNG seed
+        start.time1 <- Sys.time()           ## track computation time
+        odat <- dat                         ## store original data set workspace
+        if(browse) browser()                ## debug
+        ## calculate pre-couple duration (earliest sexual debut to couple formation) 
+        odat$bd <- apply(cbind(odat$tmar-odat$tms,odat$tmar-odat$tfs), 1, max) 
+        ##  calculate couple duration
+        odat$cd <- odat$tint - odat$tmar
+        dat <- odat[odat$group==ds.nm[s.demog],]
+        ##  male and female durations of sex before marriage, just to see how
+        ##  they affect output later on.
+        dat$mds <- dat$tmar - dat$tms
+        dat$fds <- dat$tmar - dat$tfs
+        ## ###################################### 
+        ## Generate Simulated Population
+        ## ######################################
+        if(psNonPar) { ## NON-Parametric APPROACH:Inflate observed couples times their inverse
+            ## probability of having survived to be observed. First, simulate with state
+            ## probability model to get inflation factors for each couple based on
+            ## probability of survival
+            sim <- pcalc(pars, dat, sim = T, survive = T, browse = F, trace = F) ## Use Markov State Probability model to get survival probabilities
+            surp <- rowSums(sim$pser.a) ## survival probabilities =  probability couples are in one of the alive states at DHS interview
+            infl <- 1/surp              ## infl fator = 1 / survival probabilities
+            ## Generate pseudocouple data set based on infl.fac X ## of couples per infl couple (infl.fac
+            ## just allows us to create bigger pseudopopulations).
+            numb <- rpois(rep(1,nrow(dat)),infl.fac*infl) ## poisson RNG for # of pseudocouples per real couple
+            psdat <- dat[rep(1:nrow(dat), numb),]
+            ## Reduce pseudopopulation to maximum psuedopopulation size desired
+            if(nrow(psdat) > maxN) {
+                smp <- sample(1:nrow(psdat), maxN)
+                smp <- smp[order(smp)]
+                psdat <- psdat[smp,]
+            }
+            ## make interview dates all the last interview date so we don't truncate some couple's simulations
+            psdat$tint <- max(psdat$tint)
+        }else{ ## Parametric Approach: use normal copulas fitted to relationship history patterns for each country to simulate pop
+            psdat <- psdatMarriageCohort[sample(1:nrow(psdatMarriageCohort), maxN, replace=T),]
+            psdat <- psdat[order(psdat$tmar),] ## speeds it up in parallelization by evening out load b/w nodes
+        }
+        ## Plots simulated population distributions for exploration later.
+        psdat.add <- add.vars(psdat) ## Append extra variables (see psdat.add() below) to simulated population
+        real <- add.vars(dat)       ## Append extra variables (see psdat.add() below) to real population
+        rgs <- apply(rbind(real[,vars],psdat.add[,vars]), 2 , range) ## get full range for all variables
+        sz <- 800                                                    ## JPG dimensions
+        if(make.jpgs) {                                              ##  show copula fits
+            ## Secular trends of simulated data
+            jpeg(file.path(out.dir,paste(ds.nm[country], "sec trend SIM.jpg", sep = "")), width = sz, height = sz)
+            par(mfrow=c(2,2))
+            for(vv in 1:4) {                ## for each variable
+                scatter.smooth(psdat.add$tmar, psdat.add[,vars[vv]], xlab = "couple formation date",
+                               ylab = labs[vv], bty = "n", pch = 19, cex = .5, ylim = rgs[,vv])
+                abline(lm(psdat.add[,vars[vv]]~psdat.add$tmar), col = "red", lwd = 3)
+                mtext(paste(ds.nm[country],"nonpar"[psNonPar],"smpTmar"[sample.tmar], "synthCoh"[!psNonPar & !sample.tmar]),
+                      side = 3, line = 0, outer = T, cex = 2)        
+            }
+            legend("topleft", c("linear fit", "loess fit"), col = c("red","black"), lty = 1, lwd = 1, bty = "n")    
+            dev.off()
+            ## Secular trends of real data for comparison
+            jpeg(file.path(out.dir,paste(ds.nm[country], "sec trend Real.jpg", sep = "")), width = sz, height = sz)
+            par(mfrow=c(2,2))
+            for(vv in 1:4) {                ## for each variable
+                scatter.smooth(real$tmar, real[,vars[vv]], xlab = "couple formation date", ylab = labs[vv], bty = "n", pch = 19, cex = .5, ylim = rgs[,vv])
+                abline(lm(real[,vars[vv]]~real$tmar), col = "red", lwd = 3)
+                mtext(paste(ds.nm[country],"real data"), side = 3, line = 0, outer = T, cex = 2)        
+            }
+            legend("topleft", c("linear fit", "loess fit"), col = c("red","black"), lty = 1, lwd = 1, bty = "n")        
+            dev.off()
+            ## 5D multivariate distribution
+            sz <- 1200
+            ## Simulated data
+            jpeg(file.path(out.dir,paste(ds.nm[country], "N-", maxN,"-distr-SIM.jpg", sep = "")), w = sz, h = sz)
+            ## lims & breaks chosen from multi-countyr comparison code (pscor.R)
+            ylim <- data.frame(l = rep(0,5), u = c(.02, .04, .25, .3, .01))
+            breaks <- list(seq(0,60*12, by = 12), seq(0,60*12, by = 12), seq(0,60*12, by = 1), seq(0,60*12, by = 1), ## for histograms below
+                           seq(600, 1600, by = 12))
+            ##  pairwise scatterplots of simulated data
+            sbpairs(psdat.add[,vars], browse = F, do.pdf = F, do.jpeg = F, rgs = rgs, hist.freq = F, yrg = ylim, breaks = breaks)
+            mtext(paste(ds.nm[country],"nonpar"[psNonPar],"smpTmar"[sample.tmar], "synthCoh"[!psNonPar & !sample.tmar]), side = 3, line = 0, outer = T, cex = 2)
+            dev.off()
+            ## pairwise scatterplots of real data
+            jpeg(file.path(out.dir,paste(ds.nm[country], "N-", nrow(dat),"-distr-REAL.jpg", sep = "")), w = sz, h = sz)
+            sbpairs(real[,vars], browse = F, do.pdf = F, do.jpeg = F, rgs = rgs, hist.freq = F, yrg = ylim, breaks = breaks)
+            mtext(paste(ds.nm[country],"actual data"), side = 3, line = 0, outer = T, cex = 2)
+            dev.off()
+        }
+        ## ####################################################################
+        ## Simulate couple transmission model with simulated population
+        ## ####################################################################
+        ## Scale extra-couple parameters
+        print('Running simulation')
+        cpars <- pars
+        if(counterf.betas) { ## change betas in counterfactuals
+            cpars["bmb"] <- cpars["bmb"]*bmb.sc
+            cpars["bfb"] <- cpars["bfb"]*bfb.sc   
+            cpars["bme"] <- cpars["bme"]*bme.sc
+            cpars["bfe"] <- cpars["bfe"]*bfe.sc   
+            cpars["bmp"] <- cpars["bmp"]*bmp.sc
+            cpars["bfp"] <- cpars["bfp"]*bfp.sc
+        }else{ ## change HIV transmission rate (beta_within) & contact coefficients (c's) in counterfactuals
+            cpars["bmb"] <- cpars["bmb"]*bmb.sc*bmp.sc
+            cpars["bfb"] <- cpars["bfb"]*bfb.sc*bfp.sc
+            cpars["bme"] <- cpars["bme"]*bme.sc*bmp.sc
+            cpars["bfe"] <- cpars["bfe"]*bfe.sc*bfp.sc
+            cpars["bmp"] <- cpars["bmp"]*bmp.sc
+            cpars["bfp"] <- cpars["bfp"]*bfp.sc
+        }
+        ##  call event-driven simulation
+        evout.all <- event.fn(cpars, psdat, vfreq = 100, death = death, nc = nc,
+                              acute.sc = acute.sc, dur.ac = dur.ac,
+                              late.sc = late.sc, dur.lt = dur.lt,
+                              aids.sc = aids.sc, dur.aids = dur.aids, 
+                              het.b = het.b, het.b.sd = het.b.sd, het.b.cor = het.b.cor,
+                              het.e = het.e, het.e.sd = het.e.sd, het.e.cor = het.e.cor,
+                              het.p = het.p, het.p.sd = het.p.sd, het.p.cor = het.p.cor, 
+                              het.gen = het.gen, het.gen.sd = het.gen.sd, het.gen.cor = het.gen.cor,
+                              het.beh = het.beh, het.beh.sd = het.beh.sd, het.beh.cor = het.beh.cor,
+                              hilo = hilo, phigh.m = phigh.m, phigh.f = phigh.f, rrhigh.m = rrhigh.m, rrhigh.f = rrhigh.f,
+                              scale.by.sd = scale.by.sd, scale.adj = scale.adj,
+                              browse=F)
+        evout <- evout.all$dat
+        ts <- NA ## so there's something to return if not keeping it in next line
+        temptsout <- ts.fxn(evout, nc = nc, return.ts = return.ts, start.rak = start.rak, end.rak = end.rak,
+                            dur.ac=dur.ac, dur.lt=dur.lt, dur.aids=dur.aids)     ##  convert line lists to population timeseries
+        tss <- temptsout[['tss']]      ## grab tss
+        if(return.ts)       ts <- temptsout[['ts']] ## ; ts.ap <- temptsout[['ts.ap']]
                                         #        hrout <- temptsout[['hrout']]   ## grab HIV phase object
-    hours <- round(as.numeric(difftime(Sys.time(), start.time1, unit = "hour")),3) ## runtime
-    if(!exists(as.character(substitute(jobnum)))) jobnum <- NA ## jobnum is set globally when on cluster
-    if(!exists(as.character(substitute(simj)))) simj <- NA ## simj is set globally when on cluster (job # within country/acute batch)
-    ##  produce output list
-    output <- list(jobnum = jobnum, simj = simj, evout = evout, tss = tss, ts = ts, infpm = evout.all$infpm, hm.exp = evout.all$hm.exp, #hrout = hrout, ts.ap = ts.ap,
-                   pars = c(bmb.sc = bmb.sc, bfb.sc = bfb.sc, bme.sc = bme.sc, bfe.sc = bfe.sc, bmp.sc = bmp.sc, bfp.sc = bfp.sc, 
-                     death = death, acute.sc = acute.sc, dur.ac = dur.ac,
-                     late.sc = late.sc, dur.lt = dur.lt, aids.sc = aids.sc, dur.aids = dur.aids, 
-                     s.epic = s.epic, s.demog = s.demog,
-                     s.bmb = s.bmb, s.bfb = s.bfb,
-                     s.bme = s.bme, s.bfe = s.bfe,
-                     s.bmp = s.bmp, s.bfp = s.bfp,                     
-                     het.b = het.b, het.b.sd = het.b.sd, het.b.cor = het.b.cor,
-                     het.e = het.e, het.e.sd = het.e.sd, het.e.cor = het.e.cor,
-                     het.p = het.p, het.p.sd = het.p.sd, het.p.cor = het.p.cor, 
-                     het.gen = het.gen, het.gen.sd = het.gen.sd, het.gen.cor = het.gen.cor,
-                     het.beh = het.beh, het.beh.sd = het.beh.sd, het.beh.cor = het.beh.cor,
-                     hilo = hilo, phigh.m = phigh.m, phigh.f = phigh.f, rrhigh.m = rrhigh.m, rrhigh.f = rrhigh.f,
-                     group.ind = group.ind, infl.fac = infl.fac, maxN = maxN,
-                     psNonPar = psNonPar, last.int = F, sample.tmar = sample.tmar, tint = tint,
-                     hours = hours),
-                   rakpars = c(acute.sc = acute.sc, late.sc = late.sc, bp = sqrt(prod(cpars[5:6])),
-                     dur.ac=dur.ac, dur.lt = dur.lt, dur.aids = dur.aids),
-                   tmar = tmar, each = each) ## these are vectors & so must be given separately
-    sim.nm <- paste(ds.nm[country], "-", nrow(evout), '-', jobnum, sep = "") ## name simulation results (country-#couples-jobum)
-    ## create file name making sure not to save over old files
-    output.nm.base <- file.path(out.dir, sim.nm) #paste(sim.nm, ".Rdata", sep = ""))
-    stepper <- 1
-    output.nm <- output.nm.base
-    if(save.new) { ## don't save over old files
-      while(file.exists(paste0(output.nm,'.Rdata'))) { 
-        stepper <- stepper + 1
-        output.nm <- paste0(output.nm.base, '-', stepper)
-      }
+        hours <- round(as.numeric(difftime(Sys.time(), start.time1, unit = "hour")),3) ## runtime
+        if(!exists(as.character(substitute(jobnum)))) jobnum <- NA ## jobnum is set globally when on cluster
+        if(!exists(as.character(substitute(simj)))) simj <- NA ## simj is set globally when on cluster (job # within country/acute batch)
+        ##  produce output list
+        output <- list(jobnum = jobnum, simj = simj, evout = evout, tss = tss, ts = ts, infpm = evout.all$infpm, hm.exp = evout.all$hm.exp, #hrout = hrout, ts.ap = ts.ap,
+                       pars = c(bmb.sc = bmb.sc, bfb.sc = bfb.sc, bme.sc = bme.sc, bfe.sc = bfe.sc, bmp.sc = bmp.sc, bfp.sc = bfp.sc, 
+                           death = death, acute.sc = acute.sc, dur.ac = dur.ac,
+                           late.sc = late.sc, dur.lt = dur.lt, aids.sc = aids.sc, dur.aids = dur.aids, 
+                           ## s.epic = s.epic, s.demog = s.demog,
+                           ## s.bmb = s.bmb, s.bfb = s.bfb,
+                           ## s.bme = s.bme, s.bfe = s.bfe,
+                           ## s.bmp = s.bmp, s.bfp = s.bfp,                     
+                           ## het.b = het.b, het.b.sd = het.b.sd, het.b.cor = het.b.cor,
+                           ## het.e = het.e, het.e.sd = het.e.sd, het.e.cor = het.e.cor,
+                           ## het.p = het.p, het.p.sd = het.p.sd, het.p.cor = het.p.cor, 
+                           het.gen = het.gen, het.gen.sd = het.gen.sd, het.gen.cor = het.gen.cor,
+                           ## het.beh = het.beh, het.beh.sd = het.beh.sd, het.beh.cor = het.beh.cor,
+                           ## hilo = hilo, phigh.m = phigh.m, phigh.f = phigh.f, rrhigh.m = rrhigh.m, rrhigh.f = rrhigh.f,
+                           country=country, infl.fac = infl.fac, maxN = maxN,
+                           psNonPar = psNonPar, last.int = F, sample.tmar = sample.tmar, #tint = tint,
+                           hours = hours),
+                       rakpars = c(acute.sc = acute.sc, late.sc = late.sc, bp = sqrt(prod(cpars[5:6])),
+                           dur.ac=dur.ac, dur.lt = dur.lt, dur.aids = dur.aids))
+        sim.nm <- paste(ds.nm[country], "-", nrow(evout), '-', jobnum, sep = "") ## name simulation results (country-#couples-jobum)
+        ## create file name making sure not to save over old files
+        if(!is.na(out.dir)) {
+            if(!file.exists(out.dir)) dir.create(out.dir)
+            output.nm.base <- file.path(out.dir, sim.nm) #paste(sim.nm, ".Rdata", sep = ""))
+            stepper <- 1
+            output.nm <- output.nm.base
+            if(save.new) { ## don't save over old files
+                while(file.exists(paste0(output.nm,'.Rdata'))) { 
+                    stepper <- stepper + 1
+                    output.nm <- paste0(output.nm.base, '-', stepper)
+                }
+            }
+            output.nm <- paste0(output.nm, '.Rdata')
+            print(paste('saving file',output.nm))
+            save(output, file = output.nm)
+        }
+        return(output.nm)
     }
-    output.nm <- paste0(output.nm, '.Rdata')
-    print(paste('saving file',output.nm))
-    save(output, file = output.nm)
-    return(output.nm)
-  }
 ## Returns results in a couples line list format, a time series format, and also gives all information on simulation parameters
 
 
@@ -251,459 +262,461 @@ event.fn <- function(pars, dat, browse = F, ## transmission coefficients to use 
                      ## next 3 are same as previous 3, but for behavioral heterogeneity (risk
                      ## deviate amplifies only pre- and extra-couple transmission susceptibility)
                      het.beh = F, het.beh.sd = 1, het.beh.cor = 0, ## NOT USED IN THIS PROJECT
+                     subst = F, ## from substitution analysis, to delete
                      scale.by.sd = T, ## adjust beta means to keep geometric mean constant with increasing het
                      scale.adj = 1,   ## adjust them arbitrarily (not done, just for debugging)
                      end.at.int = T, ## end infections at interviews (otherwise go til first partner is 60)
                      nc = 12,        ## number of cores
                      vfreq = 200)    ## how often to show progress
-  {
-    if(hilo & (het.gen | het.b | het.e | het.p | het.beh)) stop("Can't have both continuous and discrete heterogeneity")
-    K <- nrow(dat)
-    ## Initialize data for each couple
-    mser <- rep(0, nrow(dat))    ## serostatus at end
-    fser <- rep(0, nrow(dat))
-    mdod <- rep(NA, nrow(dat))    ## date of death (CMC)
-    fdod <- rep(NA, nrow(dat))
-    mdoi <- rep(NA, nrow(dat))    ## date of infection (CMC)
-    fdoi <- rep(NA, nrow(dat))
-    mcoi <- factor(rep(NA, nrow(dat)), levels = c("b","e","p","-"))    ## route of infection
-    fcoi <- factor(rep(NA, nrow(dat)), levels = c("b","e","p","-"))
-    hpars <- pars ## backup transmission coefficients
-    ## ################################################################
-    ## For each type of heterogeneity, sample random lognormal deviates
-    for(het.t in c('b','e','p','gen','beh')) {     ## pre-, -extra, -within, genetic (bep), behavioral (be)
-      het.log <- get(paste('het.',het.t,sep='')) ## temporary logical indicator of whether this type of heterogeneity is being simulated
-      het.sd <- get(paste('het.',het.t,'.sd',sep='')) ## corresponding standard deviation
-      het.cor <- get(paste('het.',het.t,'.cor',sep='')) ## corresponding inter-partner correlation
-      if(het.log) { ##  include this type of heterogeneity?
-        if(het.cor==0) {              ##   uncorrelated
-          assign(paste('m.het.',het.t,sep=''), exp( rnorm(K, mean = 0, sd = het.sd) ))
-          assign(paste('f.het.',het.t,sep=''), exp( rnorm(K, mean = 0, sd = het.sd) ))            
-        }else{                        ##  correlated between partners
-          b.corSig <- matrix(c(het.sd,rep(het.cor*het.sd,2),het.sd),2,2)
-          het.both <- rmvnorm(K, mean = rep(0,2), sigma = b.corSig)
-          assign(paste('m.het.',het.t,sep=''), exp(het.both[,1]))
-          assign(paste('f.het.',het.t,sep=''), exp(het.both[,2]))            
+    {
+        if(hilo & (het.gen | het.b | het.e | het.p | het.beh)) stop("Can't have both continuous and discrete heterogeneity")
+        K <- nrow(dat)
+        ## Initialize data for each couple
+        mser <- rep(0, nrow(dat))    ## serostatus at end
+        fser <- rep(0, nrow(dat))
+        mdod <- rep(NA, nrow(dat))    ## date of death (CMC)
+        fdod <- rep(NA, nrow(dat))
+        mdoi <- rep(NA, nrow(dat))    ## date of infection (CMC)
+        fdoi <- rep(NA, nrow(dat))
+        mcoi <- factor(rep(NA, nrow(dat)), levels = c("b","e","p","-"))    ## route of infection
+        fcoi <- factor(rep(NA, nrow(dat)), levels = c("b","e","p","-"))
+        hpars <- pars ## backup transmission coefficients
+        ## ################################################################
+        ## For each type of heterogeneity, sample random lognormal deviates
+        for(het.t in c('b','e','p','gen','beh')) {     ## pre-, -extra, -within, genetic (bep), behavioral (be)
+            het.log <- get(paste('het.',het.t,sep='')) ## temporary logical indicator of whether this type of heterogeneity is being simulated
+            het.sd <- get(paste('het.',het.t,'.sd',sep='')) ## corresponding standard deviation
+            het.cor <- get(paste('het.',het.t,'.cor',sep='')) ## corresponding inter-partner correlation
+            if(het.log) { ##  include this type of heterogeneity?
+                if(het.cor==0) {              ##   uncorrelated
+                    assign(paste('m.het.',het.t,sep=''), exp( rnorm(K, mean = 0, sd = het.sd) ))
+                    assign(paste('f.het.',het.t,sep=''), exp( rnorm(K, mean = 0, sd = het.sd) ))            
+                }else{                        ##  correlated between partners
+                    b.corSig <- matrix(c(het.sd,rep(het.cor*het.sd,2),het.sd),2,2)
+                    het.both <- rmvnorm(K, mean = rep(0,2), sigma = b.corSig)
+                    assign(paste('m.het.',het.t,sep=''), exp(het.both[,1]))
+                    assign(paste('f.het.',het.t,sep=''), exp(het.both[,2]))            
+                }
+                if(het.t %in% c('b','e','p')) { ## which hazards to rescale to keep geometric mean of risk deviates = 1
+                    het.hazs <- paste0('b',c('m','f'),het.t)
+                }else{
+                    if(het.t=='gen') het.hazs <- hazs
+                    if(het.t=='beh') het.hazs <- hazs[1:4]
+                }
+                if(scale.by.sd) { ##  keep geometric mean transmission coefficient the same
+                    hpars[het.hazs] <-  hpars[het.hazs] / exp(het.sd^2 / 2)  ## correct for increased geometric mean w/ hetogeneity
+                }else{
+                    hpars[het.hazs] <-  hpars[het.hazs] / scale.adj ## scale arbitrarily
+                }
+            }else{ ## no  pre-couple-specific heterogeneity
+                assign(paste('m.het.',het.t,sep=''), rep(1, K))
+                assign(paste('f.het.',het.t,sep=''), rep(1, K))          
+            }
+        }  
+        ## Discrete (binary) heterogeneity: High risk & low risk groups
+        m.het.hilo <- rep(1,K)
+        f.het.hilo <- rep(1,K)
+        if(hilo) {
+            m.high <- rbinom(K, 1, phigh.m)
+            f.high <- rbinom(K, 1, phigh.f)
+            m.het.hilo[m.high] <- rrhigh.m
+            f.het.hilo[f.high] <- rrhigh.f      
+        } ## end heterogeneity risk deviate assignment loop
+        ## ################################################################
+        ## Make data frame for storing output
+        dat <- data.frame(dat, mser, fser, mdoi, fdoi, mdod, fdod, mcoi, fcoi, m.het.gen, f.het.gen, m.het.beh, f.het.beh,
+                          m.het.b, f.het.b, ## pre-couple   
+                          m.het.e, f.het.e, ## extra-couple 
+                          m.het.p, f.het.p, ## within-couple
+                          m.het.hilo, f.het.hilo) ## genetic, binary (hi vs lo)
+        ## Add variables to track if infections from partner were due to acute phase infectiousness
+        dat$mcoi.phase <- NA
+        dat$fcoi.phase <- NA
+        if(browse) browser() ## debug?
+        ## Break couples into nc batches to split between cores. Divide between cores by couple
+        ## formation date strata since early couples will always take longest.
+        breaks <- rep(1:nc, length.out = nrow(dat))
+        ## Call couple loop function below cloop() in multicore
+        multi.out <- mclapply(1:nc, cloop, dat = dat, breaks = breaks, vfreq = vfreq, death = death,
+                              acute.sc = acute.sc, dur.ac = dur.ac, 
+                              late.sc = late.sc, dur.lt = dur.lt,
+                              aids.sc = aids.sc, dur.aids = dur.aids,
+                              pars = hpars, subst = subst, browse=F)
+        print(multi.out[which(lapply(multi.out, class)=='try-error')]) ## print any errors
+        ## ##################################################
+        ## Combine mclapply output from each core back into data frame
+        temp <- multi.out[[1]]$dat 
+        pms <- multi.out[[1]]$pms
+        inf <- multi.out[[1]]$inf
+        hm.exp <- multi.out[[1]]$hm.exp    
+        if(nc>1) {
+            for(ii in 2:nc) {
+                temp <- rbind(temp, multi.out[[ii]]$dat)
+                pms <- pms + multi.out[[ii]]$pms
+                inf <- inf + multi.out[[ii]]$inf
+                hm.exp <- rbind(hm.exp, multi.out[[ii]]$hm.exp)
+            }
         }
-        if(het.t %in% c('b','e','p')) { ## which hazards to rescale to keep geometric mean of risk deviates = 1
-          het.hazs <- paste0('b',c('m','f'),het.t)
-        }else{
-          if(het.t=='gen') het.hazs <- hazs
-          if(het.t=='beh') het.hazs <- hazs[1:4]
-        }
-        if(scale.by.sd) { ##  keep geometric mean transmission coefficient the same
-          hpars[het.hazs] <-  hpars[het.hazs] / exp(het.sd^2 / 2)  ## correct for increased geometric mean w/ hetogeneity
-        }else{
-          hpars[het.hazs] <-  hpars[het.hazs] / scale.adj ## scale arbitrarily
-        }
-      }else{ ## no  pre-couple-specific heterogeneity
-        assign(paste('m.het.',het.t,sep=''), rep(1, K))
-        assign(paste('f.het.',het.t,sep=''), rep(1, K))          
-      }
-    }  
-    ## Discrete (binary) heterogeneity: High risk & low risk groups
-    m.het.hilo <- rep(1,K)
-    f.het.hilo <- rep(1,K)
-    if(hilo) {
-      m.high <- rbinom(K, 1, phigh.m)
-      f.high <- rbinom(K, 1, phigh.f)
-      m.het.hilo[m.high] <- rrhigh.m
-      f.het.hilo[f.high] <- rrhigh.f      
-    } ## end heterogeneity risk deviate assignment loop
-    ## ################################################################
-    ## Make data frame for storing output
-    dat <- data.frame(dat, mser, fser, mdoi, fdoi, mdod, fdod, mcoi, fcoi, m.het.gen, f.het.gen, m.het.beh, f.het.beh,
-                      m.het.b, f.het.b, ## pre-couple   
-                      m.het.e, f.het.e, ## extra-couple 
-                      m.het.p, f.het.p, ## within-couple
-                      m.het.hilo, f.het.hilo) ## genetic, binary (hi vs lo)
-    ## Add variables to track if infections from partner were due to acute phase infectiousness
-    dat$mcoi.phase <- NA
-    dat$fcoi.phase <- NA
-    if(browse) browser() ## debug?
-    ## Break couples into nc batches to split between cores. Divide between cores by couple
-    ## formation date strata since early couples will always take longest.
-    breaks <- rep(1:nc, length.out = nrow(dat))
-    ## Call couple loop function below cloop() in multicore
-    multi.out <- mclapply(1:nc, cloop, dat = dat, breaks = breaks, vfreq = vfreq, death = death,
-                          acute.sc = acute.sc, dur.ac = dur.ac,
-                          late.sc = late.sc, dur.lt = dur.lt,
-                          aids.sc = aids.sc, dur.aids = dur.aids,
-                          pars = hpars, browse=F)
-    print(multi.out[which(lapply(multi.out, class)=='try-error')]) ## print any errors
-    ## ##################################################
-    ## Combine mclapply output from each core back into data frame
-    temp <- multi.out[[1]]$dat 
-    pms <- multi.out[[1]]$pms
-    inf <- multi.out[[1]]$inf
-    hm.exp <- multi.out[[1]]$hm.exp    
-    if(nc>1) {
-      for(ii in 2:nc) {
-        temp <- rbind(temp, multi.out[[ii]]$dat)
-        pms <- pms + multi.out[[ii]]$pms
-        inf <- inf + multi.out[[ii]]$inf
-        hm.exp <- rbind(hm.exp, multi.out[[ii]]$hm.exp)
-      }
+        ## ##################################################
+        print(inf) ## summarize # infected by stage
+        print(pms) ## summarize # person-months at risk by stage
+        print(inf/pms) ## summarize hazard by stage
+        dat <- temp
+        dat <- dat[order(dat$uid),]     ##  reorder by unique couple identifier
+        ## End time is the minimum of dates of death and interview time.
+        dat$tend <- ord(dat[, c("tint","mdod","fdod")], 1)
+        ## create variable for month couple ages out of DHS couple cohort, if applicable
+        dmage <- dat$tint - (dat$mage - 60*12) ## males age out at age 60
+        dmage[dmage<0] <- NA
+        dfage <- dat$tint - (dat$fage - 50*12) ## females age out at age 50
+        dfage[dfage<0] <- NA
+        dage <- apply(cbind(dmage,dfage),1, function(x) min(x, na.rm = T)) ## find earliest date at which a partner ages out
+        ## create taend which is endtime but also incorporating aging out
+        taend <- apply(cbind(dat$tend,dage),1, function(x) min(x, na.rm = T)) 
+        dat <- data.frame(dat, dmage = dmage, dfage = dfage, dage = dage, taend = taend) ## append new variables to data frame
+        ## alive at time of aging out/interview/AIDS death (ie did they die or did their partner)
+        dat$malive <- rep(T, nrow(dat))
+        dat$malive[dat$mdod <= dat$taend] <- F
+        dat$falive <- rep(T, nrow(dat))
+        dat$falive[dat$fdod <= dat$taend] <- F
+        dat$alive <- dat$malive & dat$falive
+        dat$mcoi[is.na(dat$mcoi)] <- "-"    ## replace NA with -  for cause of infections
+        dat$fcoi[is.na(dat$fcoi)] <- "-"
+        dat$ser[dat$mser == 1 & dat$fser == 1] <- 1 ## create ser (couple serostatus variable)
+        dat$ser[dat$mser == 1 & dat$fser == 0] <- 2
+        dat$ser[dat$mser == 0 & dat$fser == 1] <- 3
+        dat$ser[dat$mser == 0 & dat$fser == 0] <- 4
+        ## ####################################################################
+        ## Truncated survival times (NOT USED IN THIS PROJECT)
+        ## ####################################################################
+        ## Survival times of couple serostatus, as truncated by both death and
+        ## interviews.
+        ## ####################################################################
+        ## Couples that were ever mSDC: Would have been either
+        ## been CCC at end,  not have died before forming, mdoi < fdoi, and fdoi < tmar.
+        msdc <- (dat$taend > dat$tmar & dat$ser==1 & dat$mdoi < dat$fdoi & dat$fdoi > dat$tmar)
+        ## or mSDC at end,  not have died before forming.
+        msdc <- msdc | (dat$taend > dat$tmar & dat$ser==2)
+        msdc[is.na(msdc)] <- F
+        ## #################################################################### 
+        ## same for females
+        fsdc <- (dat$taend > dat$tmar & dat$ser==1 & dat$fdoi < dat$mdoi & dat$mdoi > dat$tmar)
+        ## or mSDC at end,  not have died before forming.
+        fsdc <- fsdc | (dat$taend > dat$tmar & dat$ser==3)
+        fsdc[is.na(fsdc)] <- F
+        ## #################################################################### 
+        ## Couples that were ever CCC: Would have been CC at
+        ## the end (interview or time of death) and not have died before forming.
+        ccc <- dat$ser == 1 & dat$taend > dat$tmar
+        ## mSDC survival times: Time between couple formation/male infection and female infection/end time.
+        tmsdc <- rep(NA, nrow(dat))
+        tmsdc[msdc & ccc] <- dat$fdoi[msdc & ccc] -ord(dat[msdc & ccc, c("tmar","mdoi")], 2)
+        tmsdc[msdc & !ccc] <- dat$taend[msdc & !ccc] -ord(dat[msdc & !ccc, c("tmar","mdoi")], 2)
+        ## for female
+        tfsdc <- rep(NA, nrow(dat))
+        tfsdc[fsdc & ccc] <- dat$mdoi[fsdc & ccc] -ord(dat[fsdc & ccc, c("tmar","fdoi")], 2)
+        tfsdc[fsdc & !ccc] <- dat$taend[fsdc & !ccc] -ord(dat[fsdc & !ccc, c("tmar","fdoi")], 2)
+        ## CCC survival time: Time between couple formation/2nd infection and endtime
+        tccc <- rep(NA, nrow(dat))
+        tccc[ccc] <- dat$taend[ccc] - ord(dat[ccc, c("tmar","fdoi","mdoi")], 3)
+        ## add to data frame.
+        dat$tmsdc <- tmsdc
+        dat$tfsdc <- tfsdc
+        dat$tccc <- tccc
+        dat$msdc <- msdc
+        dat$fsdc <- fsdc
+        dat$ccc <- ccc    
+        return(list(dat=dat, infpms=abind(inf,pms,inf/pms, along = 3), hm.exp = hm.exp))
     }
-    ## ##################################################
-    print(inf) ## summarize # infected by stage
-    print(pms) ## summarize # person-months at risk by stage
-    print(inf/pms) ## summarize hazard by stage
-    dat <- temp
-    dat <- dat[order(dat$uid),]     ##  reorder by unique couple identifier
-    ## End time is the minimum of dates of death and interview time.
-    dat$tend <- ord(dat[, c("tint","mdod","fdod")], 1)
-    ## create variable for month couple ages out of DHS couple cohort, if applicable
-    dmage <- dat$tint - (dat$mage - 60*12) ## males age out at age 60
-    dmage[dmage<0] <- NA
-    dfage <- dat$tint - (dat$fage - 50*12) ## females age out at age 50
-    dfage[dfage<0] <- NA
-    dage <- apply(cbind(dmage,dfage),1, function(x) min(x, na.rm = T)) ## find earliest date at which a partner ages out
-    ## create taend which is endtime but also incorporating aging out
-    taend <- apply(cbind(dat$tend,dage),1, function(x) min(x, na.rm = T)) 
-    dat <- data.frame(dat, dmage = dmage, dfage = dfage, dage = dage, taend = taend) ## append new variables to data frame
-    ## alive at time of aging out/interview/AIDS death (ie did they die or did their partner)
-    dat$malive <- rep(T, nrow(dat))
-    dat$malive[dat$mdod <= dat$taend] <- F
-    dat$falive <- rep(T, nrow(dat))
-    dat$falive[dat$fdod <= dat$taend] <- F
-    dat$alive <- dat$malive & dat$falive
-    dat$mcoi[is.na(dat$mcoi)] <- "-"    ## replace NA with -  for cause of infections
-    dat$fcoi[is.na(dat$fcoi)] <- "-"
-    dat$ser[dat$mser == 1 & dat$fser == 1] <- 1 ## create ser (couple serostatus variable)
-    dat$ser[dat$mser == 1 & dat$fser == 0] <- 2
-    dat$ser[dat$mser == 0 & dat$fser == 1] <- 3
-    dat$ser[dat$mser == 0 & dat$fser == 0] <- 4
-    ## ####################################################################
-    ## Truncated survival times (NOT USED IN THIS PROJECT)
-    ## ####################################################################
-    ## Survival times of couple serostatus, as truncated by both death and
-    ## interviews.
-    ## ####################################################################
-    ## Couples that were ever mSDC: Would have been either
-    ## been CCC at end,  not have died before forming, mdoi < fdoi, and fdoi < tmar.
-    msdc <- (dat$taend > dat$tmar & dat$ser==1 & dat$mdoi < dat$fdoi & dat$fdoi > dat$tmar)
-    ## or mSDC at end,  not have died before forming.
-    msdc <- msdc | (dat$taend > dat$tmar & dat$ser==2)
-    msdc[is.na(msdc)] <- F
-    ## #################################################################### 
-    ## same for females
-    fsdc <- (dat$taend > dat$tmar & dat$ser==1 & dat$fdoi < dat$mdoi & dat$mdoi > dat$tmar)
-    ## or mSDC at end,  not have died before forming.
-    fsdc <- fsdc | (dat$taend > dat$tmar & dat$ser==3)
-    fsdc[is.na(fsdc)] <- F
-    ## #################################################################### 
-    ## Couples that were ever CCC: Would have been CC at
-    ## the end (interview or time of death) and not have died before forming.
-    ccc <- dat$ser == 1 & dat$taend > dat$tmar
-    ## mSDC survival times: Time between couple formation/male infection and female infection/end time.
-    tmsdc <- rep(NA, nrow(dat))
-    tmsdc[msdc & ccc] <- dat$fdoi[msdc & ccc] -ord(dat[msdc & ccc, c("tmar","mdoi")], 2)
-    tmsdc[msdc & !ccc] <- dat$taend[msdc & !ccc] -ord(dat[msdc & !ccc, c("tmar","mdoi")], 2)
-    ## for female
-    tfsdc <- rep(NA, nrow(dat))
-    tfsdc[fsdc & ccc] <- dat$mdoi[fsdc & ccc] -ord(dat[fsdc & ccc, c("tmar","fdoi")], 2)
-    tfsdc[fsdc & !ccc] <- dat$taend[fsdc & !ccc] -ord(dat[fsdc & !ccc, c("tmar","fdoi")], 2)
-    ## CCC survival time: Time between couple formation/2nd infection and endtime
-    tccc <- rep(NA, nrow(dat))
-    tccc[ccc] <- dat$taend[ccc] - ord(dat[ccc, c("tmar","fdoi","mdoi")], 3)
-    ## add to data frame.
-    dat$tmsdc <- tmsdc
-    dat$tfsdc <- tfsdc
-    dat$tccc <- tccc
-    dat$msdc <- msdc
-    dat$fsdc <- fsdc
-    dat$ccc <- ccc    
-    return(list(dat=dat, infpms=abind(inf,pms,inf/pms, along = 3), hm.exp = hm.exp))
-  }
 
 ## #################################################################### 
 ## couple loop for event.fn (to allow parallelization
 ## batch ii does couples in the range breaks[ii,1:2]
 ## ####################################################################
-cloop <- function(batch, dat, pars, breaks, vfreq, browse = F, death, acute.sc, dur.ac, late.sc, dur.lt, aids.sc = 0, dur.aids, track.infpms = T) {
-  set.seed(batch)                     ## in case doing nonparametric inflation, we want each inflated couple to have different trajectories
-  if(browse) browser()
-  dat <- dat[breaks==batch,]          ## only simulate couples in the batch
-  ## attach parameters
-  bmb <- as.numeric(pars["bmb"])
-  bfb <- as.numeric(pars["bfb"])
-  bme <- as.numeric(pars["bme"])
-  bfe <- as.numeric(pars["bfe"])
-  bmp <- as.numeric(pars["bmp"])
-  bfp <- as.numeric(pars["bfp"])
-  ## initialize person-months at risk counters
-  pms <- matrix(0,2,4)
-  inf <- matrix(0,2,4)    
-  colnames(pms) <- c('ac','ch','lt','aids')
-  rownames(pms) <- c('mm','ff') ## gender at risk
-  colnames(inf) <- c('ac','ch','lt','aids')
-  rownames(inf) <- c('mm','ff') ## gender at risk
-  ## initialize couple-level hazard-months at risk variable (to see if hazard-months of exposure to
-  ## HIV strongly selects on heterogeneity risk factors):
-  ## THIS CALCULATES hazard-months exposed until END TIME (which may be longer than cohort period)
-  hm.exp <- data.frame(mhm = rep(0,nrow(dat)), fhm = rep(0,nrow(dat)))
-  hm.exp$mhm.e <- 0
-  hm.exp$fhm.e <- 0  
-  for(ii in 1:nrow(dat)) {             ## loop over couples
-      if(ii %% vfreq == 0) print(paste("On couple", ii, "of", nrow(dat))) ## show progress
-      ## if substitution analysis and there is a substituted epidemic curve (otherwise not)
-      if(substitute & exists(as.character(substitute(s.epic.ind)))) { 
-        epic.ind.temp <- s.epic.ind   ## substitued epidemic curve
-      }else{
-        epic.ind.temp <- dat$epic.ind[ii]                                   ## choose epidemic curve
-      }
-      ## keep simulating until date of death > date of couple
-      ## formation, i.e. condition on couple forming.
-      finished <- FALSE
-      while(!finished) {          
-        ## male before marriage: get bernoulli probability of infection in each month of sexual
-        ## activity before marriage
-        temp.haz <- bmb*dat$m.het.hilo[ii]*dat$m.het.b[ii]*dat$m.het.beh[ii]*dat$m.het.gen[ii]*epicf[dat$tms[ii]:(dat$tmar[ii]-1), epic.ind.temp]
-        m.inf.bef <- rbinom(dat$tmar[ii] - dat$tms[ii],1, ## hets: b,beh,gen
-                            prob = 1 - exp(-temp.haz))
-        if(sum(m.inf.bef)>0) {            ## if he gets infected in 1 or more months
-          ## change serostatus to HIV+ & use earliest infection as date of infection. Then
-          ## figure out date of death from age-at-seroconversion dependent Weibull survival
-          ## times.
-          hm.exp$mhm[ii] <- sum(temp.haz[1:min(which(m.inf.bef==1))]) ## accumulate hazard up until infection
-          temp.mdoi <- dat$tms[ii] + min(which(m.inf.bef==1)) - 1 ## date of infection
-          temp.mdod <- temp.mdoi + ageweib(dat$mage[ii] - (dat$tint[ii] - temp.mdoi), death = death) ## date of death
-          if(temp.mdod > dat$tmar[ii]) { ## if death is after couple formation, set values & finished
-            dat$mser[ii] <- 1         ## sero-positive
-            dat$mdoi[ii] <- temp.mdoi ## dat$tms[ii] + min(which(m.inf.bef==1)) - 1
-            dat$mdod[ii] <- temp.mdod ## mdoi[ii] + ageweib(dat$mage[ii] - (dat$tint[ii] - mdoi[ii]), death = death)
-            dat$mcoi[ii] <- "b"       ##  before couple formation (pre-couple)
-            finished <- TRUE ## if death is after couple formation, finished
-          }
-        }else{                ## if no infections, end while loop
-          hm.exp$mhm[ii] <- sum(temp.haz) ## accumulate hazard over entire period
-          finished <- TRUE
+cloop <- function(batch, dat, pars, breaks, vfreq, browse = F, death, acute.sc, dur.ac, subst = F, 
+                  late.sc, dur.lt, aids.sc = 0, dur.aids, track.infpms = T) {
+    set.seed(batch)                     ## in case doing nonparametric inflation, we want each inflated couple to have different trajectories
+    if(browse) browser()
+    dat <- dat[breaks==batch,]          ## only simulate couples in the batch
+    ## attach parameters
+    bmb <- as.numeric(pars["bmb"])
+    bfb <- as.numeric(pars["bfb"])
+    bme <- as.numeric(pars["bme"])
+    bfe <- as.numeric(pars["bfe"])
+    bmp <- as.numeric(pars["bmp"])
+    bfp <- as.numeric(pars["bfp"])
+    ## initialize person-months at risk counters
+    pms <- matrix(0,2,4)
+    inf <- matrix(0,2,4)    
+    colnames(pms) <- c('ac','ch','lt','aids')
+    rownames(pms) <- c('mm','ff') ## gender at risk
+    colnames(inf) <- c('ac','ch','lt','aids')
+    rownames(inf) <- c('mm','ff') ## gender at risk
+    ## initialize couple-level hazard-months at risk variable (to see if hazard-months of exposure to
+    ## HIV strongly selects on heterogeneity risk factors):
+    ## THIS CALCULATES hazard-months exposed until END TIME (which may be longer than cohort period)
+    hm.exp <- data.frame(mhm = rep(0,nrow(dat)), fhm = rep(0,nrow(dat)))
+    hm.exp$mhm.e <- 0
+    hm.exp$fhm.e <- 0  
+    for(ii in 1:nrow(dat)) {             ## loop over couples
+        if(ii %% vfreq == 0) print(paste("On couple", ii, "of", nrow(dat))) ## show progress
+        ## if substitution analysis and there is a substituted epidemic curve (otherwise not)
+        if(subst & exists(as.character(substitute(s.epic.ind)))) { 
+            epic.ind.temp <- s.epic.ind   ## substitued epidemic curve
+        }else{
+            epic.ind.temp <- dat$epic.ind[ii]                                   ## choose epidemic curve
         }
-      }
-      ## keep simulting until date of death > date of couple
-      ## formation, i.e. condition on couple forming.
-      finished <- FALSE
-      while(!finished) {
-        ## female before marriage: get bernoulli probability of
-        ## infection in each month of sexual activity before
-        ## marriage
-        temp.haz <- bfb*dat$f.het.hilo[ii]*dat$f.het.b[ii]*dat$f.het.gen[ii]*dat$f.het.beh[ii]*epicm[dat$tfs[ii]:(dat$tmar[ii]-1), epic.ind.temp]
-        f.inf.bef <- rbinom(dat$tmar[ii] - dat$tfs[ii],1, ## hets: b,beh,gen
-                            prob = 1 - exp(-temp.haz))
-        if(sum(f.inf.bef)>0) { ## if she gets infected in 1 or more months
-          ## change serostatus to HIV+ & use earliest infection as date of infection. Then
-          ## figure out date of death from age-at-seroconversion dependent Weibull survival
-          ## times.
-          hm.exp$fhm[ii] <- sum(temp.haz[1:min(which(f.inf.bef==1))]) ## accumulate hazard up until infection
-          temp.fdoi <- dat$tfs[ii] + min(which(f.inf.bef==1)) - 1 ## date of infection
-          temp.fdod <- temp.fdoi + ageweib(dat$fage[ii] - (dat$tint[ii] - temp.fdoi), death = death) ## date of death
-          if(temp.fdod > dat$tmar[ii]) ## if death is after couple formation, set values & finished
-            {
-              dat$fser[ii] <- 1   ## seropositive
-              dat$fdoi[ii] <- temp.fdoi 
-              dat$fdod[ii] <- temp.fdod 
-              dat$fcoi[ii] <- "b"
-              finished <- TRUE ## if death is after couple formation, finished
+        ## keep simulating until date of death > date of couple
+        ## formation, i.e. condition on couple forming.
+        finished <- FALSE
+        while(!finished) {          
+            ## male before marriage: get bernoulli probability of infection in each month of sexual
+            ## activity before marriage
+            temp.haz <- bmb*dat$m.het.hilo[ii]*dat$m.het.b[ii]*dat$m.het.beh[ii]*dat$m.het.gen[ii]*epicf[dat$tms[ii]:(dat$tmar[ii]-1), epic.ind.temp]
+            m.inf.bef <- rbinom(dat$tmar[ii] - dat$tms[ii],1, ## hets: b,beh,gen
+                                prob = 1 - exp(-temp.haz))
+            if(sum(m.inf.bef)>0) {            ## if he gets infected in 1 or more months
+                ## change serostatus to HIV+ & use earliest infection as date of infection. Then
+                ## figure out date of death from age-at-seroconversion dependent Weibull survival
+                ## times.
+                hm.exp$mhm[ii] <- sum(temp.haz[1:min(which(m.inf.bef==1))]) ## accumulate hazard up until infection
+                temp.mdoi <- dat$tms[ii] + min(which(m.inf.bef==1)) - 1 ## date of infection
+                temp.mdod <- temp.mdoi + ageweib(dat$mage[ii] - (dat$tint[ii] - temp.mdoi), death = death) ## date of death
+                if(temp.mdod > dat$tmar[ii]) { ## if death is after couple formation, set values & finished
+                    dat$mser[ii] <- 1         ## sero-positive
+                    dat$mdoi[ii] <- temp.mdoi ## dat$tms[ii] + min(which(m.inf.bef==1)) - 1
+                    dat$mdod[ii] <- temp.mdod ## mdoi[ii] + ageweib(dat$mage[ii] - (dat$tint[ii] - mdoi[ii]), death = death)
+                    dat$mcoi[ii] <- "b"       ##  before couple formation (pre-couple)
+                    finished <- TRUE ## if death is after couple formation, finished
+                }
+            }else{                ## if no infections, end while loop
+                hm.exp$mhm[ii] <- sum(temp.haz) ## accumulate hazard over entire period
+                finished <- TRUE
             }
-        }else{                ## if no infections, end while loop
-          hm.exp$fhm[ii] <- sum(temp.haz) ## accumulate hazard over entire period
-          finished <- TRUE
         }
-      }
-      ## if both aren't infected already by date of couple
-      ## formation, simulate transmission during couple duration
-      if(dat$mser[ii] + dat$fser[ii] < 2) { 
-        ## only simulate up to interview time or date of death, whichever is earliest
-        end <- min(dat$mdod[ii], dat$fdod[ii], dat$tint[ii], na.rm = TRUE) 
-        tt <- dat$tmar[ii] ##  couple formation date
-        ## While both are alive and both aren't infected, run infection loop up until they age out of cohort (f<50yrs, m<60yrs).
-        while((tt <= end) & (dat$mser[ii] + dat$fser[ii] < 2) & (dat$mage[ii] - (dat$tint[ii]-tt)) < (60*12) & (dat$fage[ii] - (dat$tint[ii]-tt)) < (50*12))
-          {
-            ## infections from partners, length 2 vector,
-            ## bernoulli, c(male inf by part, female inf by part);
-            ## if(((tt - dat$mdoi[ii]) <= 2 & dat$mser[ii]) | ((tt - dat$fdoi[ii]) <= 2& dat$fser[ii])) browser()
-            ## #################################################################### 
-            ## LATE phase scalars from (dur.lt+dur.aids-1)-(dur.aids) months before death
-            if(dat$mser[ii] & tt > (dat$mdod[ii] - (dur.lt + dur.aids)) & tt <= (dat$mdod[ii] - dur.aids)) {
-              m.lt.sc <- late.sc
-            }else{
-              m.lt.sc <- 1
+        ## keep simulting until date of death > date of couple
+        ## formation, i.e. condition on couple forming.
+        finished <- FALSE
+        while(!finished) {
+            ## female before marriage: get bernoulli probability of
+            ## infection in each month of sexual activity before
+            ## marriage
+            temp.haz <- bfb*dat$f.het.hilo[ii]*dat$f.het.b[ii]*dat$f.het.gen[ii]*dat$f.het.beh[ii]*epicm[dat$tfs[ii]:(dat$tmar[ii]-1), epic.ind.temp]
+            f.inf.bef <- rbinom(dat$tmar[ii] - dat$tfs[ii],1, ## hets: b,beh,gen
+                                prob = 1 - exp(-temp.haz))
+            if(sum(f.inf.bef)>0) { ## if she gets infected in 1 or more months
+                ## change serostatus to HIV+ & use earliest infection as date of infection. Then
+                ## figure out date of death from age-at-seroconversion dependent Weibull survival
+                ## times.
+                hm.exp$fhm[ii] <- sum(temp.haz[1:min(which(f.inf.bef==1))]) ## accumulate hazard up until infection
+                temp.fdoi <- dat$tfs[ii] + min(which(f.inf.bef==1)) - 1 ## date of infection
+                temp.fdod <- temp.fdoi + ageweib(dat$fage[ii] - (dat$tint[ii] - temp.fdoi), death = death) ## date of death
+                if(temp.fdod > dat$tmar[ii]) ## if death is after couple formation, set values & finished
+                    {
+                        dat$fser[ii] <- 1   ## seropositive
+                        dat$fdoi[ii] <- temp.fdoi 
+                        dat$fdod[ii] <- temp.fdod 
+                        dat$fcoi[ii] <- "b"
+                        finished <- TRUE ## if death is after couple formation, finished
+                    }
+            }else{                ## if no infections, end while loop
+                hm.exp$fhm[ii] <- sum(temp.haz) ## accumulate hazard over entire period
+                finished <- TRUE
             }
-            if(dat$fser[ii] & tt > (dat$fdod[ii] - (dur.lt + dur.aids)) & tt <= (dat$fdod[ii] - dur.aids)) {
-              f.lt.sc <- late.sc
-            }else{
-              f.lt.sc <- 1
-            }
-            ## #################################################################### 
-            ## AIDS phase scalars
-            if(dat$mser[ii] & tt > (dat$mdod[ii] - dur.aids)) { ## male late-stage from dur.aids-1 months before death
-              m.aids.sc <- aids.sc
-            }else{
-              m.aids.sc <- 1
-            }
-            if(dat$fser[ii] & tt > (dat$fdod[ii] - dur.aids)) { ## female late-stage from dur.aids-1 months before death
-              f.aids.sc <- aids.sc
-            }else{
-              f.aids.sc <- 1
-            }
-            ## ###################################################################### 
-            ## ACUTE phase scalars (done last so that acute scalars trumps early/late
-            if(dat$mser[ii]) {## male acutely infected for dur.ac months after infection
-              if((tt - dat$mdoi[ii]) <= ceiling(dur.ac)) { ## if any part of the phase is acute (i.e. 3rd month after infection, acute phase is 3.5 months)
-                if((tt - dat$mdoi[ii]) <= dur.ac) { ## if all of this month is acute phase
-                  m.ac.sc <- acute.sc
-                  m.lt.sc <- 1 ## and can't also be late
-                }else{ ## only part of month is acute phase
-                  frac.mon.ac <- (tt - dat$mdoi[ii]) - dur.ac
-                  m.ac.sc <- (acute.sc-1)*frac.mon.ac/1+1 ## attributable risk * time at risk / 1 month + 1
-                  m.lt.sc <- (m.lt.sc-1)*(1-frac.mon.ac)/1+1 ## rest of the month is late if applicable (=1 if m.lt.sc=1)
-                } }else{
-                  m.ac.sc <- 1
-                }
-            }else{
-              m.ac.sc <- 1
-            }
-            if(dat$fser[ii]) {## female acutely infected for dur.ac months after infection
-              if((tt - dat$fdoi[ii]) <= ceiling(dur.ac)) { ## if any part of the phase is acute (i.e. 3rd month after infection, acute phase is 3.5 months)
-                if((tt - dat$fdoi[ii]) <= dur.ac) { ## if all of this month is acute phase
-                  f.ac.sc <- acute.sc
-                  f.lt.sc <- 1 ## and can't also be late
-                }else{ ## only part of month is acute phase
-                  frac.mon.ac <- (tt - dat$fdoi[ii]) - dur.ac
-                  f.ac.sc <- (acute.sc-1)*frac.mon.ac/1+1 ## attributable risk * time at risk / 1 month + 1
-                  f.lt.sc <- (f.lt.sc-1)*(1-frac.mon.ac)/1+1 ## rest of the month is late if applicable (=1 if m.lt.sc=1)
-                } }else{
-                  f.ac.sc <- 1
-                }
-            }else{
-              f.ac.sc <- 1
-            }
-            ## ####################################################################################################
-            ## Infection process during marriage
-            ## ####################################################################################################              
-            ## Bernoulli within-couple transmission probabilities in current month; hets: p, gen
-            ## if(dat$mser[ii] + dat$fser[ii] >0) browser()
-            temp.hazs <- c(f.ac.sc*f.lt.sc*f.aids.sc*bmp*dat$m.het.hilo[ii]*dat$m.het.p[ii]*dat$m.het.gen[ii],
-                                    m.ac.sc*m.lt.sc*m.aids.sc*bfp*dat$f.het.hilo[ii]*dat$f.het.p[ii]*dat$f.het.gen[ii])
-            temp.prob <- 1 - exp(-temp.hazs)
-            if(dat$mser[ii]==0 & dat$fser[ii]==1) hm.exp$mhm[ii] <- hm.exp$mhm[ii] + temp.hazs[1] ## accumulate hazard if partner is infected
-            if(dat$fser[ii]==0 & dat$mser[ii]==1) hm.exp$fhm[ii] <- hm.exp$fhm[ii] + temp.hazs[2] ## accumulate hazard if partner is infected            
-            ## if(sum(temp.prob)>0) browser()
-            from.part <- rbinom(2, 1, temp.prob)                   ## Bernoulli random variables
-            from.part <- from.part * c(dat$fser[ii], dat$mser[ii]) ## only counts if partner is infected
-            if(track.infpms) {
-              ## Tally up time at risk (could get screwed up for fractional acute months, but still a good check otherwise)
-              ## Acute
-              if(f.ac.sc!=1 & f.lt.sc==1 & f.aids.sc==1 & dat$fser[ii]==1 & dat$mser[ii]==0) {
-                pms['mm','ac'] <- pms['mm','ac'] + 1
-                inf['mm','ac'] <- inf['mm','ac'] + from.part[1]
-              }
-              if(m.ac.sc!=1 & m.lt.sc==1 & m.aids.sc==1 & dat$mser[ii]==1 & dat$fser[ii]==0) {
-                pms['ff','ac'] <- pms['ff','ac'] + 1
-                inf['ff','ac'] <- inf['ff','ac'] + from.part[2]
-              }
-              ## Chronic
-              if(f.ac.sc==1 & f.lt.sc==1 & f.aids.sc==1 & dat$fser[ii]==1 & dat$mser[ii]==0) {
-                pms['mm','ch'] <- pms['mm','ch'] + 1
-                inf['mm','ch'] <- inf['mm','ch'] + from.part[1]
-              }
-              if(m.ac.sc==1 & m.lt.sc==1 & m.aids.sc==1 & dat$mser[ii]==1 & dat$fser[ii]==0) {
-                pms['ff','ch'] <- pms['ff','ch'] + 1
-                inf['ff','ch'] <- inf['ff','ch'] + from.part[2]
-              }
-              ## Late
-              if(f.ac.sc==1 & f.lt.sc!=1 & f.aids.sc==1 & dat$fser[ii]==1 & dat$mser[ii]==0) {
-                pms['mm','lt'] <- pms['mm','lt'] + 1
-                inf['mm','lt'] <- inf['mm','lt'] + from.part[1]
-              }
-              if(m.ac.sc==1 & m.lt.sc!=1 & m.aids.sc==1 & dat$mser[ii]==1 & dat$fser[ii]==0) {
-                pms['ff','lt'] <- pms['ff','lt'] + 1
-                inf['ff','lt'] <- inf['ff','lt'] + from.part[2]
-              }
-              ## AIDS
-              if(f.ac.sc==1 & f.lt.sc==1 & f.aids.sc!=1 & dat$fser[ii]==1 & dat$mser[ii]==0) {
-                pms['mm','aids'] <- pms['mm','aids'] + 1
-                inf['mm','aids'] <- inf['mm','aids'] + from.part[1]
-              }
-              if(m.ac.sc==1 & m.lt.sc==1 & m.aids.sc!=1 & dat$mser[ii]==1 & dat$fser[ii]==0) {
-                pms['ff','aids'] <- pms['ff','aids'] + 1
-                inf['ff','aids'] <- inf['ff','aids'] + from.part[2]
-              }
-            }
-            ## if new male infection from partner
-            if(dat$mser[ii]==0 & from.part[1] == 1) {              
-              dat$mser[ii] <- 1
-              dat$mdoi[ii] <- tt
-              dat$mdod[ii] <- tt + ageweib(dat$mage[ii] - (dat$tint[ii] - tt), death = death)
-              dat$mcoi[ii] <- "p" ## within-couple
-              ## track phase of infector
-              if((tt - dat$fdoi[ii])<=dur.ac) {
-                dat$mcoi.phase[ii] <- 'a' #acute
-              }else{
-                if(tt <= (dat$fdod[ii] - (dur.lt+dur.aids))) {
-                  dat$mcoi.phase[ii] <- 'c' #chronic
-                }else{
-                  if(tt <= (dat$fdod[ii] - dur.aids)) {
-                    dat$mcoi.phase[ii] <- 'l' #late
-                  }else{
-                    if(tt > (dat$fdod[ii] - dur.aids) & tt <= (dat$fdod[ii])) dat$mcoi.phase[ii] <- 'ad' #aids
-                  }
-                }
-              }
-            }
-            ## if new female infection from partner
-            if(dat$fser[ii]==0 & from.part[2] == 1) {
-              dat$fser[ii] <- 1
-              dat$fdoi[ii] <- tt
-              dat$fdod[ii] <- tt + ageweib(dat$fage[ii] - (dat$tint[ii] - tt), death = death)
-              dat$fcoi[ii] <- "p" ## within-couple
-              if((tt - dat$mdoi[ii])<=dur.ac) {
-                dat$fcoi.phase[ii] <- 'a' #acute
-              }else{
-                if(tt <= (dat$mdod[ii] - (dur.lt+dur.aids))) {
-                  dat$fcoi.phase[ii] <- 'c' #chronic
-                }else{
-                  if(tt <= (dat$mdod[ii] - dur.aids)) {
-                    dat$fcoi.phase[ii] <- 'l' #late
-                  }else{
-                    if(tt > (dat$mdod[ii] - dur.aids) & tt <= (dat$mdod[ii])) dat$fcoi.phase[ii] <- 'ad'
-                  }
-                }
-              }
-            }
-            if(sum(from.part)==0) { ## if there wasn't a within-couple infection (implying now concordant positive) (added Dec 6, 2013) to fix
-              ## calculations of within-couple hazards for Rakai analysis. Previously we were slightly underestimating
-              ## estimating hazards because some 'p' infections got replaced by 'e' infections.  extra-couple infections
-              ## c(m,f); temporary transmission probability; hets: e, gen, beh
-              temp.hazs <- c(bme*dat$m.het.hilo[ii]*dat$m.het.e[ii]*dat$m.het.gen[ii]*dat$m.het.beh[ii]*epicf[tt, epic.ind.temp],
-                             bfe*dat$f.het.hilo[ii]*dat$f.het.e[ii]*dat$f.het.gen[ii]*dat$f.het.beh[ii]*epicm[tt, epic.ind.temp])
-              exc <- rbinom(2, 1, prob = 1 - exp(-temp.hazs))
-              if(dat$mser[ii]==0) hm.exp$mhm[ii] <- hm.exp$mhm[ii] + temp.hazs[1] ## accumulate hazard if partner is infected
-              if(dat$fser[ii]==0) hm.exp$fhm[ii] <- hm.exp$fhm[ii] + temp.hazs[2] ## accumulate hazard if partner is infected            
-              if(dat$mser[ii]==0) hm.exp$mhm.e[ii] <- hm.exp$mhm.e[ii] + temp.hazs[1] ## accumulate hazard if partner is infected
-              if(dat$fser[ii]==0) hm.exp$fhm.e[ii] <- hm.exp$fhm.e[ii] + temp.hazs[2] ## accumulate hazard if partner is infected            
-              ## if new m inf from extracouple
-              if(dat$mser[ii]==0 & exc[1] == 1) {
-                dat$mser[ii] <- 1
-                dat$mdoi[ii] <- tt
-                dat$mdod[ii] <- tt + ageweib(dat$mage[ii] - (dat$tint[ii] - tt), death = death)
-                dat$mcoi[ii] <- "e" ## extra-couple
-              }
-              ## if new f inf from extracouple
-              if(dat$fser[ii]==0 & exc[2] == 1) {
-                dat$fser[ii] <- 1
-                dat$fdoi[ii] <- tt
-                dat$fdod[ii] <- tt + ageweib(dat$fage[ii] - (dat$tint[ii] - tt), death = death)
-                dat$fcoi[ii] <- "e" ## extra-couple
-              }
-            }
-            end <- min(dat$mdod[ii], dat$fdod[ii], dat$tint[ii], na.rm = TRUE)
-            tt <- tt+1
-          } ## while still stuff to do
-      }     ## end marriage if statement
+        }
+        ## if both aren't infected already by date of couple
+        ## formation, simulate transmission during couple duration
+        if(dat$mser[ii] + dat$fser[ii] < 2) { 
+            ## only simulate up to interview time or date of death, whichever is earliest
+            end <- min(dat$mdod[ii], dat$fdod[ii], dat$tint[ii], na.rm = TRUE) 
+            tt <- dat$tmar[ii] ##  couple formation date
+            ## While both are alive and both aren't infected, run infection loop up until they age out of cohort (f<50yrs, m<60yrs).
+            while((tt <= end) & (dat$mser[ii] + dat$fser[ii] < 2) & (dat$mage[ii] - (dat$tint[ii]-tt)) < (60*12) & (dat$fage[ii] - (dat$tint[ii]-tt)) < (50*12))
+                {
+                    ## infections from partners, length 2 vector,
+                    ## bernoulli, c(male inf by part, female inf by part);
+                    ## if(((tt - dat$mdoi[ii]) <= 2 & dat$mser[ii]) | ((tt - dat$fdoi[ii]) <= 2& dat$fser[ii])) browser()
+                    ## #################################################################### 
+                    ## LATE phase scalars from (dur.lt+dur.aids-1)-(dur.aids) months before death
+                    if(dat$mser[ii] & tt > (dat$mdod[ii] - (dur.lt + dur.aids)) & tt <= (dat$mdod[ii] - dur.aids)) {
+                        m.lt.sc <- late.sc
+                    }else{
+                        m.lt.sc <- 1
+                    }
+                    if(dat$fser[ii] & tt > (dat$fdod[ii] - (dur.lt + dur.aids)) & tt <= (dat$fdod[ii] - dur.aids)) {
+                        f.lt.sc <- late.sc
+                    }else{
+                        f.lt.sc <- 1
+                    }
+                    ## #################################################################### 
+                    ## AIDS phase scalars
+                    if(dat$mser[ii] & tt > (dat$mdod[ii] - dur.aids)) { ## male late-stage from dur.aids-1 months before death
+                        m.aids.sc <- aids.sc
+                    }else{
+                        m.aids.sc <- 1
+                    }
+                    if(dat$fser[ii] & tt > (dat$fdod[ii] - dur.aids)) { ## female late-stage from dur.aids-1 months before death
+                        f.aids.sc <- aids.sc
+                    }else{
+                        f.aids.sc <- 1
+                    }
+                    ## ###################################################################### 
+                    ## ACUTE phase scalars (done last so that acute scalars trumps early/late
+                    if(dat$mser[ii]) {## male acutely infected for dur.ac months after infection
+                        if((tt - dat$mdoi[ii]) <= ceiling(dur.ac)) { ## if any part of the phase is acute (i.e. 3rd month after infection, acute phase is 3.5 months)
+                            if((tt - dat$mdoi[ii]) <= dur.ac) { ## if all of this month is acute phase
+                                m.ac.sc <- acute.sc
+                                m.lt.sc <- 1 ## and can't also be late
+                            }else{ ## only part of month is acute phase
+                                frac.mon.ac <- (tt - dat$mdoi[ii]) - dur.ac
+                                m.ac.sc <- (acute.sc-1)*frac.mon.ac/1+1 ## attributable risk * time at risk / 1 month + 1
+                                m.lt.sc <- (m.lt.sc-1)*(1-frac.mon.ac)/1+1 ## rest of the month is late if applicable (=1 if m.lt.sc=1)
+                            } }else{
+                                m.ac.sc <- 1
+                            }
+                    }else{
+                        m.ac.sc <- 1
+                    }
+                    if(dat$fser[ii]) {## female acutely infected for dur.ac months after infection
+                        if((tt - dat$fdoi[ii]) <= ceiling(dur.ac)) { ## if any part of the phase is acute (i.e. 3rd month after infection, acute phase is 3.5 months)
+                            if((tt - dat$fdoi[ii]) <= dur.ac) { ## if all of this month is acute phase
+                                f.ac.sc <- acute.sc
+                                f.lt.sc <- 1 ## and can't also be late
+                            }else{ ## only part of month is acute phase
+                                frac.mon.ac <- (tt - dat$fdoi[ii]) - dur.ac
+                                f.ac.sc <- (acute.sc-1)*frac.mon.ac/1+1 ## attributable risk * time at risk / 1 month + 1
+                                f.lt.sc <- (f.lt.sc-1)*(1-frac.mon.ac)/1+1 ## rest of the month is late if applicable (=1 if m.lt.sc=1)
+                            } }else{
+                                f.ac.sc <- 1
+                            }
+                    }else{
+                        f.ac.sc <- 1
+                    }
+                    ## ####################################################################################################
+                    ## Infection process during marriage
+                    ## ####################################################################################################              
+                    ## Bernoulli within-couple transmission probabilities in current month; hets: p, gen
+                    ## if(dat$mser[ii] + dat$fser[ii] >0) browser()
+                    temp.hazs <- c(f.ac.sc*f.lt.sc*f.aids.sc*bmp*dat$m.het.hilo[ii]*dat$m.het.p[ii]*dat$m.het.gen[ii],
+                                   m.ac.sc*m.lt.sc*m.aids.sc*bfp*dat$f.het.hilo[ii]*dat$f.het.p[ii]*dat$f.het.gen[ii])
+                    temp.prob <- 1 - exp(-temp.hazs)
+                    if(dat$mser[ii]==0 & dat$fser[ii]==1) hm.exp$mhm[ii] <- hm.exp$mhm[ii] + temp.hazs[1] ## accumulate hazard if partner is infected
+                    if(dat$fser[ii]==0 & dat$mser[ii]==1) hm.exp$fhm[ii] <- hm.exp$fhm[ii] + temp.hazs[2] ## accumulate hazard if partner is infected            
+                    ## if(sum(temp.prob)>0) browser()
+                    from.part <- rbinom(2, 1, temp.prob)                   ## Bernoulli random variables
+                    from.part <- from.part * c(dat$fser[ii], dat$mser[ii]) ## only counts if partner is infected
+                    if(track.infpms) {
+                        ## Tally up time at risk (could get screwed up for fractional acute months, but still a good check otherwise)
+                        ## Acute
+                        if(f.ac.sc!=1 & f.lt.sc==1 & f.aids.sc==1 & dat$fser[ii]==1 & dat$mser[ii]==0) {
+                            pms['mm','ac'] <- pms['mm','ac'] + 1
+                            inf['mm','ac'] <- inf['mm','ac'] + from.part[1]
+                        }
+                        if(m.ac.sc!=1 & m.lt.sc==1 & m.aids.sc==1 & dat$mser[ii]==1 & dat$fser[ii]==0) {
+                            pms['ff','ac'] <- pms['ff','ac'] + 1
+                            inf['ff','ac'] <- inf['ff','ac'] + from.part[2]
+                        }
+                        ## Chronic
+                        if(f.ac.sc==1 & f.lt.sc==1 & f.aids.sc==1 & dat$fser[ii]==1 & dat$mser[ii]==0) {
+                            pms['mm','ch'] <- pms['mm','ch'] + 1
+                            inf['mm','ch'] <- inf['mm','ch'] + from.part[1]
+                        }
+                        if(m.ac.sc==1 & m.lt.sc==1 & m.aids.sc==1 & dat$mser[ii]==1 & dat$fser[ii]==0) {
+                            pms['ff','ch'] <- pms['ff','ch'] + 1
+                            inf['ff','ch'] <- inf['ff','ch'] + from.part[2]
+                        }
+                        ## Late
+                        if(f.ac.sc==1 & f.lt.sc!=1 & f.aids.sc==1 & dat$fser[ii]==1 & dat$mser[ii]==0) {
+                            pms['mm','lt'] <- pms['mm','lt'] + 1
+                            inf['mm','lt'] <- inf['mm','lt'] + from.part[1]
+                        }
+                        if(m.ac.sc==1 & m.lt.sc!=1 & m.aids.sc==1 & dat$mser[ii]==1 & dat$fser[ii]==0) {
+                            pms['ff','lt'] <- pms['ff','lt'] + 1
+                            inf['ff','lt'] <- inf['ff','lt'] + from.part[2]
+                        }
+                        ## AIDS
+                        if(f.ac.sc==1 & f.lt.sc==1 & f.aids.sc!=1 & dat$fser[ii]==1 & dat$mser[ii]==0) {
+                            pms['mm','aids'] <- pms['mm','aids'] + 1
+                            inf['mm','aids'] <- inf['mm','aids'] + from.part[1]
+                        }
+                        if(m.ac.sc==1 & m.lt.sc==1 & m.aids.sc!=1 & dat$mser[ii]==1 & dat$fser[ii]==0) {
+                            pms['ff','aids'] <- pms['ff','aids'] + 1
+                            inf['ff','aids'] <- inf['ff','aids'] + from.part[2]
+                        }
+                    }
+                    ## if new male infection from partner
+                    if(dat$mser[ii]==0 & from.part[1] == 1) {              
+                        dat$mser[ii] <- 1
+                        dat$mdoi[ii] <- tt
+                        dat$mdod[ii] <- tt + ageweib(dat$mage[ii] - (dat$tint[ii] - tt), death = death)
+                        dat$mcoi[ii] <- "p" ## within-couple
+                        ## track phase of infector
+                        if((tt - dat$fdoi[ii])<=dur.ac) {
+                            dat$mcoi.phase[ii] <- 'a' #acute
+                        }else{
+                            if(tt <= (dat$fdod[ii] - (dur.lt+dur.aids))) {
+                                dat$mcoi.phase[ii] <- 'c' #chronic
+                            }else{
+                                if(tt <= (dat$fdod[ii] - dur.aids)) {
+                                    dat$mcoi.phase[ii] <- 'l' #late
+                                }else{
+                                    if(tt > (dat$fdod[ii] - dur.aids) & tt <= (dat$fdod[ii])) dat$mcoi.phase[ii] <- 'ad' #aids
+                                }
+                            }
+                        }
+                    }
+                    ## if new female infection from partner
+                    if(dat$fser[ii]==0 & from.part[2] == 1) {
+                        dat$fser[ii] <- 1
+                        dat$fdoi[ii] <- tt
+                        dat$fdod[ii] <- tt + ageweib(dat$fage[ii] - (dat$tint[ii] - tt), death = death)
+                        dat$fcoi[ii] <- "p" ## within-couple
+                        if((tt - dat$mdoi[ii])<=dur.ac) {
+                            dat$fcoi.phase[ii] <- 'a' #acute
+                        }else{
+                            if(tt <= (dat$mdod[ii] - (dur.lt+dur.aids))) {
+                                dat$fcoi.phase[ii] <- 'c' #chronic
+                            }else{
+                                if(tt <= (dat$mdod[ii] - dur.aids)) {
+                                    dat$fcoi.phase[ii] <- 'l' #late
+                                }else{
+                                    if(tt > (dat$mdod[ii] - dur.aids) & tt <= (dat$mdod[ii])) dat$fcoi.phase[ii] <- 'ad'
+                                }
+                            }
+                        }
+                    }
+                    if(sum(from.part)==0) { ## if there wasn't a within-couple infection (implying now concordant positive) (added Dec 6, 2013) to fix
+                        ## calculations of within-couple hazards for Rakai analysis. Previously we were slightly underestimating
+                        ## estimating hazards because some 'p' infections got replaced by 'e' infections.  extra-couple infections
+                        ## c(m,f); temporary transmission probability; hets: e, gen, beh
+                        temp.hazs <- c(bme*dat$m.het.hilo[ii]*dat$m.het.e[ii]*dat$m.het.gen[ii]*dat$m.het.beh[ii]*epicf[tt, epic.ind.temp],
+                                       bfe*dat$f.het.hilo[ii]*dat$f.het.e[ii]*dat$f.het.gen[ii]*dat$f.het.beh[ii]*epicm[tt, epic.ind.temp])
+                        exc <- rbinom(2, 1, prob = 1 - exp(-temp.hazs))
+                        if(dat$mser[ii]==0) hm.exp$mhm[ii] <- hm.exp$mhm[ii] + temp.hazs[1] ## accumulate hazard if partner is infected
+                        if(dat$fser[ii]==0) hm.exp$fhm[ii] <- hm.exp$fhm[ii] + temp.hazs[2] ## accumulate hazard if partner is infected            
+                        if(dat$mser[ii]==0) hm.exp$mhm.e[ii] <- hm.exp$mhm.e[ii] + temp.hazs[1] ## accumulate hazard if partner is infected
+                        if(dat$fser[ii]==0) hm.exp$fhm.e[ii] <- hm.exp$fhm.e[ii] + temp.hazs[2] ## accumulate hazard if partner is infected            
+                        ## if new m inf from extracouple
+                        if(dat$mser[ii]==0 & exc[1] == 1) {
+                            dat$mser[ii] <- 1
+                            dat$mdoi[ii] <- tt
+                            dat$mdod[ii] <- tt + ageweib(dat$mage[ii] - (dat$tint[ii] - tt), death = death)
+                            dat$mcoi[ii] <- "e" ## extra-couple
+                        }
+                        ## if new f inf from extracouple
+                        if(dat$fser[ii]==0 & exc[2] == 1) {
+                            dat$fser[ii] <- 1
+                            dat$fdoi[ii] <- tt
+                            dat$fdod[ii] <- tt + ageweib(dat$fage[ii] - (dat$tint[ii] - tt), death = death)
+                            dat$fcoi[ii] <- "e" ## extra-couple
+                        }
+                    }
+                    end <- min(dat$mdod[ii], dat$fdod[ii], dat$tint[ii], na.rm = TRUE)
+                    tt <- tt+1
+                } ## while still stuff to do
+        }     ## end marriage if statement
     }         ## loop over couples
-  return(list(dat=dat, pms=pms, inf=inf, hm.exp=hm.exp))
+    return(list(dat=dat, pms=pms, inf=inf, hm.exp=hm.exp))
 }
 
 ## ####################################################################

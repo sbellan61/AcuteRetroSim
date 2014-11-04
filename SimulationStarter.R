@@ -1,13 +1,8 @@
 ######################################################################
-## Drivers of serodiscordance patterns and sub-Saharan Africa
+## Couples cohort transmission simulator
 ###################################################################### 
-## Steve Bellan, 2013
+## Steve Bellan, 2014
 ## steve.bellan@gmail.com
-#################################################################################################### 
-##  The goal of this analysis is to assess the extent to which pre-, extra-, & within-couple
-##  transmission, AIDS mortality, and acute phase infectivity drive observed levels of
-##  serodiscordance in sub-Saharan Africa as well as to determine which country-specific
-##  characteristics can explain their variable serodiscordance proportions and epidemic intensities.
 #################################################################################################### 
 ## This code is called by R CMD BATCH with input arguments (each line of a control file sent to a
 ## cluster), runs a simulation using functions from sim fxns3.R, and then saves the output in a
@@ -45,40 +40,9 @@ pars.arr <- out.arr[,,which(in.arr[,1,2]==7),] # median and credible intervals f
 hazs <- c("bmb","bfb","bme","bfe","bmp","bfp") # six gender-route specific transmission coefficients (*b*efore-, *e*xtra-, from-*p*artner-) for *m*ale & *f*emale
 spars <- pars.arr[hazs,2,country]              # get transmission coefficients from base country
 spars[5:6] <- .007
-## If substituting, substitute parameters/epidemic curves out for those from donor country
-## if(substitute) {
-##   ##  For each country substitute things from others and see how close
-##   ##  it gets to the serodiscordance levels of the other country.
-## ######################################################################
-##   ##  Epidemic curve
-##   if(s.epic!=country) {     # if substituting, replce it in data (otherwise it defaults to original)
-##     s.epic.nm <- ds.nm[s.epic]              # epidemic curve to use (country name)
-##     s.epic.ind <- which(colnames(epicf)==s.epic.nm) # epidemic curve to use (column index of epicf/m matrices)
-##     ## substitute epidemic curves into data
-##     dat$epic.ind <- s.epic.ind
-##     dat$epic.nm <- s.epic.nm
-##   }
-##   if(sub.betas) { ## substituting betas between countries
-##       ##  substitute parameters from substitution (donor) country. At most two of these substitutions will change spars.
-##       spars['bmb'] <- pars.arr['bmb',2,s.bmb] # pre-couple to male
-##       spars['bfb'] <- pars.arr['bfb',2,s.bfb] # pre-couple to female
-##       spars['bme'] <- pars.arr['bme',2,s.bme] # extra-couple to male  
-##       spars['bfe'] <- pars.arr['bfe',2,s.bfe] # extra-couple to female  
-##       spars['bmp'] <- pars.arr['bmp',2,s.bmp] # within-couple to male  
-##       spars['bfp'] <- pars.arr['bfp',2,s.bfp] # within-couple to female  
-##       ## substitute demography is just done by using parameters & epi curves from the opposite country in psrun() below.
-##     }else{ ## substituting HIV transmission rate & contact coefficients
-##       spars['bmb'] <- pars.arr['bmp',2,s.bmp] * pars.arr['cmb',2,s.bmb] # pre-couple to male
-##       spars['bfb'] <- pars.arr['bfp',2,s.bfp] * pars.arr['cfb',2,s.bfb] # pre-couple to female
-##       spars['bme'] <- pars.arr['bmp',2,s.bmp] * pars.arr['cme',2,s.bme] # extra-couple to male  
-##       spars['bfe'] <- pars.arr['bfp',2,s.bfp] * pars.arr['cfe',2,s.bfe] # extra-couple to female  
-##       spars['bmp'] <- pars.arr['bmp',2,s.bmp] # within-couple to male  
-##       spars['bfp'] <- pars.arr['bfp',2,s.bfp] # within-couple to female  
-##     }
-## }else{
 s.epic.nm <- NA # not substituting epidemic curves, this will cause rcop() to use default country epidemic curves
 s.epic.ind <- NA  
-## }
+
 
 ## nc <- 12
 ## each <- 100
