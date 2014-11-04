@@ -1,4 +1,5 @@
-library(graphics); library(abind); library(mvtnorm); library(multicore); library(lme4) # load necessary libraries
+library(graphics); library(abind); library(mvtnorm); library(lme4) # load necessary libraries
+if(R.Version()$major==3) library(parallel) else library(multicore)
 load("data files/copula sigmas.Rdata")  # multivariate copula covariance matrix for simulating couple pseudopopulations
 load("data files/epic.Rdata")     # infectious HIV prevalence
 ##  transmission parameters fit to DHS across the range of a acute phase relative hazards
@@ -26,6 +27,7 @@ ageweib <- function(age, death = T) {
 ## simulator. Then compile output into a couple-level timeseries. Calls event.fn() (see below)
 psrun <- function(country=13, s.demog = country, # country to simulate;  country whose relationship patterns are to be used in simulation
                   seed = 1,              ## seed to set for random number generation
+                  jobnum = NA, simj = NA,
                   maxN = 10^4, ## maximum simulated couple population size (sample inflated pop) to avoid memory problems
                   ## Condition on Rakai retrospecive cohort sample sizes
                   condRakai = FALSE, RakSamp = c(inc = 23, prev = 161, late = 51), ## 
@@ -197,8 +199,6 @@ psrun <- function(country=13, s.demog = country, # country to simulate;  country
         if(return.ts)       ts <- temptsout[['ts']] ## ; ts.ap <- temptsout[['ts.ap']]
                                         #        hrout <- temptsout[['hrout']]   ## grab HIV phase object
         hours <- round(as.numeric(difftime(Sys.time(), start.time1, unit = "hour")),3) ## runtime
-        if(!exists(as.character(substitute(jobnum)))) jobnum <- NA ## jobnum is set globally when on cluster
-        if(!exists(as.character(substitute(simj)))) simj <- NA ## simj is set globally when on cluster (job # within country/acute batch)
         ##  produce output list
         output <- list(jobnum = jobnum, simj = simj, evout = evout, tss = tss, ts = ts, infpm = evout.all$infpm, hm.exp = evout.all$hm.exp, #hrout = hrout, ts.ap = ts.ap,
                        pars = c(bmb.sc = bmb.sc, bfb.sc = bfb.sc, bme.sc = bme.sc, bfe.sc = bfe.sc, bmp.sc = bmp.sc, bfp.sc = bfp.sc, 
