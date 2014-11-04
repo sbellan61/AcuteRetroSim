@@ -3,7 +3,7 @@ rm(list=ls(all=T)); gc()
 ## Summarize Hollingsworth & Wawer style fits to simulated data
 outdir <- file.path('FiguresAndTables','UgandaFitSummaries')
 nc <- 12                                       # core per simulation
-load(file=file.path(outdir, 'wf.Rdata'))
+load(file='results/RakAcute/wf.Rdata') ## big file, stored outside of git repo
 load(file = file.path('results','HollingsworthAn','RealExclbyErr','workspace.Rdata')) ## fit to real data
 names(fout)
 outdir <- file.path('FiguresAndTables','UgandaFitSummaries') ## incase workspace load changed it
@@ -19,10 +19,10 @@ prev <- infs/cas
 rh.waw <- prev[1]/prev[2]
 
 ## Wawer CIs
-## Multivariate from their paper
+## Multivariate from Wawer paper, direct from Table 2
 wexsum <- (c(3.05, 7.25, 17.25)-1)*5
-## Univariate from binomial regression, ORs are approximately equal to prevalence ratios because
-## probabilities are so small so we can use logistic regression.
+## Univariate estimates from Wawer data using binomial regression, ORs are approximately equal to
+## prevalence ratios because probabilities are so small so we can use logistic regression.
 wraw <- data.frame(ph = c('acute','chronic'), infs = infs, cas = cas)
 wraw$ph <- relevel(wraw$ph, levels = c('acute','chronic'), ref = 'chronic')
 mod <- glm(infs ~ offset(log(cas)) + ph, wraw, family= poisson)
@@ -32,9 +32,9 @@ wexsum.univ <- c(exp(confint(mod))['phacute',1],
 wexsum.univ <- (wexsum.univ-1)*5
 
 ####################################################################################################
-## Do LOESS for each sigma_hazard for Waw & Holl with XbErr, then find where true CI's hit the Loess
-## just get subsets we're interested in
-thf <- hf[hf$var=='ehm.ac' & hf$ehm.late==40,] 
+## Do LOESS for each sigma_hazard for Waw & Holl with XbErr, then find where previously published
+## CI's hit the Loess.
+thf <- hf[hf$var=='ehm.ac' & hf$ehm.late==40,] ## First, just get subsets we're interested in.
 twf <- wf[wf$var=='ehm.ac' & wf$ehm.late==40 & wf$cov=='',]
 hsds <- seq(0,3, by = .5)
   
@@ -43,6 +43,7 @@ xs <- seq(0,250, by = .1)
 wpred <- data.frame(xs = xs)
 for(hsd in hsds) {
   sel <- twf$err=='XbErr' & twf$het.sd==hsd & twf$hobs=='obs0'
+  ## Add a column that has the predicted estimated EHM for a true EHM (do it at all xs, insted of the subset of EHMs simulated)
   wpred <- cbind(wpred, with(twf[sel,], predict(loess(med~true), xs)))
   names(wpred)[ncol(wpred)] <- paste0('sig',hsd)
 }
@@ -52,26 +53,27 @@ head(wpred)
 hpred <- data.frame(xs = xs)
 for(hsd in hsds) {
   sel <- thf$err=='XbErr' & thf$het.sd==hsd
+  ## Add a column that has the predicted estimated EHM for a true EHM (do it at all xs, insted of the subset of EHMs simulated)
   hpred <- cbind(hpred, with(thf[sel,], predict(loess(med~true), xs)))
   names(hpred)[ncol(hpred)] <- paste0('sig',hsd)
 }
 head(hpred)
 
-findCI.h <- function(x) {
+findCI.h <- function(x) { ## find value closest to median & 95CI bounds
   lci <- which.min(abs(x-fexsum['2.5%','ehm.ac']))
   med <- which.min(abs(x-fexsum['50%','ehm.ac']))
   uci <- which.min(abs(x-fexsum['97.5%','ehm.ac']))
   return(xs[c(lci, med, uci)])
 }
 
-findCI.w <- function(x) {
+findCI.w <- function(x) {               ## wawer multivariate
   lci <- which.min(abs(x-wexsum[1]))
   med <- which.min(abs(x-wexsum[2]))
   uci <- which.min(abs(x-wexsum[3]))
   return(xs[c(lci, med, uci)])
 }
 
-findCI.w.univ <- function(x) {
+findCI.w.univ <- function(x) { ## wawer univariate
   lci <- which.min(abs(x-wexsum.univ[1]))
   med <- which.min(abs(x-wexsum.univ[2]))
   uci <- which.min(abs(x-wexsum.univ[3]))

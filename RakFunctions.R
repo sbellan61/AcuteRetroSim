@@ -139,7 +139,7 @@ truehrs <- function(tst, evt, sl=NULL) {
     tst <- tst[,sl] #cohsim$ts.rak.all
     evt <- evt[sl,] ##cohsim$dat.rak
   }
-  pms.ac <- sum(grepl('ac', as.vector(tst)))
+  pms.ac <- sum(grepl('ac', as.vector(tst))) ## person-months acute
   infs.ac <- sum(apply(tst,2,function(x) sum(grepl('hh',x))>0) & (evt$mcoi.phase=='a' | evt$fcoi.phase=='a'), na.rm=T)
   pms.ch <- sum(as.vector(tst) %in% c('mm','ff'))
   infs.ch <- sum(apply(tst,2,function(x) sum(grepl('hh',x))>0) & (evt$mcoi.phase=='c' | evt$fcoi.phase=='c'), na.rm=T)

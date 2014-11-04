@@ -34,8 +34,8 @@ fit.fls <- fit.fls[order(fit.fls)]
 excl.extram <- F ## exclude couples with 2nd partner infected extra-couply?
 ##to.do <- 1:nrow(blocks)
 to.do <- fls
-to.do <- with(blocks, which(dur.lt==10 & late.sc==1 & het.gen.sd %in% 0:3))
-to.do <- to.do[!to.do %in% fit.fls] ## which haven't been fit yet
+#to.do <- with(blocks, which(dur.lt==10 & late.sc==1 & het.gen.sd %in% 0:3))
+#to.do <- to.do[!to.do %in% fit.fls] ## which haven't been fit yet
 ##to.do <- jobnums.to.do
 
 blocks[head(fls,10),]

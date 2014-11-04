@@ -10,7 +10,7 @@ load(file = file.path('results','RakAcute','HollModTestFits', 'blocksHollFitTest
 hazs <- c('bmb','bfb','bme','bfe','bmp','bfp') ##  transmission coefficient names, for convenience
 nc <- 12                                       ## core per simulation
 ## Compare these to fits of SB cohort data, load those (from SummarizeFits.R output) for comparison
-load(file=file.path('FiguresAndTables','UgandaFitSummaries', 'wf.Rdata'))
+load(file='results/RakAcute/wf.Rdata')
 
 ## Load fit files from Hollingsworth-Model-generated data
 fls <- list.files(file.path('results','RakAcute','HollModTestFits','fitouts'), pattern = 'fitout-', full.names=T)

@@ -19,6 +19,9 @@ if(real.dat) {
     }  }
 }
 
+jobnum=3058; simj=3058; batchdirnm="results/RakAcute/UgandaFitsExtram"; nc=12; sim.nm="results/RakAcute/Uganda/Uganda-96200-3058.Rdata"; simul=T; sb.sim=TRUE; nc=12; seed.bump=0; interv=10; max.vis=5; ltf.prob=0.0287682072451781; rr.ltf.ff=1.5; rr.ltf.mm=1.5; rr.ltf.hh=1; rr.ltf.d=1; rr.inc.sdc=1.5; aniter=5000; anburn=1000; niter=10000; nburn=1500; init.jit=0.45; excl.extram=FALSE; decont=FALSE
+
+
 ## Parameters as used in SB simulation
 country <- which(ds.nm=='Uganda')
 epic.ind <- which(colnames(epicf)=='Uganda')

@@ -73,3 +73,49 @@ dev.off()
 ## hist(cpls.excl, xlab = "# couples excluded by \n following Rakai exclusion criteria", ylab = "frequency", las = 1, col = 'black',
 ##      xlim = c(0,1000), main = '')
 
+## Look at distribution of # of couples
+load(file.path(outdir,'wtabs.Rdata'))
+plausParms <- read.csv(file = file.path(outdir,'RHacute & dacute combos with 95CI.csv'))
+
+infprob <- function(x) data.frame(inct = x$inct$i[1:4] / x$inct$n[1:4],  prevt = x$prevt$i[1:4] / x$prevt$n[1:4], latet = x$latet$i[1:4] / x$latet$n[1:4])
+
+lsSelect <- names(wtab.XbErr.ls) %in% plausParms$job
+names(wtab.XbErr.ls)[lsSelect] ## jobs that match
+
+lsSelect <- 1:length(wtab.XbErr.ls)
+
+wtabXbErrPlaus <- wtab.XbErr.ls[lsSelect]
+wtabBasePlaus <- wtab.base.ls[lsSelect]
+
+wtabXbErrPlaus[1][[1]]$inct
+wtabBasePlaus[1][[1]]$inct
+
+tail(fls)
+
+infProbs95 <- mclapply(wtabXbErrPlaus, infprob)
+IncProbs95 <- t(as.data.frame(lapply(infProbs95, '[', 'inct')))
+PrevProbs95 <- t(as.data.frame(lapply(infProbs95, '[', 'prevt')))
+rownames(IncProbs95) <- rownames(PrevProbs95)<- names(wtabXbErrPlaus)
+
+IncProbs95
+PrevProbs95
+
+apply(IncProbs95, 2, range)
+apply(PrevProbs95, 2, range)
+apply(PrevProbs95, 2, mean)
+infprob(wtab.rl)
+
+-log(1-apply(PrevProbs95, 2, mean)) ## rate
+
+
+load(fls[jobnums==3058])
+fitout$dpars
+fitout$het.gen.sd
+names(fitout)
+plausParms[plausParms$job==3058,]
+
+head(twf)
+with(twf, twf[job==3058 & hobs=='obsNA' & err == 'XbErr',])
+
+with(twf, twf[acute.sc == 5 & dur.ac == 3 & hobs=='obsNA' & err == 'XbErr',])
+## 2798 is het = 0, 3058 is hete = 1
