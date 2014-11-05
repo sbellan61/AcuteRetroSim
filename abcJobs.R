@@ -27,37 +27,38 @@ rhAcutePrior <- function(n) exp(rnorm(n, log(ehms.vl['med']), sd = sd_RHacutePri
 
 durAcutePrior <- function(n) runif(n, .5, 8) ## uniform from 2 weeks to 8 months
 
-n <- 10e4
-simParms <- data.frame(lambda = lambdaPrior(n), acute.sc = rhAcutePrior(n), dur.ac = durAcutePrior(n), het.gen.sd = hetGenSDPrior(n),
-                       dur.lt = 10, dur.aids = 10, late.sc = 5, aids.sc=0,## Fix these since they don't affect acute estimates much
-                       het.gen.cor = 0, ## going with no intra-partner correlation in risk (conservative to this assumption)
-                       group = which(ds.nm=='Uganda'), maxN = 10e5, each = 200) 
-simParms$jobnum <- 1:nrow(simParms)
-head(simParms)
-nn <- nrow(simParms)
-to.do <- 1:nrow(simParms) # which rows in simParms to do (default is all)
+## n <- 10e4
+## simParms <- data.frame(lambda = lambdaPrior(n), acute.sc = rhAcutePrior(n), dur.ac = durAcutePrior(n), het.gen.sd = hetGenSDPrior(n),
+##                        dur.lt = 10, dur.aids = 10, late.sc = 5, aids.sc=0,## Fix these since they don't affect acute estimates much
+##                        het.gen.cor = 0, ## going with no intra-partner correlation in risk (conservative to this assumption)
+##                        group = which(ds.nm=='Uganda'), maxN = 10e5, each = 200) 
+## simParms$jobnum <- 1:nrow(simParms)
+## head(simParms)
+## nn <- nrow(simParms)
+## to.do <- 1:nrow(simParms) # which rows in simParms to do (default is all)
 
-outdir <- file.path('results','RakABC1')
-if(!file.exists(outdir))      dir.create(outdir) # create directory if necessary
-if(!file.exists(file.path(outdir,'routs')))      dir.create(file.path(outdir, 'routs')) # setup directory to store Rout files
+## outdir <- file.path('results','RakABC1')
+## if(!file.exists(outdir))      dir.create(outdir) # create directory if necessary
+## if(!file.exists(file.path(outdir,'routs')))      dir.create(file.path(outdir, 'routs')) # setup directory to store Rout files
 
-## #################################################################### 
-sink("RakABC1.txt") ## create a control file to send to the cluster
-for(ii in to.do) {
-    cmd <- with(simParms, paste("R CMD BATCH '--args jobnum=", jobnum[ii], " simj=", ii, " outdir=\"", outdir, "\"", " nc=", nc,
-                                " group.ind=", group[ii], " lambda=", lambda[ii],
-                                " acute.sc=", acute.sc[ii], " late.sc=", late.sc[ii]," aids.sc=", aids.sc[ii], # acute phase varying throughout loop
-                                " dur.ac=", dur.ac[ii], " dur.lt=", dur.lt[ii], " dur.aids=", dur.aids[ii],
-                                " het.gen=T het.gen.sd=", het.gen.sd[ii], " het.gen.cor=", het.gen.cor[ii],
-                                " maxN=", maxN[ii], " seed=1 each=", each[ii],
-                                " return.ts=TRUE", ## cohort dates, return a time series as output
-                                " one.couple=F", ## debugging with one couple replicated a bunch of times
-                                ## interview date, call simulation script and specify output
-                                " tint=100*12' SimulationStarter.R ", file.path(outdir, "routs", paste0(ds.nm[group[ii]], ii, ".Rout")), sep='') )
-    cat(cmd)               # add command
-    cat('\n')              # add new line
-}
-sink()
-save(simParms, file = file.path(outdir,'simParms.Rdata')) # these are country-acute phase specific simParms
+## ## #################################################################### 
+## sink("RakABC1.txt") ## create a control file to send to the cluster
+## for(ii in to.do) {
+##     cmd <- with(simParms, paste("R CMD BATCH '--no-restore --no-save --args jobnum=", jobnum[ii], " simj=", ii, " outdir=\"", 
+##                                 outdir, "\"", " nc=", nc,
+##                                 " group.ind=", group[ii], " lambda=", lambda[ii],
+##                                 " acute.sc=", acute.sc[ii], " late.sc=", late.sc[ii]," aids.sc=", aids.sc[ii], # acute phase varying throughout loop
+##                                 " dur.ac=", dur.ac[ii], " dur.lt=", dur.lt[ii], " dur.aids=", dur.aids[ii],
+##                                 " het.gen=T het.gen.sd=", het.gen.sd[ii], " het.gen.cor=", het.gen.cor[ii],
+##                                 " maxN=", maxN[ii], " seed=1 each=", each[ii],
+##                                 " return.ts=TRUE", ## cohort dates, return a time series as output
+##                                 " one.couple=F", ## debugging with one couple replicated a bunch of times
+##                                 ## interview date, call simulation script and specify output
+##                                 " tint=100*12' SimulationStarter.R ", file.path(outdir, "routs", paste0(ds.nm[group[ii]], ii, ".Rout")), sep='') )
+##     cat(cmd)               # add command
+##     cat('\n')              # add new line
+## }
+## sink()
+## save(simParms, file = file.path(outdir,'simParms.Rdata')) # these are country-acute phase specific simParms
 
 

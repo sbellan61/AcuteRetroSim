@@ -14,7 +14,7 @@ hazs <- c("bmb","bfb","bme","bfe","bmp","bfp")
 spars <- pars.arr[hazs,,13]              # get transmission coefficients from base country
 
 ## Prior on pre-, extra-, and within-couple transmission parameters
-logHazMeans <- log(spars[,'50%']) * 1.5 
+logHazMeans <- log(spars[,'50%']* 1.5)
 logHazSDs <- rowMeans(abs(log(spars[,c('2.5%','97.5%')])-log(spars[,'50%']))) / 1.96 ## ~1.96*SD of
 ## parameter estimates on log scale monthly hazard = infections/(coital acts) * (coital acts)/month
 ## from Wawer. 1.3 bump is because we know this needs to be bigger than Wawer's since prevalent
@@ -27,6 +27,7 @@ logHazPrior <- function(n=1, scl = 1, mean = logHazSDs, sd = logHazSDs, extraUnc
 tst <- logHazPrior(1000)
 apply(tst, 2, function(x) quantile(x, c(.025,.5,.975)))
 exp(logHazMeans)
+spars[,'50%']
 
 ## Flat uniform prior from 1 to 3
 hetGenSDPrior <- function(n) runif(n, 1, 3)
@@ -47,5 +48,30 @@ simParmSamp <- function(n,...) {
     return(samp)
 }
 
-simParmSamp(10)
+####################################################################################################
+## Function that does simulation & gets wtab all at once
+abcSimSumStat <- function(parms=simParmSamp(1), maxN=10000, seed=1, nc=12, browse=F,
+                          condRakai = FALSE, RakSamp = c(inc = 23, prev = 161, late = 51)) {
+    tempFileNm <- with(parms, psrun(maxN = maxN, jobnum = seed, pars = parms[hazs], save.new = T, return.ts = T,
+                                    acute.sc = acute.sc, dur.ac = dur.ac, het.gen.sd = het.gen.sd, browse = F, nc = nc))
+    load(tempFileNm)
+    cohsim <- rak.coh.fxn(output, #ts.ap = output$ts, dat = output$evout, dpars = output$rakpars,
+                          ltf.prob=0.0287682072451781, 
+                          rr.ltf.ff=1.5, rr.ltf.mm=1.5, rr.ltf.hh=1, rr.ltf.d=1, rr.inc.sdc=1.5,
+                          verbose = F, browse = F)
+                                        #    rm(output); gc() ## free up memory
+    rcohsim <- rak.wawer(rak.coh = cohsim, excl.extram=T, het.gen.sd = with(parms,het.gen.sd),
+                         cov.mods = F, verbose = F, fit.Pois=F, browse=F)
+    ## Condition on Rakai retrospecive cohort sample sizes
+    if(condRakai) rcohsim <- within(rcohsim, {
+        inc.wh <- which(rakll$phase=='inc')
+        prev.wh <- which(rakll$phase=='prev')
+        late.wh <- which(rakll$phase=='late')
+        resamp <- c(sample(inc.wh, RakSamp['inc'], replace=T), sample(prev.wh, RakSamp['prev'], replace=T), 
+                    sample(late.wh, RakSamp['late'], replace=T))
+        rakll <- rakll[resamp,]})
+    wtabSim <- sbmod.to.wdat(rcohsim$rakll, excl.by.err = T, browse=F)
+    return(list(wtabSim=wtabSim, parms=parms))
+}
+
 

@@ -11,24 +11,26 @@ if(length(args)>0)  {## Then cycle through each element of the list and evaluate
       }  }else{ seed <- 1}
 sapply(c("SimulationFunctions.R","RakFunctions.R",'abcFunctions.R'), source) # load Rakai analysis simulation functions from script
 set.seed(seed)
-SimTime <- 60*30 ## seconds to simulate for
+SimMinutes <- .5 ## minutes to simulate for
 maxN <- 10^4
 
-parms <- simParmSamp(1000)
+
 startTime <- Sys.time()
 
+simParmSamp(1)
+
+abcSimSumStat(maxN=2000, browse=F)
+
 ii <- 1
-while(as.numeric(Sys.time() - startTime) < SimTime) { ## 
-    temp <- with(parms[ii,], psrun(maxN = 400, jobnum = seed, pars = parms[ii, hazs], 
-                                   acute.sc = acute.sc, dur.ac = dur.ac, het.gen.sd = het.gen.sd, browse = F, nc = 1))
+timeTaken <- as.numeric(difftime(Sys.time(), startTime, units='mins'))
+while(timeTaken < SimMinutes) { ## 
+    temp <- with(parms[ii,], psrun(maxN = 1000, jobnum = seed, pars = parms[ii, hazs], save.new = T, ret
+                                   acute.sc = acute.sc, dur.ac = dur.ac, het.gen.sd = het.gen.sd, browse = F, nc = 12))
     ii <- ii+1
+    timeTaken <- as.numeric(difftime(Sys.time(), startTime, units='mins'))
+    print(timeTaken)
 }
 
-load(temp)                              # load output of simulations
-names(output)                           # list objects summarized below
-## jobnum=which job; evout=line list of each couple; tss=time series of pseudopopulation, rakacRR=
-## retrospective cohort estimate of acute infectivity; pars=input parameters; tmar=marriage cohort
-## dates; each=# couples per marriage cohort
-## 
-head(output$evout)                      # columns explained below
-rm(list=ls(all=T))                           # clear workspace
+rm(list=ls(all=T)) ## clear workspace
+
+

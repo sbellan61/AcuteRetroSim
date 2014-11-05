@@ -29,8 +29,6 @@ psrun <- function(country=13, s.demog = country, # country to simulate;  country
                   seed = 1,              ## seed to set for random number generation
                   jobnum = NA, simj = NA,
                   maxN = 10^4, ## maximum simulated couple population size (sample inflated pop) to avoid memory problems
-                  ## Condition on Rakai retrospecive cohort sample sizes
-                  condRakai = FALSE, RakSamp = c(inc = 23, prev = 161, late = 51), ## 
                   ## non-parametric approach to generate couple simulated population
                   infl.fac = 4, ##  simulated population inflation factor (for non-parametric couple generator, NOT USED)
                   last.int = F, ##  set interview dates to be the latest one for all individuals
@@ -236,6 +234,8 @@ psrun <- function(country=13, s.demog = country, # country to simulate;  country
             print(paste('saving file',output.nm))
             save(output, file = output.nm)
         }
+#        rm(ls()[ls()!='output.nm']) ## clean up
+        gc()
         return(output.nm)
     }
 ## Returns results in a couples line list format, a time series format, and also gives all information on simulation parameters

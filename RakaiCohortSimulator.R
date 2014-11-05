@@ -38,7 +38,7 @@ if(!is.null(sim.nm)) { ## if running from a qsub job
   init <- dpars
   ldpars <- log(dpars)
   het.gen.sd <- output$pars['het.gen.sd']
-  cohsim <- rak.coh.fxn(ts.ap = output$ts, dat = output$evout, start.rak = 1994, end.rak = 1999.5,
+  cohsim <- rak.coh.fxn(ts.ap = output$ts, dat = output$evout, start.rak = 1994, end.rak = 1999.5, dpars = dpars,
                         interv = interv, max.vis = max.vis, ltf.prob = ltf.prob,
                         rr.ltf.ff = rr.ltf.ff, rr.ltf.mm = rr.ltf.mm, rr.ltf.hh = rr.ltf.hh, rr.ltf.d = rr.ltf.d, rr.inc.sdc = rr.inc.sdc,
                         verbose = T, browse = F)
