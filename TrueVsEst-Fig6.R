@@ -4,7 +4,7 @@ rm(list=ls(all=T)); gc()
 ## Creates Figures 3 & S4 from the manuscript
 nc <- 12                                       # core per simulation
 outdir <- file.path('FiguresAndTables','UgandaFitSummaries')
-load(file=file.path(outdir, 'wf.Rdata'))
+load(file='results/RakAcute/wf.Rdata')
 load(file = file.path('results','HollingsworthAn','RealExclbyErr','workspace.Rdata')) ## fit to real data
 outdir <- file.path('FiguresAndTables','UgandaFitSummaries') ## incase changed by workspace load
 

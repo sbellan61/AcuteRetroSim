@@ -511,7 +511,7 @@ poismod.to.tab <- function(mod) {
 }
 
 ## Poisson Model with specified correlation with true heterogeneous variables (for feeding into mclapply)
-do.hetmod <- function(het) {
+do.hetmod <- function(het, hps, hetproxies, het.gen.sd, rtrunc, excl.by.err) {
     if(is.na(het)) { ## if not controlling for covariates
         formul <- formula(paste('inf.trunc ~ offset(log(pm.trunc)) + phase', '+'[hps>1], hetproxies[hps]))
     }else{ ## controlling for covariates, create a random covariate with het amount of correlation with true underlying individual risk factors
@@ -530,7 +530,8 @@ do.hetmod <- function(het) {
 ####################################################################################################
 ## Wawer et al. style analysis of Rakai retrospective cohort
 rak.wawer <- function(rak.coh, verbose = F, verbose2=F, browse = F, excl.extram = T, decont=F, start.rak=1994, het.gen.sd, late.ph,
-                      resamp=F, cov.mods=T, fit.Pois=T) {
+                      resamp=F, cov.mods=T, fit.Pois=T,
+                      prop.controlled = c(NA,seq(0, 1, by = .1)), hetproxies = '') { ## amount of heteroeneity controlled for, other covariates to add
     if(browse) browser()
     ts.vm <- rak.coh$ts.rak
     ts.vm.all <- rak.coh$ts.rak.all
@@ -640,15 +641,16 @@ rak.wawer <- function(rak.coh, verbose = F, verbose2=F, browse = F, excl.extram 
         print(xtabs(inf.trunc ~ phase, rtrunc) / xtabs(pm.trunc ~ phase, rtrunc))
     }
     ## Do several models
-    prop.controlled <- c(NA,seq(0, 1, by = .1)) ## amount of heteroeneity controlled for
     obs.hets <- paste0('obs',prop.controlled) ## name variables
     ## should we include any other proxy of heterogeneity in the model?
-    hetproxies <- c('','indp.age','secp.age','mardur','secp.tdsa','secp.pdsa')
     gc()
     if(fit.Pois) {
         for(hps in 1:length(hetproxies)) { ## for each covariate that could be included which might be indicative of heterogeneity
             print(paste('fitting Poisson models with heterogeneity &', hetproxies[hps]))
-            tout <- mclapply(prop.controlled, do.hetmod)
+
+            tout <- mclapply(prop.controlled, do.hetmod, hps = hps, rtrunc=rtrunc, het.gen.sd=het.gen.sd)
+            do.hetmod(NA, hps = hps, rtrunc=rtrunc, het.gen.sd=het.gen.sd, hetproxies=hetproxies, excl.by.err=excl.by.err)
+
             if(hps==1) {
                 armod <- abind(tout,along = 4)
             }else{
@@ -872,10 +874,21 @@ ucp.lt.2 <- function(latet, dpars, browse=F) {
  
  
 ## turn SB simulation into Wawer style table
-sbmod.to.wdat <- function(sim, browse=F, excl.by.err = F) {    
+sbmod.to.wdat <- function(sim, browse=F, excl.by.err = F, giveLate = T, giveProp = F, condRakai=F, RakSamp = c(inc = 23, prev = 161, late=51)) {    
     ## Excluding incident couples seen serodiscordant once & then never again as in Wawer 2005?
     if(browse) browser()
     if(excl.by.err) sim <- sim[!sim$excl.by.err,]
+    ## Condition on Rakai sample sizes by sampling with replacement
+    if(condRakai) {
+        inc.wh <- which(sim$phase=='inc')
+        prev.wh <- which(sim$phase=='prev')
+        if(giveLate) {prev.wh <- which(sim$phase=='prev')
+                      resamp <- c(sample(inc.wh, RakSamp['inc'], replace=T), sample(prev.wh, RakSamp['prev'], replace=T),sample(late.wh, RakSamp['late'], replace=T))
+                  }else{ ## only inc & prev
+                      resamp <- c(sample(inc.wh, RakSamp['inc'], replace=T), sample(prev.wh, RakSamp['prev'], replace=T))
+                  }
+        sim <- sim[resamp,]
+    }
     ## early
     inctab <- xtabs(~inf+kk, sim, subset=phase=='inc')
     inct <- data.frame(int = 1, n = sum(sim$phase=='inc'), i = inctab[2,1])
@@ -894,21 +907,32 @@ sbmod.to.wdat <- function(sim, browse=F, excl.by.err = F) {
                            i = prevtab[2,ii])
         prevt <- rbind(prevt, temp)
     }
-    ## late
-    latetab <- xtabs(~inf+kk, sim, subset=phase=='late')
-    maxints <- max(sim$kkt, na.rm=T)
-    if(maxints==-Inf) maxints <- 1
-    latet <- data.frame(int = 1:1, n = 0, i = 0)
-    for(ii in 1:nrow(latet)) {
-        int <- latet$int[ii]
-        #wh.tm <- sim$phase=='late' & (sim$kkt == int | (sim$kkt>int & sim$kk<=int))
-        #print(head(sim[wh.tm,],20))
+    if(giveLate) {
+        ## late
+        latetab <- xtabs(~inf+kk, sim, subset=phase=='late')
+        maxints <- max(sim$kkt, na.rm=T)
+        if(maxints==-Inf) maxints <- 1
+        latet <- data.frame(int = 1:1, n = 0, i = 0)
+        for(ii in 1:nrow(latet)) {
+            int <- latet$int[ii]
+                                        #wh.tm <- sim$phase=='late' & (sim$kkt == int | (sim$kkt>int & sim$kk<=int))
+                                        #print(head(sim[wh.tm,],20))
             latet$n[latet$int==int] <- sum(sim$phase=='late' & (sim$kkt == int | (sim$kkt>int & sim$kk<=int)) )
             latet$i[latet$int==int] <- sum(sim$phase=='late' & sim$kk==int)
         }              
-    head(sim[sim$phase=='late',],10)
-    #latet <- latet[nrow(latet):1,]
-    return(list(inct=inct, prevt=prevt, latet= latet))
+        head(sim[sim$phase=='late',],10)
+        if(giveProp) {
+            inct$p <- with(inct, i/n)
+            prevt$p <- with(prevt, i/n)
+            if(giveLate) latet$p <- with(latet, i/n)
+        }
+        return(list(inct=inct, prevt=prevt, latet= latet))
+    }else{
+        if(giveProp) {
+            inct$p <- with(inct, i/n)
+            prevt$p <- with(prevt, i/n)
+        }
+        return(list(inct=inct, prevt=prevt))}
 }
 
 ####################################################################################################
@@ -1248,3 +1272,8 @@ prevt <- data.frame(int = 1:4, n = c(161,129,92,45), i = c(14,9,10,3))
 latet <- data.frame(int = 4:1, n = c(22,35,31,13), i = c(2,9,8,0))
 wtab.rl <- list(inct=inct, prevt=prevt, latet=latet)
 wtab.rl.no.err <- list(inct=inct.no.err, prevt=prevt, latet=latet)
+
+wtab.rlp <- within(wtab.rl, {
+    inct$p <- with(inct, i/n)
+    prevt$p <- with(prevt, i/n)
+    latet$p <- with(latet, i/n)})

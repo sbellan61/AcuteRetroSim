@@ -26,6 +26,7 @@ ageweib <- function(age, death = T) {
 ## Create a simulated couple population and simulate transmission therein with an event driven
 ## simulator. Then compile output into a couple-level timeseries. Calls event.fn() (see below)
 psrun <- function(country=13, s.demog = country, # country to simulate;  country whose relationship patterns are to be used in simulation
+                  returnFileNm = T, ## return saved file name vs file itself
                   seed = 1,              ## seed to set for random number generation
                   jobnum = NA, simj = NA,
                   maxN = 10^4, ## maximum simulated couple population size (sample inflated pop) to avoid memory problems
@@ -236,7 +237,7 @@ psrun <- function(country=13, s.demog = country, # country to simulate;  country
         }
 #        rm(ls()[ls()!='output.nm']) ## clean up
         gc()
-        return(output.nm)
+        if(returnFileNm) return(output.nm) else return(output)
     }
 ## Returns results in a couples line list format, a time series format, and also gives all information on simulation parameters
 
