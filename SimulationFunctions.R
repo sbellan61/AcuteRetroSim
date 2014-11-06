@@ -26,7 +26,7 @@ ageweib <- function(age, death = T) {
 ## Create a simulated couple population and simulate transmission therein with an event driven
 ## simulator. Then compile output into a couple-level timeseries. Calls event.fn() (see below)
 psrun <- function(country=13, s.demog = country, # country to simulate;  country whose relationship patterns are to be used in simulation
-                  returnFileNm = T, ## return saved file name vs file itself
+                  saveFile = T, returnFileNm = T, ## return saved file name vs file itself
                   seed = 1,              ## seed to set for random number generation
                   jobnum = NA, simj = NA,
                   maxN = 10^4, ## maximum simulated couple population size (sample inflated pop) to avoid memory problems
@@ -220,22 +220,22 @@ psrun <- function(country=13, s.demog = country, # country to simulate;  country
                            dur.ac=dur.ac, dur.lt = dur.lt, dur.aids = dur.aids))
         sim.nm <- paste(ds.nm[country], "-", nrow(evout), '-', jobnum, sep = "") ## name simulation results (country-#couples-jobum)
         ## create file name making sure not to save over old files
-        if(!is.na(out.dir)) {
-            if(!file.exists(out.dir)) dir.create(out.dir)
-            output.nm.base <- file.path(out.dir, sim.nm) #paste(sim.nm, ".Rdata", sep = ""))
-            stepper <- 1
-            output.nm <- output.nm.base
-            if(save.new) { ## don't save over old files
-                while(file.exists(paste0(output.nm,'.Rdata'))) { 
-                    stepper <- stepper + 1
-                    output.nm <- paste0(output.nm.base, '-', stepper)
+        if(saveFile) {
+            if(!is.na(out.dir)) {
+                if(!file.exists(out.dir)) dir.create(out.dir)
+                output.nm.base <- file.path(out.dir, sim.nm) #paste(sim.nm, ".Rdata", sep = ""))
+                stepper <- 1
+                output.nm <- output.nm.base
+                if(save.new) { ## don't save over old files
+                    while(file.exists(paste0(output.nm,'.Rdata'))) { 
+                        stepper <- stepper + 1
+                        output.nm <- paste0(output.nm.base, '-', stepper)
+                    }
                 }
-            }
-            output.nm <- paste0(output.nm, '.Rdata')
-            print(paste('saving file',output.nm))
-            save(output, file = output.nm)
-        }
-#        rm(ls()[ls()!='output.nm']) ## clean up
+                output.nm <- paste0(output.nm, '.Rdata')
+                print(paste('saving file',output.nm))
+                save(output, file = output.nm)
+            }}
         gc()
         if(returnFileNm) return(output.nm) else return(output)
     }

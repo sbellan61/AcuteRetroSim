@@ -14,12 +14,12 @@ hazs <- c("bmb","bfb","bme","bfe","bmp","bfp")
 spars <- pars.arr[hazs,,13]              # get transmission coefficients from base country
 
 ## Prior on pre-, extra-, and within-couple transmission parameters
-logHazMeans <- log(spars[,'50%']* 5)
+bump <- 5
+logHazMeans <- log(spars[,'50%']*bump)
 logHazSDs <- rowMeans(abs(log(spars[,c('2.5%','97.5%')])-log(spars[,'50%']))) / 1.96 ## ~1.96*SD of
 ## parameter estimates on log scale monthly hazard = infections/(coital acts) * (coital acts)/month
-## from Wawer. 1.3 bump is because we know this needs to be bigger than Wawer's since prevalent
+## from Wawer. bump is because we know this needs to be bigger than Wawer's since prevalent
 ## couples have much lower hazard than the baseline in a hetrogeneous model
-logHazMeans[c('bmp','bfp')] <- log(36/48525 * 10 * 1.3) 
 logHazPrior <- function(n=1, scl = 1, mean = logHazSDs, sd = logHazSDs, extraUncertaintyHazs = 1.5) {
     logHazSamp <- rnorm(6*n, logHazMeans, sd = logHazSDs*extraUncertaintyHazs)
     return(matrix(exp(logHazSamp),nr=n, ncol = 6, byrow = T))
@@ -30,7 +30,7 @@ exp(logHazMeans)
 spars[,'50%']
 
 ## Flat uniform prior from 1 to 3
-hetGenSDPrior <- function(n) runif(n, 1, 3)
+hetGenSDPrior <- function(n) runif(n, 0, 3)
 
 ## Get RHacute prior centered on estimates from viral loads but with way more uncertainty
 extraUncertaintyRH <- 3.5
@@ -52,7 +52,7 @@ simParmSamp <- function(n,...) {
 ## Function that does simulation & gets wtab all at once
 retroCohSim <- function(parms=simParmSamp(1), maxN=10000, seed=1, nc=12, browse=F) {
     startTime <- Sys.time()
-    output <- with(parms, psrun(maxN = maxN, jobnum = seed, pars = parms[hazs], save.new = T, return.ts = T, returnFileNm=F,
+    output <- with(parms, psrun(maxN = maxN, jobnum = seed, pars = parms[hazs], save.new = T, return.ts = T, returnFileNm=F, saveFile=F,
                                     acute.sc = acute.sc, dur.ac = dur.ac, het.gen=T, het.gen.sd = het.gen.sd, browse = F, nc = nc))
     cohsim <- rak.coh.fxn(output, #ts.ap = output$ts, dat = output$evout, dpars = output$rakpars,
                           ltf.prob=0.0287682072451781, 
@@ -60,7 +60,7 @@ retroCohSim <- function(parms=simParmSamp(1), maxN=10000, seed=1, nc=12, browse=
                           verbose = F, browse = F)
                                         #    rm(output); gc() ## free up memory
     rcohsim <- rak.wawer(rak.coh = cohsim, excl.extram=T, het.gen.sd = with(parms,het.gen.sd),
-                         cov.mods = F, verbose = F, fit.Pois=T, prop.controlled=c(NA,1), browse=F)
+                         cov.mods = F, verbose = F, fit.Pois=F, simpPois=T, prop.controlled=c(NA,1), browse=F)
     rcohsim$pars <- parms
     minutesTaken <- as.numeric(difftime(Sys.time(), startTime, units='mins'))
     print(paste('minutes taken', round(minutesTaken,2)))
@@ -72,3 +72,32 @@ abcSimSumStat <- function(rcohsim) {
     return(list(wtabSim=wtabSim, parms=parms, minutesTaken=))
 }
 
+gStat <- function(x) { ## G test of independence
+    n <- sum(x)
+    sr <- rowSums(x)
+    sc <- colSums(x)
+    E <- outer(sr, sc, "*")/n
+    2*sum(x*log(x/E))
+}
+
+gSumStat <- function(wtab) { ## compare wtab to wtab.rl
+    prevG <- incG <- numeric(4)
+    ## inc
+    if(nrow(wtab$inct)<4) { ## deal with less rows
+        nr <- nrow(wtab$inct)
+        for(rr in (nr+1):4) wtab$inct[rr,] <- c(NA,NA)
+    }
+    for(ii in 1:4) {
+        incG[ii] <- gStat(rbind(contTabsRl$inct[ii,], wtab$inct[ii,])+.5)
+    }
+    ## prev
+    if(nrow(wtab$prevt)<4) { ## deal with less rows
+        nr <- nrow(wtab$prevt)
+        for(rr in (nr+1):4) wtab$prevt[rr,] <- c(NA,NA)
+    }
+    for(ii in 1:4) {
+        prevG[ii] <- gStat(rbind(contTabsRl$prevt[ii,], wtab$prevt[ii,])+.5)
+    }
+    Gtable <- abind(cbind(contTabsRl$inct, wtab$inct, incG), cbind(contTabsRl$prevt, wtab$prevt, prevG),  along = 3)
+    return(list(Gval = sum(incG,prevG, na.rm=T), Gtable))
+}

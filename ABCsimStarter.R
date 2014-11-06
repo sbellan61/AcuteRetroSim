@@ -3,17 +3,21 @@
 ## Simulate from priors for ABC particle swarm
 ###################################################################### 
 ## Steve Bellan, 2014, steve.bellan@gmail.com
-if(Sys.info()['nodename']=='stevebemacbook3') setwd('~/Documents/R Repos/AcuteRetroSim/') else setwd('Rakai/AcuteRetroSim/')
 rm(list=ls(all=T))                           # clear workspace
 args=(commandArgs(TRUE))                # load arguments from R CMD BATCH 
 if(length(args)>0)  {## Then cycle through each element of the list and evaluate the expressions.
     for(i in 1:length(args)) {
         eval(parse(text=args[[i]]))
-      }  }else{ seed <- 1}
+    }  }else{ 
+        seed <- 1; out.dir <- file.path('results','testDir')
+        if(Sys.info()['nodename']=='stevebemacbook3') setwd('~/Documents/R Repos/AcuteRetroSim/') else setwd('Rakai/AcuteRetroSim/')
+    }
 sapply(c("SimulationFunctions.R","RakFunctions.R",'abcFunctions.R'), source) # load Rakai analysis simulation functions from script
 set.seed(seed)
-SimMinutes <- 10 ## minutes to simulate for
+SimMinutes <- 24*60 ## minutes to simulate for
 maxN <- 5000
+
+print(paste('seed is', seed))
 
 startTime <- Sys.time()
 ii <- 1
@@ -24,24 +28,12 @@ while(timeTaken < SimMinutes) { ##
     rcohsList[[ii]] <- temprcoh
     ii <- ii+1
     timeTaken <- as.numeric(difftime(Sys.time(), startTime, units='mins'))
-    print(timeTaken)
+    print(paste('on', ii,'taken', round(timeTaken,2),'mins'))
+    if(ii%%30==0) save(rcohsList, file = file.path(out.dir, paste0('rcohsList-',seed,'.Rdata'))) ## save every 30
 }
 
-save(rcohsList, file = paste0('results/testDir/rcohsList-',seed,'.Rdata'))
+save(rcohsList, file = file.path(out.dir, paste0('rcohsList-',seed,'.Rdata')))
 
-lapply(rcohsList, function(x) sbmod.to.wdat(x$rakll, excl.by.err = T, browse=F, giveLate=F, condRakai=F, giveProp=T))
 
-testPars <- simParmSamp(1)
-testPars
-testPars2 <- testPars
-testPars2[c('acute.sc','dur.ac','het.gen.sd')] <- c(5,3,2)
-testPars2[c('bmp','bfp')] <- testPars2[c('bmp','bfp')]*10
-
-sapply(c("SimulationFunctions.R","RakFunctions.R",'abcFunctions.R'), source) # load Rakai analysis simulation functions from script
-testPars2
-rcohsim <- retroCohSim(parms = testPars2, maxN=500, browse=F)
-sbmod.to.wdat(rcohsim$rakll, excl.by.err = T, browse=F, giveLate=F, condRakai=F, giveProp=T)
-sbmod.to.wdat(rcohsim$rakll, excl.by.err = T, browse=F, giveLate=F, condRakai=T, giveProp=T)
-
-wtab.rlp
-lapply(wtab.rlp, function(x) x$p)
+## lapply(rcohsList, function(x) sbmod.to.wdat(x$rakll, excl.by.err = T, browse=F, giveLate=F, condRakai=T, giveProp=T))
+## sbmod.to.wdat(rcohsList[[1]]$rakll, excl.by.err = T, browse=F, giveLate=F, condRakai=F, giveProp=T)

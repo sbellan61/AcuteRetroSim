@@ -398,11 +398,11 @@ make.rakll <- function(dat.vm, ts.vm, cov.mods=F, interv=10, verbose2=F) {
     ## **************************************************???
     ## What to do with couples that are both EARLY & LATE?? for now leave them as early only
     lt.inc.wh <- lt.wh[lt.wh %in% inc.wh]
-    print(paste(length(lt.inc.wh), 'couples were classified as both early & late. We keep them as early for the analysis, though if decont=T, they are completey excluded later'))
+    if(verbose2) print(paste(length(lt.inc.wh), 'couples were classified as both early & late. We keep them as early for the analysis, though if decont=T, they are completey excluded later'))
     lt.wh <- lt.wh[!lt.wh %in% lt.inc.wh]
     rakll$phase[lt.wh] <- 'late'
     ## those that became ++ and were seen ++ at a visit *including* if only first seen ++ at the first visit after a partner's death
-    lt.wh.hh <- lt.wh[which(apply(ts.vm[,lt.wh], 2, function(x) sum(grepl('hh',x) )>0))]
+    lt.wh.hh <- lt.wh[which(apply(ts.vm[,lt.wh,drop=F], 2, function(x) sum(grepl('hh',x) )>0))]
     rakll$inf[lt.wh.hh] <- 1
     rakll$pm[lt.wh.hh] <- apply(ts.vm[,lt.wh.hh,drop=F], 2, function(x) sum(x %in% sdcs)-1)*interv + interv/2
     ## those that stayed +- up until last visit
@@ -472,6 +472,26 @@ make.rakll <- function(dat.vm, ts.vm, cov.mods=F, interv=10, verbose2=F) {
                 lt.wh=lt.wh, lt.wh.hh=lt.wh.hh, lt.wh.nhh=lt.wh.nhh))
 }
 
+####################################################################################################
+## Poisson Model with specified correlation with true heterogeneous variables (for feeding into mclapply)
+do.hetmod <- function(het) {
+    if(is.na(het)) { ## if not controlling for covariates
+        formul <- formula(paste('inf.trunc ~ offset(log(pm.trunc)) + phase', '+'[hps>1], hetproxies[hps]))
+    }else{ ## controlling for covariates, create a random covariate with het amount of correlation with true underlying individual risk factors
+        temp <- rnorm(nrow(rtrunc), mean = het*rtrunc$secp.lhet, sd = sqrt(het.gen.sd^2 - het^2*het.gen.sd^2))
+        formul <- formula(paste('inf.trunc ~ offset(log(pm.trunc)) + phase + temp', '+'[hps>1], hetproxies[hps]))
+    }
+    temp.arr <- abind(poismod.to.tab(glm(formul, family = "poisson", data = rtrunc)),
+                      poismod.to.tab(glm(formul, family = "poisson", data = rtrunc, subset = !excl.by.err)),
+                      along = 3)
+    dimnames(temp.arr)[[3]] <- c('base', 'XbErr')
+    rm(list=setdiff(ls(), "temp.arr")) ## remove everything but output
+    gc() ## clean up memory
+    return(temp.arr)
+}
+
+
+####################################################################################################
 ## Poisson Regression (ignoring any source of heterogeneity, i.e. no coital acts, GUD, age, etc)
 ## assume coital acts are a function of person-months and use that as the offset
 ## Used in rak.wawer below
@@ -510,27 +530,11 @@ poismod.to.tab <- function(mod) {
     return(poistab[,tracenames])
 }
 
-## Poisson Model with specified correlation with true heterogeneous variables (for feeding into mclapply)
-do.hetmod <- function(het, hps, hetproxies, het.gen.sd, rtrunc, excl.by.err) {
-    if(is.na(het)) { ## if not controlling for covariates
-        formul <- formula(paste('inf.trunc ~ offset(log(pm.trunc)) + phase', '+'[hps>1], hetproxies[hps]))
-    }else{ ## controlling for covariates, create a random covariate with het amount of correlation with true underlying individual risk factors
-        temp <- rnorm(nrow(rtrunc), mean = het*rtrunc$secp.lhet, sd = sqrt(het.gen.sd^2 - het^2*het.gen.sd^2))
-        formul <- formula(paste('inf.trunc ~ offset(log(pm.trunc)) + phase + temp', '+'[hps>1], hetproxies[hps]))
-    }
-    temp.arr <- abind(poismod.to.tab(glm(formul, family = "poisson", data = rtrunc)),
-                      poismod.to.tab(glm(formul, family = "poisson", data = rtrunc, subset = !excl.by.err)),
-                      along = 3)
-    dimnames(temp.arr)[[3]] <- c('base', 'XbErr')
-    rm(list=setdiff(ls(), "temp.arr")) ## remove everything but output
-    gc() ## clean up memory
-    return(temp.arr)
-}
 
 ####################################################################################################
 ## Wawer et al. style analysis of Rakai retrospective cohort
 rak.wawer <- function(rak.coh, verbose = F, verbose2=F, browse = F, excl.extram = T, decont=F, start.rak=1994, het.gen.sd, late.ph,
-                      resamp=F, cov.mods=T, fit.Pois=T,
+                      resamp=F, cov.mods=T, fit.Pois=T, simpPois=F,
                       prop.controlled = c(NA,seq(0, 1, by = .1)), hetproxies = '') { ## amount of heteroeneity controlled for, other covariates to add
     if(browse) browser()
     ts.vm <- rak.coh$ts.rak
@@ -644,13 +648,18 @@ rak.wawer <- function(rak.coh, verbose = F, verbose2=F, browse = F, excl.extram 
     obs.hets <- paste0('obs',prop.controlled) ## name variables
     ## should we include any other proxy of heterogeneity in the model?
     gc()
+    if(simpPois) { ## just get an unadj Pois & an omnitient Pois reg (controlling for all heterogeneity), ignoring late phase
+        formul.uni <- formula('inf.trunc ~ offset(log(pm.trunc)) + phase')
+        acuteRH.uni <- exp(coef(glm(formul.uni, family = "poisson", data = rtrunc[rtrunc$phase!='late',])))['phaseinc']
+        formul.mult <- formula('inf.trunc ~ offset(log(pm.trunc)) + phase + secp.lhet')
+        acuteRH.mult <- exp(coef(glm(formul.mult, family = "poisson", data = rtrunc[rtrunc$phase!='late',])))['phaseinc']
+        PoisRHs <- c(univ = acuteRH.uni, omn = acuteRH.mult)
+    }else{ PoisRhs <- NA}
+####################################################################################################
     if(fit.Pois) {
         for(hps in 1:length(hetproxies)) { ## for each covariate that could be included which might be indicative of heterogeneity
             print(paste('fitting Poisson models with heterogeneity &', hetproxies[hps]))
-
-            tout <- mclapply(prop.controlled, do.hetmod, hps = hps, rtrunc=rtrunc, het.gen.sd=het.gen.sd)
-            do.hetmod(NA, hps = hps, rtrunc=rtrunc, het.gen.sd=het.gen.sd, hetproxies=hetproxies, excl.by.err=excl.by.err)
-
+            tout <- mclapply(prop.controlled, do.hetmod)
             if(hps==1) {
                 armod <- abind(tout,along = 4)
             }else{
@@ -677,11 +686,11 @@ rak.wawer <- function(rak.coh, verbose = F, verbose2=F, browse = F, excl.extram 
             print(ddply(rtrunc, .(secp.pdsa.cat), summarise, mean.indiv.RH = exp(mean(secp.lhet))))        
         }
     }else{armod <- NA}
-  ## Check that calcultions are working
-  if(verbose2) {with(rakllout, {rnd <- sample(lt.wh,10); print(ts.vm[,rnd]); print(rakll[rnd,])})}
-  rakll <- rakllout$rakll
-  rm(list=setdiff(ls(), c("erhs","rakll","armod"))) ## remove everything but output
-  return(list(erhs = erhs, rakll = rakll, armod = armod))
+    ## Check that calcultions are working
+    if(verbose2) {with(rakllout, {rnd <- sample(lt.wh,10); print(ts.vm[,rnd]); print(rakll[rnd,])})}
+    rakll <- rakllout$rakll
+    rm(list=setdiff(ls(), c("erhs","rakll","armod","PoisRHs"))) ## remove everything but output
+  return(list(erhs = erhs, rakll = rakll, armod = armod, PoisRHs = PoisRHs))
   gc()
 }
 
@@ -890,14 +899,16 @@ sbmod.to.wdat <- function(sim, browse=F, excl.by.err = F, giveLate = T, giveProp
         sim <- sim[resamp,]
     }
     ## early
+    sim$inf <- factor(sim$inf)
     inctab <- xtabs(~inf+kk, sim, subset=phase=='inc')
     inct <- data.frame(int = 1, n = sum(sim$phase=='inc'), i = inctab[2,1])
-    for(ii in 2:ncol(inctab)) {
-        temp <- data.frame(int = ii,
-                           n =  inct$n[ii-1] - inct$i[ii-1] - inctab[1,ii-1],
-                           i = inctab[2,ii])
-        inct <- rbind(inct, temp)
-    }
+    if(ncol(inctab)>1) {
+        for(ii in 2:min(4,ncol(inctab))) {
+            temp <- data.frame(int = ii,
+                               n =  inct$n[ii-1] - inct$i[ii-1] - inctab[1,ii-1],
+                               i = inctab[2,ii])
+            inct <- rbind(inct, temp)
+        }}
     ## prev
     prevtab <- xtabs(~inf+kk, sim, subset=phase=='prev')
     prevt <- data.frame(int = 1, n = sum(sim$phase=='prev'), i = prevtab[2,1])
@@ -1276,4 +1287,9 @@ wtab.rl.no.err <- list(inct=inct.no.err, prevt=prevt, latet=latet)
 wtab.rlp <- within(wtab.rl, {
     inct$p <- with(inct, i/n)
     prevt$p <- with(prevt, i/n)
-    latet$p <- with(latet, i/n)})
+    latet$p <- with(latet, i/n)
+    inct$ni <- with(inct, n-i)
+    prevt$ni <- with(prevt, n-i)
+    latet$ni <- with(latet, n-i)
+})
+contTabsRl <- lapply(wtab.rlp, '[', c('i','ni'))
