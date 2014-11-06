@@ -10,7 +10,7 @@ if(length(args)>0)  {## Then cycle through each element of the list and evaluate
         eval(parse(text=args[[i]]))
     }  }else{ 
         seed <- 1; out.dir <- file.path('results','testDir')
-        if(Sys.info()['nodename']=='stevebemacbook3') setwd('~/Documents/R Repos/AcuteRetroSim/') else setwd('Rakai/AcuteRetroSim/')
+        if(Sys.info()['nodename']=='stevebemacbook3') setwd('~/Documents/R Repos/AcuteRetroSim/') else setwd('/home1/02413/sbellan/Rakai/AcuteRetroSim/')
     }
 sapply(c("SimulationFunctions.R","RakFunctions.R",'abcFunctions.R'), source) # load Rakai analysis simulation functions from script
 set.seed(seed)
@@ -24,7 +24,7 @@ ii <- 1
 timeTaken <- as.numeric(difftime(Sys.time(), startTime, units='mins'))
 rcohsList <- list()
 while(timeTaken < SimMinutes) { ##
-    temprcoh <- retroCohSim(parms = simParmSamp(1), maxN=maxN, browse=F)
+    temprcoh <- retroCohSim(parms = simParmSamp(1), seed = seed, maxN=maxN, browse=F)
     rcohsList[[ii]] <- temprcoh
     ii <- ii+1
     timeTaken <- as.numeric(difftime(Sys.time(), startTime, units='mins'))
@@ -37,3 +37,6 @@ save(rcohsList, file = file.path(out.dir, paste0('rcohsList-',seed,'.Rdata')))
 
 ## lapply(rcohsList, function(x) sbmod.to.wdat(x$rakll, excl.by.err = T, browse=F, giveLate=F, condRakai=T, giveProp=T))
 ## sbmod.to.wdat(rcohsList[[1]]$rakll, excl.by.err = T, browse=F, giveLate=F, condRakai=F, giveProp=T)
+## sapply(c("SimulationFunctions.R","RakFunctions.R",'abcFunctions.R'), source) # load Rakai analysis simulation functions from script
+## temprcoh <- retroCohSim(parms = simParmSamp(1), seed = seed, maxN=1200, browse=F)
+## sbmod.to.wdat(temprcoh$rakll, excl.by.err = T, browse=F, simpPois=T, giveLate=F, condRakai=T, giveProp=T)

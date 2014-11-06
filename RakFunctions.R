@@ -534,7 +534,7 @@ poismod.to.tab <- function(mod) {
 ####################################################################################################
 ## Wawer et al. style analysis of Rakai retrospective cohort
 rak.wawer <- function(rak.coh, verbose = F, verbose2=F, browse = F, excl.extram = T, decont=F, start.rak=1994, het.gen.sd, late.ph,
-                      resamp=F, cov.mods=T, fit.Pois=T, simpPois=F,
+                      resamp=F, cov.mods=T, fit.Pois=T, 
                       prop.controlled = c(NA,seq(0, 1, by = .1)), hetproxies = '') { ## amount of heteroeneity controlled for, other covariates to add
     if(browse) browser()
     ts.vm <- rak.coh$ts.rak
@@ -648,13 +648,6 @@ rak.wawer <- function(rak.coh, verbose = F, verbose2=F, browse = F, excl.extram 
     obs.hets <- paste0('obs',prop.controlled) ## name variables
     ## should we include any other proxy of heterogeneity in the model?
     gc()
-    if(simpPois) { ## just get an unadj Pois & an omnitient Pois reg (controlling for all heterogeneity), ignoring late phase
-        formul.uni <- formula('inf.trunc ~ offset(log(pm.trunc)) + phase')
-        acuteRH.uni <- exp(coef(glm(formul.uni, family = "poisson", data = rtrunc[rtrunc$phase!='late',])))['phaseinc']
-        formul.mult <- formula('inf.trunc ~ offset(log(pm.trunc)) + phase + secp.lhet')
-        acuteRH.mult <- exp(coef(glm(formul.mult, family = "poisson", data = rtrunc[rtrunc$phase!='late',])))['phaseinc']
-        PoisRHs <- c(univ = acuteRH.uni, omn = acuteRH.mult)
-    }else{ PoisRhs <- NA}
 ####################################################################################################
     if(fit.Pois) {
         for(hps in 1:length(hetproxies)) { ## for each covariate that could be included which might be indicative of heterogeneity
@@ -690,7 +683,7 @@ rak.wawer <- function(rak.coh, verbose = F, verbose2=F, browse = F, excl.extram 
     if(verbose2) {with(rakllout, {rnd <- sample(lt.wh,10); print(ts.vm[,rnd]); print(rakll[rnd,])})}
     rakll <- rakllout$rakll
     rm(list=setdiff(ls(), c("erhs","rakll","armod","PoisRHs"))) ## remove everything but output
-  return(list(erhs = erhs, rakll = rakll, armod = armod, PoisRHs = PoisRHs))
+  return(list(erhs = erhs, rakll = rakll, armod = armod))
   gc()
 }
 
@@ -883,7 +876,7 @@ ucp.lt.2 <- function(latet, dpars, browse=F) {
  
  
 ## turn SB simulation into Wawer style table
-sbmod.to.wdat <- function(sim, browse=F, excl.by.err = F, giveLate = T, giveProp = F, condRakai=F, RakSamp = c(inc = 23, prev = 161, late=51)) {    
+sbmod.to.wdat <- function(sim, browse=F, excl.by.err = F, giveLate = T, giveProp = F, condRakai=F, RakSamp = c(inc = 23, prev = 161, late=51), simpPois=F) {    
     ## Excluding incident couples seen serodiscordant once & then never again as in Wawer 2005?
     if(browse) browser()
     if(excl.by.err) sim <- sim[!sim$excl.by.err,]
@@ -918,6 +911,13 @@ sbmod.to.wdat <- function(sim, browse=F, excl.by.err = F, giveLate = T, giveProp
                            i = prevtab[2,ii])
         prevt <- rbind(prevt, temp)
     }
+    if(simpPois) { ## just get an unadj Pois & an omnitient Pois reg (controlling for all heterogeneity), ignoring late phase
+        formul.uni <- formula('inf.trunc ~ offset(log(pm.trunc)) + phase')
+        acuteRH.uni <- exp(coef(glm(formul.uni, family = "poisson", data = sim[sim$phase!='late',])))['phaseinc']
+        formul.mult <- formula('inf.trunc ~ offset(log(pm.trunc)) + phase + secp.lhet')
+        acuteRH.mult <- exp(coef(glm(formul.mult, family = "poisson", data = sim[sim$phase!='late',])))['phaseinc']
+        PoisRHs <- c(univ = acuteRH.uni, omn = acuteRH.mult)
+    }else{ PoisRHs <- NA}
     if(giveLate) {
         ## late
         latetab <- xtabs(~inf+kk, sim, subset=phase=='late')
@@ -943,7 +943,7 @@ sbmod.to.wdat <- function(sim, browse=F, excl.by.err = F, giveLate = T, giveProp
             inct$p <- with(inct, i/n)
             prevt$p <- with(prevt, i/n)
         }
-        return(list(inct=inct, prevt=prevt))}
+        return(list(inct=inct, prevt=prevt, PoisRHs=PoisRHs))}
 }
 
 ####################################################################################################

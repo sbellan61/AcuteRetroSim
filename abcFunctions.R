@@ -52,7 +52,7 @@ simParmSamp <- function(n,...) {
 ## Function that does simulation & gets wtab all at once
 retroCohSim <- function(parms=simParmSamp(1), maxN=10000, seed=1, nc=12, browse=F) {
     startTime <- Sys.time()
-    output <- with(parms, psrun(maxN = maxN, jobnum = seed, pars = parms[hazs], save.new = T, return.ts = T, returnFileNm=F, saveFile=F,
+    output <- with(parms, psrun(maxN = maxN, jobnum = seed, pars = parms[hazs], save.new = T, return.ts = T, returnFileNm=F, saveFile=F, seed = seed,
                                     acute.sc = acute.sc, dur.ac = dur.ac, het.gen=T, het.gen.sd = het.gen.sd, browse = F, nc = nc))
     cohsim <- rak.coh.fxn(output, #ts.ap = output$ts, dat = output$evout, dpars = output$rakpars,
                           ltf.prob=0.0287682072451781, 
@@ -60,7 +60,7 @@ retroCohSim <- function(parms=simParmSamp(1), maxN=10000, seed=1, nc=12, browse=
                           verbose = F, browse = F)
                                         #    rm(output); gc() ## free up memory
     rcohsim <- rak.wawer(rak.coh = cohsim, excl.extram=T, het.gen.sd = with(parms,het.gen.sd),
-                         cov.mods = F, verbose = F, fit.Pois=F, simpPois=T, prop.controlled=c(NA,1), browse=F)
+                         cov.mods = F, verbose = F, fit.Pois=F, prop.controlled=c(NA,1), browse=F)
     rcohsim$pars <- parms
     minutesTaken <- as.numeric(difftime(Sys.time(), startTime, units='mins'))
     print(paste('minutes taken', round(minutesTaken,2)))
@@ -73,11 +73,13 @@ abcSimSumStat <- function(rcohsim) {
 }
 
 gStat <- function(x) { ## G test of independence
-    n <- sum(x)
+    nn <- sum(x)
     sr <- rowSums(x)
     sc <- colSums(x)
-    E <- outer(sr, sc, "*")/n
-    2*sum(x*log(x/E))
+    E <- outer(sr, sc, "*")/nn
+    gs <- x*log(x/E)
+    gs[x==0] <- 0
+    2*sum(gs)
 }
 
 gSumStat <- function(wtab) { ## compare wtab to wtab.rl
@@ -88,16 +90,52 @@ gSumStat <- function(wtab) { ## compare wtab to wtab.rl
         for(rr in (nr+1):4) wtab$inct[rr,] <- c(NA,NA)
     }
     for(ii in 1:4) {
-        incG[ii] <- gStat(rbind(contTabsRl$inct[ii,], wtab$inct[ii,])+.5)
+        incG[ii] <- gStat(rbind(contTabsRl$inct[ii,], wtab$inct[ii,]))
     }
+    incG[is.nan(incG)] <- 0
     ## prev
     if(nrow(wtab$prevt)<4) { ## deal with less rows
         nr <- nrow(wtab$prevt)
         for(rr in (nr+1):4) wtab$prevt[rr,] <- c(NA,NA)
     }
     for(ii in 1:4) {
-        prevG[ii] <- gStat(rbind(contTabsRl$prevt[ii,], wtab$prevt[ii,])+.5)
+        prevG[ii] <- gStat(rbind(contTabsRl$prevt[ii,], wtab$prevt[ii,]))
     }
+    prevG[is.nan(prevG)] <- 0
     Gtable <- abind(cbind(contTabsRl$inct, wtab$inct, incG), cbind(contTabsRl$prevt, wtab$prevt, prevG),  along = 3)
     return(list(Gval = sum(incG,prevG, na.rm=T), Gtable))
 }
+
+collectSumStat <- function(filenm, returnGtable = F, browse=F, ncores = 12) {
+    if(browse) browser()
+    print(filenm)
+    load(filenm)
+    ## Convert to wtab
+    wtabSims <- mclapply(rcohsList, function(x) sbmod.to.wdat(x$rakll, excl.by.err = T, browse=F, giveLate=F, condRakai=T, giveProp=T, simpPois=T),
+                         mc.cores=ncores)
+    parmsMat <- matrix(unlist(lapply(rcohsList, '[[', 'pars')), nr = length(rcohsList), nc = 9, byrow=T)
+    PoisRHsMat <- data.frame(matrix(unlist(lapply(wtabSims, '[[', 'PoisRHs')), nr = length(rcohsList), nc = 2, byrow=T))
+    colnames(parmsMat) <- names(rcohsList[[1]]$pars)
+    colnames(PoisRHsMat) <- names(wtabSims[[1]]$PoisRHs)
+    PoisRHsMat <- within(PoisRHsMat, {
+        RHreduction <- univ.phaseinc/omn.phaseinc
+        enoughHet <- RHreduction > 11/7.25}) ## univariate unadjusted / multivariate from Wawer paper
+    rm(rcohsList); gc()
+    ## just get # infected & # uninfected
+    contTabsSim <- mclapply(wtabSims, function(x) {
+        x <- within(x, {
+            inct$ni <- with(inct, n-i)
+            inct <- inct[,c('i','ni')]
+            prevt$ni <- with(prevt, n-i)
+            prevt <- prevt[,c('i','ni')]})}, mc.cores=ncores)
+    ## Get G statistics
+    gS <- mclapply(contTabsSim, gSumStat, mc.cores = ncores)
+    gVals <- unlist(lapply(gS, '[',1))
+    ## Create parameter matrix
+    parmsMat <- data.frame(parmsMat, PoisRHsMat, gVals, filenm = filenm, job = 1:nrow(parmsMat))
+    pmat <- parmsMat[order(gVals),]
+    if(returnGtable) Gtable <- unlist(lapply(gS, '[',2)) else Gtable <- NA
+    rm(parmsMat, contTabsSim, gS,gVals); gc()
+    return(list(pmat=pmat, Gtable=Gtable))
+}
+

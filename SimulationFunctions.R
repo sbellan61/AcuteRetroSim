@@ -436,7 +436,7 @@ event.fn <- function(pars, dat, browse = F, ## transmission coefficients to use 
 ## ####################################################################
 cloop <- function(batch, dat, pars, breaks, vfreq, browse = F, death, acute.sc, dur.ac, subst = F, 
                   late.sc, dur.lt, aids.sc = 0, dur.aids, track.infpms = T) {
-    set.seed(batch)                     ## in case doing nonparametric inflation, we want each inflated couple to have different trajectories
+    #set.seed(batch)                     ## in case doing nonparametric inflation, we want each inflated couple to have different trajectories
     if(browse) browser()
     dat <- dat[breaks==batch,]          ## only simulate couples in the batch
     ## attach parameters
