@@ -11,6 +11,8 @@ s.epic.ind <- s.epic.nm <- NA # not substituting epidemic curves, this will caus
 ## Get fitted transmission coefficients from DHS for prior
 pars.arr <- out.arr[,,which(in.arr[,1,2]==7),] 
 hazs <- c("bmb","bfb","bme","bfe","bmp","bfp") 
+logParms <- c(hazs,'acute.sc')
+notlogParms <- c('dur.ac','het.gen.sd')
 spars <- pars.arr[hazs,,13]              # get transmission coefficients from base country
 
 ## Prior on pre-, extra-, and within-couple transmission parameters
@@ -104,6 +106,7 @@ simParmSamp <- function(n, parms=NULL, unifHaz=TRUE) {
     }}
 x <- simParmSamp(10)
 simParmSamp(parms=x)
+parnms <- names(simParmSamp(1)) ## useful later
 
 ####################################################################################################
 ## Function that does simulation & gets wtab all at once
@@ -191,3 +194,20 @@ collectSumStat <- function(filenm, returnGtable = F, browse=F, ncores = 12) {
     return(list(pmat=parmsMat, Gtable=Gtable))
 }
 
+
+sdPost <- function(pm) { ## get sd of posterior (on appropriate scale)
+    pmUnTransf <- pmatChosen
+    pmUnTransf[,logParms] <- log(pmUnTransf[,logParms])
+    return(apply(pmUnTransf, 2, sd))
+}
+ 
+perturbParticle <- function(parms, sds) { ## perturb a particle (must be done on appropriate scale
+    parms[logParms] <- exp(log(parms[logParms]) + runif(length(logParms), - sds[logParms], sds[logParms])) ## logged parms
+    parms[notlogParms] <- parms[notlogParms] + runif(length(notlogParms), - sds[notlogParms], sds[notlogParms]) ## others
+    return(parms)                           
+}
+
+weightParticle <- function() {
+
+
+}

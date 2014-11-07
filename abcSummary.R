@@ -9,7 +9,6 @@ if(!file.exists(fig.dir))      dir.create(fig.dir) # create directory if necessa
 if(!file.exists(out.dir))      dir.create(out.dir) # create directory if necessary
 fls <- list.files('results/abcBatch1', pattern='Rdata', full.names=T)
 #fls <- list.files('results/testDir', pattern='Rdata', full.names=T)
-parnms <- names(simParmSamp(1))
 ## tst <- collectSumStat(fls[2], browse=F, returnGtable=T)
 #pmatLs <- lapply(fls, collectSumStat, returnGtable=T) ## not enough mem to do more than a few cores
 
@@ -56,8 +55,14 @@ graphics.off()
 apply(pmat[,sel], 2, function(x) quantile(x,c(.025,.5,.975)))
 apply(pmat[with(pmat, gVals<cutf & enoughHet),sel], 2, function(x) quantile(x,c(.025,.5,.975)))
 
-cutf <- 4
+cutf <- 2
 pmatChosen <- pmat[with(pmat, gVals<cutf & enoughHet), parnms]
 dim(pmatChosen)
 head(pmatChosen)
+ehms <- with(pmatChosen, (acute.sc-1)*dur.ac)
+quantile(ehms,c(.025, .5, .975))
+ehmsprior <- with(pmat, (acute.sc-1)*dur.ac)
+quantile(ehmsprior,c(.025, .5, .975))
 head(simParmSamp(parms=pmatChosen))
+
+perturbParticle(pmatChosen[1,], sds)
