@@ -16,6 +16,7 @@ sapply(c("SimulationFunctions.R","RakFunctions.R",'abcFunctions.R'), source) # l
 set.seed(seed)
 SimMinutes <- 24*60 ## minutes to simulate for
 maxN <- 5000
+simParms <- simParmSamp(SimMinutes*20) ## each sim takes a minute, so this is conservative
 
 print(paste('seed is', seed))
 
@@ -24,7 +25,7 @@ ii <- 1
 timeTaken <- as.numeric(difftime(Sys.time(), startTime, units='mins'))
 rcohsList <- list()
 while(timeTaken < SimMinutes) { ##
-    temprcoh <- retroCohSim(parms = simParmSamp(1), seed = seed, maxN=maxN, browse=F)
+    temprcoh <- retroCohSim(parms = simParms[ii,], seed = seed, maxN=maxN, browse=F)
     rcohsList[[ii]] <- temprcoh
     ii <- ii+1
     timeTaken <- as.numeric(difftime(Sys.time(), startTime, units='mins'))
@@ -34,7 +35,7 @@ while(timeTaken < SimMinutes) { ##
 
 save(rcohsList, file = file.path(out.dir, paste0('rcohsList-',seed,'.Rdata')))
 
-
+## duplicated(do.call(rbind.data.frame, lapply(rcohsList, '[[','pars')))
 ## lapply(rcohsList, function(x) sbmod.to.wdat(x$rakll, excl.by.err = T, browse=F, giveLate=F, condRakai=T, giveProp=T))
 ## sbmod.to.wdat(rcohsList[[1]]$rakll, excl.by.err = T, browse=F, giveLate=F, condRakai=F, giveProp=T)
 ## sapply(c("SimulationFunctions.R","RakFunctions.R",'abcFunctions.R'), source) # load Rakai analysis simulation functions from script

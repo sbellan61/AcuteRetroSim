@@ -27,7 +27,7 @@ ageweib <- function(age, death = T) {
 ## simulator. Then compile output into a couple-level timeseries. Calls event.fn() (see below)
 psrun <- function(country=13, s.demog = country, # country to simulate;  country whose relationship patterns are to be used in simulation
                   saveFile = T, returnFileNm = T, ## return saved file name vs file itself
-                  seed = 1,              ## seed to set for random number generation
+                  setseed = T, seed = 1,              ## seed to set for random number generation
                   jobnum = NA, simj = NA,
                   maxN = 10^4, ## maximum simulated couple population size (sample inflated pop) to avoid memory problems
                   ## non-parametric approach to generate couple simulated population
@@ -71,7 +71,7 @@ psrun <- function(country=13, s.demog = country, # country to simulate;  country
                   cccol = "red",         ## concordant positive color
                   browse = F)            ## debug
     {
-        set.seed(seed)                      ## set RNG seed
+        if(setseed) set.seed(seed)                      ## set RNG seed
         start.time1 <- Sys.time()           ## track computation time
         odat <- dat                         ## store original data set workspace
         if(browse) browser()                ## debug

@@ -134,7 +134,7 @@ collectSumStat <- function(filenm, returnGtable = F, browse=F, ncores = 12) {
     ## Create parameter matrix
     parmsMat <- data.frame(parmsMat, PoisRHsMat, gVals, filenm = filenm, job = 1:nrow(parmsMat))
     pmat <- parmsMat[order(gVals),]
-    if(returnGtable) Gtable <- unlist(lapply(gS, '[',2)) else Gtable <- NA
+    if(returnGtable) Gtable <- lapply(gS, '[',2) else Gtable <- NA
     rm(parmsMat, contTabsSim, gS,gVals); gc()
     return(list(pmat=pmat, Gtable=Gtable))
 }
