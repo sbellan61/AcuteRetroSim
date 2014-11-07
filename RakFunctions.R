@@ -892,9 +892,10 @@ sbmod.to.wdat <- function(sim, browse=F, excl.by.err = F, giveLate = T, giveProp
         sim <- sim[resamp,]
     }
     ## early
-    sim$inf <- factor(sim$inf)
+    sim$inf <- factor(sim$inf, levels=c(0,1))
     inctab <- xtabs(~inf+kk, sim, subset=phase=='inc')
-    inct <- data.frame(int = 1, n = sum(sim$phase=='inc'), i = inctab[2,1])
+    inct <- try(data.frame(int = 1, n = sum(sim$phase=='inc'), i = inctab[2,1]))
+    if(inherits(inct, 'try-error')) {print(inctab); print(sum(sim$phase=='inc'))}
     if(ncol(inctab)>1) {
         for(ii in 2:min(4,ncol(inctab))) {
             temp <- data.frame(int = ii,
@@ -911,13 +912,15 @@ sbmod.to.wdat <- function(sim, browse=F, excl.by.err = F, giveLate = T, giveProp
                            i = prevtab[2,ii])
         prevt <- rbind(prevt, temp)
     }
-    if(simpPois) { ## just get an unadj Pois & an omnitient Pois reg (controlling for all heterogeneity), ignoring late phase
+    ## just get an unadj Pois & an omnitient Pois reg (controlling for all heterogeneity), ignoring late phase
+    ## only do if there aren't 0's in any of the inf/phase categories (neither all infected, or none infected in a phase), otherwise return NA (commented for now
+    if(simpPois) { # & sum(xtabs(~inf + phase, temprcoh$rakll)[,c('prev','inc')]==0)==0) {
         formul.uni <- formula('inf.trunc ~ offset(log(pm.trunc)) + phase')
         acuteRH.uni <- exp(coef(glm(formul.uni, family = "poisson", data = sim[sim$phase!='late',])))['phaseinc']
         formul.mult <- formula('inf.trunc ~ offset(log(pm.trunc)) + phase + secp.lhet')
         acuteRH.mult <- exp(coef(glm(formul.mult, family = "poisson", data = sim[sim$phase!='late',])))['phaseinc']
         PoisRHs <- c(univ = acuteRH.uni, omn = acuteRH.mult)
-    }else{ PoisRHs <- NA}
+    }else{ PoisRHs <- c(NA,NA)}
     if(giveLate) {
         ## late
         latetab <- xtabs(~inf+kk, sim, subset=phase=='late')
@@ -926,8 +929,8 @@ sbmod.to.wdat <- function(sim, browse=F, excl.by.err = F, giveLate = T, giveProp
         latet <- data.frame(int = 1:1, n = 0, i = 0)
         for(ii in 1:nrow(latet)) {
             int <- latet$int[ii]
-                                        #wh.tm <- sim$phase=='late' & (sim$kkt == int | (sim$kkt>int & sim$kk<=int))
-                                        #print(head(sim[wh.tm,],20))
+            ##wh.tm <- sim$phase=='late' & (sim$kkt == int | (sim$kkt>int & sim$kk<=int))
+            ##print(head(sim[wh.tm,],20))
             latet$n[latet$int==int] <- sum(sim$phase=='late' & (sim$kkt == int | (sim$kkt>int & sim$kk<=int)) )
             latet$i[latet$int==int] <- sum(sim$phase=='late' & sim$kk==int)
         }              

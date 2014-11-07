@@ -17,36 +17,93 @@ spars <- pars.arr[hazs,,13]              # get transmission coefficients from ba
 bump <- 5
 logHazMeans <- log(spars[,'50%']*bump)
 logHazSDs <- rowMeans(abs(log(spars[,c('2.5%','97.5%')])-log(spars[,'50%']))) / 1.96 ## ~1.96*SD of
+logHazUnifLoBound <- log(spars[,'50%']/15) ## 20X smaller & bigger than DHS estimates
+logHazUnifHiBound <- log(spars[,'50%']*15) ## 20X smaller & bigger than DHS estimates
+exp(rbind(logHazUnifLoBound,logHazUnifHiBound))
 ## parameter estimates on log scale monthly hazard = infections/(coital acts) * (coital acts)/month
 ## from Wawer. bump is because we know this needs to be bigger than Wawer's since prevalent
 ## couples have much lower hazard than the baseline in a hetrogeneous model
-logHazPrior <- function(n=1, scl = 1, mean = logHazSDs, sd = logHazSDs, extraUncertaintyHazs = 1.5) {
-    logHazSamp <- rnorm(6*n, logHazMeans, sd = logHazSDs*extraUncertaintyHazs)
-    return(matrix(exp(logHazSamp),nr=n, ncol = 6, byrow = T))
-}
+logHazPrior <- function(n=1, parms = NULL, scl = 1, mean = logHazSDs, sd = logHazSDs, extraUncertaintyHazs = 1.5) { 
+    if(is.null(parms[1])){ ## RNG
+        logHazSamp <- rnorm(6*n, logHazMeans, sd = logHazSDs*extraUncertaintyHazs)
+        samp <- matrix(exp(logHazSamp),nr=n, ncol = 6, byrow = T)
+        colnames(samp) <- hazs
+        return(samp)
+    }else{ ### give prior probability density
+        dprior <- log(parms)
+        for(ii in 1:ncol(parms)) dprior[,ii] <- dnorm(dprior[,ii], logHazMeans[ii], sd = logHazSDs[ii]*extraUncertaintyHazs)
+        return(dprior)
+    }}
+logHazPriorUnif <- function(n=1, parms = NULL, low=logHazUnifLoBound, high=logHazUnifHiBound) { ## less informative prior, uniform on wide range (on log scale)
+    if(is.null(parms[1])){ ## RNG
+        logHazSamp <- runif(6*n, low, high)
+        samp <- matrix(exp(logHazSamp),nr=n, ncol = 6, byrow = T)
+        colnames(samp) <- hazs
+        return(samp)
+    }else{ ### give prior probability density
+        dprior <- log(parms)
+        for(ii in 1:ncol(parms)) dprior[,ii] <- dunif(dprior[,ii], low[ii], high[ii])
+        return(dprior)
+    }}
+## Check to make sure it's working
 tst <- logHazPrior(1000)
+tstu <- logHazPriorUnif(1000)
+logHazPrior(1)
+logHazPrior(p=logHazPrior(1))
+logHazPriorUnif(1)
+logHazPriorUnif(p=logHazPrior(1)) ##100 fold difference on a log scale for all of them means same pdf for each parameter
 apply(tst, 2, function(x) quantile(x, c(.025,.5,.975)))
+apply(tstu, 2, function(x) quantile(x, c(.025,.5,.975)))
+exp(c(logHazUnifLoBound, logHazUnifHiBound))
 exp(logHazMeans)
 spars[,'50%']
 
 ## Flat uniform prior from 1 to 3
-hetGenSDPrior <- function(n) runif(n, 0, 3)
+hetGenSDPrior <- function(n, parms=NULL, lo = 0, hi = 3) {
+    if(is.null(parms[1])) return(runif(n, lo, hi)) else return(dunif(parms, lo, hi))## RNG
+}
+x <- hetGenSDPrior(10)
+hetGenSDPrior(parms=c(-.2,x,4)) # check its working
 
 ## Get RHacute prior centered on estimates from viral loads but with way more uncertainty
-extraUncertaintyRH <- 3.5
+extraUncertaintyRH <- 4
 log(ehms.vl['med'])-log(ehms.vl[c('lci','uci')]) ## How far away are bounds on a log scale? about .5
 sd_RHacutePrior <- .5/1.96 * extraUncertaintyRH ## add a bunch of extra uncertainty since this is just VL
-exp(qnorm(c(.025,.975), log(ehms.vl['med']), sd = sd_RHacutePrior)) ## 95% CI bounds: .97 - 32X as infectious
-rhAcutePrior <- function(n) exp(rnorm(n, log(ehms.vl['med']), sd = sd_RHacutePrior))
+exp(qnorm(c(.025,.975), log(ehms.vl['med']), sd = sd_RHacutePrior)) ## 95% CI bounds: .1 - 300X as infectious
+rhAcutePrior <- function(n, parms = NULL, mu = log(ehms.vl['med']), sig= sd_RHacutePrior) {
+    if(is.null(parms[1])) return(exp(rnorm(n, mu, sig))) else return(dnorm(log(parms), mu, sig))
+}
+x <- rhAcutePrior(10)
+rhAcutePrior(parms=x)
+cbind(1:50,rhAcutePrior(parms=1:50)) ## how uninformative is it? This seems pretty fair.
+
+pdf('FiguresAndTables/abcFig/RHprior.pdf',5.5,4)
+par(mar=c(5,4,1,.5), 'ps'=10)
+xs <- exp(seq(log(.5),log(300),l=300))
+ys <- rhAcutePrior(parms=xs)
+plot(xs,ys, type = 'l', lwd = 2, log='x', ylab = 'probability density', xlab=expression(RH[acute]), main = '', las = 1, bty = 'n')
+graphics.off()
 
 ## uniform from 2 weeks to 8 months
-durAcutePrior <- function(n) runif(n, .5, 8)
+durAcutePrior <- function(n, parms = NULL, lo = .5, hi = 8)   if(is.null(parms[1])) return(runif(n, lo, hi)) else return(dunif(parms, lo, hi))## RNG
+x <- durAcutePrior(10)
+durAcutePrior(parms=c(-.2,x,4)) # check its working
 
-simParmSamp <- function(n,...) {
-    samp <- data.frame(logHazPrior(n), acute.sc = rhAcutePrior(n), dur.ac = durAcutePrior(n), het.gen.sd = hetGenSDPrior(n))
-    names(samp)[1:6] <- hazs
-    return(samp)
-}
+simParmSamp <- function(n, parms=NULL, unifHaz=TRUE) {
+    if(is.null(parms)) {
+        if(unifHaz) samp <- data.frame(logHazPriorUnif(n), acute.sc = rhAcutePrior(n), dur.ac = durAcutePrior(n), het.gen.sd = hetGenSDPrior(n))
+        if(!unifHaz) samp <- data.frame(logHazPrior(n), acute.sc = rhAcutePrior(n), dur.ac = durAcutePrior(n), het.gen.sd = hetGenSDPrior(n))
+        return(samp)
+    }else{
+        dprior <- parms
+        if(unifHaz) dprior[,hazs] <- logHazPriorUnif(parms = parms[,hazs]) else dprior[,hazs] <- logHazPrior(parms = parms[,hazs])
+        dprior[,'acute.sc'] <- rhAcutePrior(parms = parms[,'acute.sc'])
+        dprior[,'dur.ac'] <- durAcutePrior(parms = parms[,'dur.ac'])
+        dprior[,'het.gen.sd'] <- hetGenSDPrior(parms = parms[,'het.gen.sd'])
+        return(dprior)
+    }}
+x <- simParmSamp(10)
+simParmSamp(parms=x)
 
 ####################################################################################################
 ## Function that does simulation & gets wtab all at once
@@ -65,11 +122,6 @@ retroCohSim <- function(parms=simParmSamp(1), maxN=10000, seed=1, nc=12, browse=
     minutesTaken <- as.numeric(difftime(Sys.time(), startTime, units='mins'))
     print(paste('minutes taken', round(minutesTaken,2)))
     return(rcohsim)
-}
-
-abcSimSumStat <- function(rcohsim) {
-    wtabSim <- sbmod.to.wdat(rcohsim$rakll, excl.by.err = T, browse=F, giveLate=F, condRakai=T)
-    return(list(wtabSim=wtabSim, parms=parms, minutesTaken=))
 }
 
 gStat <- function(x) { ## G test of independence
@@ -106,6 +158,12 @@ gSumStat <- function(wtab) { ## compare wtab to wtab.rl
     return(list(Gval = sum(incG,prevG, na.rm=T), Gtable))
 }
 
+contTabFxn <- function(x) within(x, { ## turn wtab into only having # infected & # uninfected
+    inct$ni <- with(inct, n-i)
+    inct <- inct[,c('i','ni')]
+    prevt$ni <- with(prevt, n-i)
+    prevt <- prevt[,c('i','ni')]})
+
 collectSumStat <- function(filenm, returnGtable = F, browse=F, ncores = 12) {
     if(browse) browser()
     print(filenm)
@@ -122,20 +180,14 @@ collectSumStat <- function(filenm, returnGtable = F, browse=F, ncores = 12) {
         enoughHet <- RHreduction > 11/7.25}) ## univariate unadjusted / multivariate from Wawer paper
     rm(rcohsList); gc()
     ## just get # infected & # uninfected
-    contTabsSim <- mclapply(wtabSims, function(x) {
-        x <- within(x, {
-            inct$ni <- with(inct, n-i)
-            inct <- inct[,c('i','ni')]
-            prevt$ni <- with(prevt, n-i)
-            prevt <- prevt[,c('i','ni')]})}, mc.cores=ncores)
+    contTabsSim <- mclapply(wtabSims, contTabFxn, mc.cores=ncores)
     ## Get G statistics
     gS <- mclapply(contTabsSim, gSumStat, mc.cores = ncores)
     gVals <- unlist(lapply(gS, '[',1))
     ## Create parameter matrix
     parmsMat <- data.frame(parmsMat, PoisRHsMat, gVals, filenm = filenm, job = 1:nrow(parmsMat))
-    pmat <- parmsMat[order(gVals),]
     if(returnGtable) Gtable <- lapply(gS, '[',2) else Gtable <- NA
-    rm(parmsMat, contTabsSim, gS,gVals); gc()
-    return(list(pmat=pmat, Gtable=Gtable))
+    rm(contTabsSim, gS,gVals); gc()
+    return(list(pmat=parmsMat, Gtable=Gtable))
 }
 

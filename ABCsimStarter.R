@@ -35,6 +35,13 @@ while(timeTaken < SimMinutes) { ##
 
 save(rcohsList, file = file.path(out.dir, paste0('rcohsList-',seed,'.Rdata')))
 
+## head(temprcoh$rakll)
+## temprcoh$rakll <- within(temprcoh$rakll, {inf[phase=='inc'] <- 0})
+## wt <- sbmod.to.wdat(temprcoh$rakll, simpPois=T, browse=F, condRakai=T, giveLate=F)
+## wt
+## ct <- contTabFxn(wt)
+## gS <- gSumStat(ct)
+
 ## duplicated(do.call(rbind.data.frame, lapply(rcohsList, '[[','pars')))
 ## lapply(rcohsList, function(x) sbmod.to.wdat(x$rakll, excl.by.err = T, browse=F, giveLate=F, condRakai=T, giveProp=T))
 ## sbmod.to.wdat(rcohsList[[1]]$rakll, excl.by.err = T, browse=F, giveLate=F, condRakai=F, giveProp=T)
