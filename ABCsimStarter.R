@@ -26,7 +26,9 @@ timeTaken <- as.numeric(difftime(Sys.time(), startTime, units='mins'))
 rcohsList <- list()
 while(timeTaken < SimMinutes) { ##
     temprcoh <- retroCohSim(parms = simParms[ii,], seed = seed, maxN=maxN, browse=F)
-    rcohsList[[ii]] <- temprcoh
+    plausible <- with(temprcoh$rakll, sum(phase=='inc') > 0 & sum(inf[phase=='inc']) > 0 & 
+                      sum(phase=='prev') > 0 & sum(inf[phase=='prev']) > 0) ## otherwise causes errors later on
+    if(plausible) rcohsList[[ii]] <- temprcoh
     ii <- ii+1
     timeTaken <- as.numeric(difftime(Sys.time(), startTime, units='mins'))
     print(paste('on', ii,'taken', round(timeTaken,2),'mins'))

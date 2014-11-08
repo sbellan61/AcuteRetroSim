@@ -9,7 +9,8 @@ if(!file.exists(fig.dir))      dir.create(fig.dir) # create directory if necessa
 if(!file.exists(out.dir))      dir.create(out.dir) # create directory if necessary
 fls <- list.files('results/abcBatch1', pattern='Rdata', full.names=T)
 #fls <- list.files('results/testDir', pattern='Rdata', full.names=T)
-## tst <- collectSumStat(fls[2], browse=F, returnGtable=T)
+
+##tst <- collectSumStat(fls[2], browse=T, returnGtable=T, ncores=1)
 #pmatLs <- lapply(fls, collectSumStat, returnGtable=T) ## not enough mem to do more than a few cores
 
 sel <- c('acute.sc','dur.ac','het.gen.sd','gVals')

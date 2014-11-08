@@ -11,36 +11,32 @@ s.epic.ind <- s.epic.nm <- NA # not substituting epidemic curves, this will caus
 ## Get fitted transmission coefficients from DHS for prior
 pars.arr <- out.arr[,,which(in.arr[,1,2]==7),] 
 hazs <- c("bmb","bfb","bme","bfe","bmp","bfp") 
-logParms <- c(hazs,'acute.sc')
-notlogParms <- c('dur.ac','het.gen.sd')
-spars <- pars.arr[hazs,,13]              # get transmission coefficients from base country
+ghazs <- c('bb','be','bp') ## geometric mean hazards
+mfs <- c('bm2f','em2f','pm2f')
+logParms <- c(hazs,'acute.sc','dur.ac')
+notlogParms <- c('het.gen.sd')
+gpars <- pars.arr[ghazs,,13]              # get transmission coefficients from base country
+mfratios <- pars.arr[mfs,,13]
 
-## Prior on pre-, extra-, and within-couple transmission parameters
-bump <- 5
-logHazMeans <- log(spars[,'50%']*bump)
-logHazSDs <- rowMeans(abs(log(spars[,c('2.5%','97.5%')])-log(spars[,'50%']))) / 1.96 ## ~1.96*SD of
-logHazUnifLoBound <- log(spars[,'50%']/15) ## 20X smaller & bigger than DHS estimates
-logHazUnifHiBound <- log(spars[,'50%']*15) ## 20X smaller & bigger than DHS estimates
-exp(rbind(logHazUnifLoBound,logHazUnifHiBound))
+## Parameterize by geometric mean hazard b/w genders M2F ratio to get at correlation structure from DHS
+
+## Prior on geometric pre-, extra-, and within-couple transmission parameters.  Go more up than down
+## because we know we're going to need more hazard if heterogeneity is added, but no reason to need
+## less hazard since the estimates are from a homogoneous model which can't get any more homogenous
+logGHazMeans <- log(gpars[,'50%'])
+logGHazLoBound <- log(gpars[,'50%']/5) ## 5X smaller than DHS estimates
+logGHazHiBound <- log(gpars[,'50%']*20) ## 20X bigger than DHS estimates
+gpars[,'50%']
+exp(rbind(logGHazLoBound,logGHazHiBound))
 ## parameter estimates on log scale monthly hazard = infections/(coital acts) * (coital acts)/month
 ## from Wawer. bump is because we know this needs to be bigger than Wawer's since prevalent
 ## couples have much lower hazard than the baseline in a hetrogeneous model
-logHazPrior <- function(n=1, parms = NULL, scl = 1, mean = logHazSDs, sd = logHazSDs, extraUncertaintyHazs = 1.5) { 
+
+logGHazPrior <- function(n=1, parms = NULL, low=logGHazLoBound, high=logGHazHiBound) { ## less informative prior, uniform on wide range (on log scale)
     if(is.null(parms[1])){ ## RNG
-        logHazSamp <- rnorm(6*n, logHazMeans, sd = logHazSDs*extraUncertaintyHazs)
-        samp <- matrix(exp(logHazSamp),nr=n, ncol = 6, byrow = T)
-        colnames(samp) <- hazs
-        return(samp)
-    }else{ ### give prior probability density
-        dprior <- log(parms)
-        for(ii in 1:ncol(parms)) dprior[,ii] <- dnorm(dprior[,ii], logHazMeans[ii], sd = logHazSDs[ii]*extraUncertaintyHazs)
-        return(dprior)
-    }}
-logHazPriorUnif <- function(n=1, parms = NULL, low=logHazUnifLoBound, high=logHazUnifHiBound) { ## less informative prior, uniform on wide range (on log scale)
-    if(is.null(parms[1])){ ## RNG
-        logHazSamp <- runif(6*n, low, high)
-        samp <- matrix(exp(logHazSamp),nr=n, ncol = 6, byrow = T)
-        colnames(samp) <- hazs
+        logGHazSamp <- runif(3*n, low, high)
+        samp <- matrix(exp(logGHazSamp),nr=n, ncol = 3, byrow = T)
+        colnames(samp) <- ghazs
         return(samp)
     }else{ ### give prior probability density
         dprior <- log(parms)
@@ -48,17 +44,33 @@ logHazPriorUnif <- function(n=1, parms = NULL, low=logHazUnifLoBound, high=logHa
         return(dprior)
     }}
 ## Check to make sure it's working
-tst <- logHazPrior(1000)
-tstu <- logHazPriorUnif(1000)
-logHazPrior(1)
-logHazPrior(p=logHazPrior(1))
-logHazPriorUnif(1)
-logHazPriorUnif(p=logHazPrior(1)) ##100 fold difference on a log scale for all of them means same pdf for each parameter
-apply(tst, 2, function(x) quantile(x, c(.025,.5,.975)))
-apply(tstu, 2, function(x) quantile(x, c(.025,.5,.975)))
-exp(c(logHazUnifLoBound, logHazUnifHiBound))
-exp(logHazMeans)
-spars[,'50%']
+logGHazPrior(1)
+logGHazPrior(p=logGHazPrior(1))
+apply(logGHazPrior(10^4), 2, function(x) quantile(x, c(.025,.5,.975)))
+exp(rbind(logGHazLoBound, logGHazHiBound))
+exp(logGHazMeans)
+gpars[,'50%']
+
+
+logM2Fsd <- rowMeans(log(mfratios[,c(2,3)])-log(mfratios[,c(1,2)]))/1.96 ## SD on log scale (using average of 97.5-50 & 50-2.5%)
+logM2Fmean <- log(mfratios[,2])
+## Priors on log(M2F) ratios for each route
+logM2FPrior <- function(n=1, parms=NULL, mu=logM2Fmean, sig=logM2Fsd) {
+    if(is.null(parms[1])) {
+        logM2FSamp <- rnorm(3*n, mean = mu, sd = sig)
+        samp <- matrix(exp(logM2FSamp), nr=n, ncol = 3, byrow = T)
+        colnames(samp) <- mfs
+        return(samp)
+    }else{
+        dprior <- log(parms)
+        for(ii in 1:ncol(parms)) dprior[,ii] <- dnorm(dprior[,ii], mu[ii], sig[ii])
+        return(dprior)
+    }}
+## Check to make sure it's working
+logM2FPrior(3)
+logM2FPrior(parms=logM2FPrior(3))
+apply(logM2FPrior(10^4), 2, function(x) quantile(x, c(.025,.5,.975)))
+mfratios ## looks like it's simulating well!
 
 ## Flat uniform prior from 1 to 3
 hetGenSDPrior <- function(n, parms=NULL, lo = 0, hi = 3) {
@@ -67,51 +79,78 @@ hetGenSDPrior <- function(n, parms=NULL, lo = 0, hi = 3) {
 x <- hetGenSDPrior(10)
 hetGenSDPrior(parms=c(-.2,x,4)) # check its working
 
-## Get RHacute prior centered on estimates from viral loads but with way more uncertainty
-extraUncertaintyRH <- 4
-log(ehms.vl['med'])-log(ehms.vl[c('lci','uci')]) ## How far away are bounds on a log scale? about .5
-sd_RHacutePrior <- .5/1.96 * extraUncertaintyRH ## add a bunch of extra uncertainty since this is just VL
-exp(qnorm(c(.025,.975), log(ehms.vl['med']), sd = sd_RHacutePrior)) ## 95% CI bounds: .1 - 300X as infectious
-rhAcutePrior <- function(n, parms = NULL, mu = log(ehms.vl['med']), sig= sd_RHacutePrior) {
-    if(is.null(parms[1])) return(exp(rnorm(n, mu, sig))) else return(dnorm(log(parms), mu, sig))
-}
-x <- rhAcutePrior(10)
-rhAcutePrior(parms=x)
-cbind(1:50,rhAcutePrior(parms=1:50)) ## how uninformative is it? This seems pretty fair.
+## uniform from 1/2X to 50X
+rhAcutePrior <- function(n, parms = NULL, lo = .5, hi = 200) {
+    if(is.null(parms[1])) {
+        samp <- runif(n, log(lo), log(hi))
+        return(exp(samp)) 
+    }else{
+        return(dunif(log(parms), log(lo), log(hi)))
+    }}
+rhAcutePrior(10)
+quantile(rhAcutePrior(10^4), c(.025,.5,.975))
 
 pdf('FiguresAndTables/abcFig/RHprior.pdf',5.5,4)
 par(mar=c(5,4,1,.5), 'ps'=10)
-xs <- exp(seq(log(.5),log(300),l=300))
+xs <- exp(seq(log(.5),log(500),l=500))
 ys <- rhAcutePrior(parms=xs)
-plot(xs,ys, type = 'l', lwd = 2, log='x', ylab = 'probability density', xlab=expression(RH[acute]), main = '', las = 1, bty = 'n')
+plot(xs,ys, type = 'l', lwd = 2, log='x', ylab = 'probability density', xlab=expression(RH[acute]), main = '', las = 1, bty = 'n', xlim=c(.5,500))
 graphics.off()
 
 ## uniform from 2 weeks to 8 months
-durAcutePrior <- function(n, parms = NULL, lo = .5, hi = 8)   if(is.null(parms[1])) return(runif(n, lo, hi)) else return(dunif(parms, lo, hi))## RNG
+durAcutePrior <- function(n, parms = NULL, lo = .5, hi = 8) {
+    if(is.null(parms[1])) {
+        samp <- runif(n, log(lo), log(hi))
+        return(exp(samp)) 
+    }else{
+        return(dunif(log(parms), log(lo), log(hi)))
+    }}
 x <- durAcutePrior(10)
-durAcutePrior(parms=c(-.2,x,4)) # check its working
+durAcutePrior(parms=c(.1,x,4)) # check its working
 
-simParmSamp <- function(n, parms=NULL, unifHaz=TRUE) {
+simParmSamp <- function(n, parms=NULL) {
     if(is.null(parms)) {
-        if(unifHaz) samp <- data.frame(logHazPriorUnif(n), acute.sc = rhAcutePrior(n), dur.ac = durAcutePrior(n), het.gen.sd = hetGenSDPrior(n))
-        if(!unifHaz) samp <- data.frame(logHazPrior(n), acute.sc = rhAcutePrior(n), dur.ac = durAcutePrior(n), het.gen.sd = hetGenSDPrior(n))
+        samp <- data.frame(logGHazPrior(n), logM2FPrior(n),
+                           acute.sc = rhAcutePrior(n), dur.ac = durAcutePrior(n), het.gen.sd = hetGenSDPrior(n))
         return(samp)
     }else{
         dprior <- parms
-        if(unifHaz) dprior[,hazs] <- logHazPriorUnif(parms = parms[,hazs]) else dprior[,hazs] <- logHazPrior(parms = parms[,hazs])
+        dprior[,ghazs] <- logGHazPrior(parms = parms[,ghazs])
+        dprior[,mfs] <- logM2FPrior(parms = parms[,mfs])
         dprior[,'acute.sc'] <- rhAcutePrior(parms = parms[,'acute.sc'])
         dprior[,'dur.ac'] <- durAcutePrior(parms = parms[,'dur.ac'])
         dprior[,'het.gen.sd'] <- hetGenSDPrior(parms = parms[,'het.gen.sd'])
         return(dprior)
     }}
+
+simParmSamp(10)
 x <- simParmSamp(10)
 simParmSamp(parms=x)
 parnms <- names(simParmSamp(1)) ## useful later
+
+simParmConverter <- function(parms) {
+    ghazSamp <- log(parms[,ghazs])
+    M2FSamp <- log(parms[,mfs])
+    mSamp <- ghazSamp + M2FSamp/2
+    fSamp <- ghazSamp - M2FSamp/2
+    colnames(mSamp) <- c('bmb','bme','bmp')
+    colnames(fSamp) <- c('bfb','bfe','bfp')
+    hazSamp <- exp(cbind(mSamp,fSamp)[,hazs]) ## order columns
+    parms <- data.frame(parms,hazSamp)
+    return(parms)
+}
+simParmConverter(simParmSamp(10)) ## looking good
+tst <- apply(simParmConverter(simParmSamp(10^4)), 2, function(x) quantile(x, c(.025,.5,.975))) ## looking good
+tst['2.5%',hazs]
+t(pars.arr[hazs,2,13]*.2) ## 
+tst['97.5%',hazs]
+t(pars.arr[hazs,2,13]*20) ## all good going 5x lower & 20x higher
 
 ####################################################################################################
 ## Function that does simulation & gets wtab all at once
 retroCohSim <- function(parms=simParmSamp(1), maxN=10000, seed=1, nc=12, browse=F) {
     startTime <- Sys.time()
+    parms <- simParmConverter(parms)
     output <- with(parms, psrun(maxN = maxN, jobnum = seed, pars = parms[hazs], save.new = T, return.ts = T, returnFileNm=F, saveFile=F, seed = seed,
                                     acute.sc = acute.sc, dur.ac = dur.ac, het.gen=T, het.gen.sd = het.gen.sd, browse = F, nc = nc))
     cohsim <- rak.coh.fxn(output, #ts.ap = output$ts, dat = output$evout, dpars = output$rakpars,
@@ -138,42 +177,47 @@ gStat <- function(x) { ## G test of independence
 }
 
 gSumStat <- function(wtab) { ## compare wtab to wtab.rl
-    prevG <- incG <- numeric(4)
-    ## inc
-    if(nrow(wtab$inct)<4) { ## deal with less rows
-        nr <- nrow(wtab$inct)
-        for(rr in (nr+1):4) wtab$inct[rr,] <- c(NA,NA)
-    }
-    for(ii in 1:4) {
-        incG[ii] <- gStat(rbind(contTabsRl$inct[ii,], wtab$inct[ii,]))
-    }
-    incG[is.nan(incG)] <- 0
-    ## prev
-    if(nrow(wtab$prevt)<4) { ## deal with less rows
-        nr <- nrow(wtab$prevt)
-        for(rr in (nr+1):4) wtab$prevt[rr,] <- c(NA,NA)
-    }
-    for(ii in 1:4) {
-        prevG[ii] <- gStat(rbind(contTabsRl$prevt[ii,], wtab$prevt[ii,]))
-    }
-    prevG[is.nan(prevG)] <- 0
-    Gtable <- abind(cbind(contTabsRl$inct, wtab$inct, incG), cbind(contTabsRl$prevt, wtab$prevt, prevG),  along = 3)
-    return(list(Gval = sum(incG,prevG, na.rm=T), Gtable))
+    if(!is.na(wtab[1])) {
+        prevG <- incG <- numeric(4)
+        ## inc
+        if(nrow(wtab$inct)<4) { ## deal with less rows
+            nr <- nrow(wtab$inct)
+            for(rr in (nr+1):4) wtab$inct[rr,] <- c(NA,NA)
+        }
+        for(ii in 1:4) {
+            incG[ii] <- gStat(rbind(contTabsRl$inct[ii,], wtab$inct[ii,]))
+        }
+        incG[is.nan(incG)] <- 0
+        ## prev
+        if(nrow(wtab$prevt)<4) { ## deal with less rows
+            nr <- nrow(wtab$prevt)
+            for(rr in (nr+1):4) wtab$prevt[rr,] <- c(NA,NA)
+        }
+        for(ii in 1:4) {
+            prevG[ii] <- gStat(rbind(contTabsRl$prevt[ii,], wtab$prevt[ii,]))
+        }
+        prevG[is.nan(prevG)] <- 0
+        Gtable <- abind(cbind(contTabsRl$inct, wtab$inct, incG), cbind(contTabsRl$prevt, wtab$prevt, prevG),  along = 3)
+        return(list(Gval = sum(incG,prevG, na.rm=T), Gtable))
+    }else{    return(list(Gval = NA, Gtable=NA)) }
 }
 
 contTabFxn <- function(x) within(x, { ## turn wtab into only having # infected & # uninfected
-    inct$ni <- with(inct, n-i)
-    inct <- inct[,c('i','ni')]
-    prevt$ni <- with(prevt, n-i)
-    prevt <- prevt[,c('i','ni')]})
+    if(!is.na(as.vector(inct)[1])) {
+        inct$ni <- with(inct, n-i)
+        inct <- inct[,c('i','ni')]
+        prevt$ni <- with(prevt, n-i)
+        prevt <- prevt[,c('i','ni')]
+    }else{ return(NA) }
+})
 
 collectSumStat <- function(filenm, returnGtable = F, browse=F, ncores = 12) {
     if(browse) browser()
     print(filenm)
     load(filenm)
     ## Convert to wtab
-    wtabSims <- mclapply(rcohsList, function(x) sbmod.to.wdat(x$rakll, excl.by.err = T, browse=F, giveLate=F, condRakai=T, giveProp=T, simpPois=T),
-                         mc.cores=ncores)
+    wtabSims <- mclapply(rcohsList, function(x) sbmod.to.wdat(x$rakll, excl.by.err = T, browse=F, giveLate=F, 
+                                                              condRakai=T, giveProp=T, simpPois=T), mc.cores=ncores)
     parmsMat <- matrix(unlist(lapply(rcohsList, '[[', 'pars')), nr = length(rcohsList), nc = 9, byrow=T)
     PoisRHsMat <- data.frame(matrix(unlist(lapply(wtabSims, '[[', 'PoisRHs')), nr = length(rcohsList), nc = 2, byrow=T))
     colnames(parmsMat) <- names(rcohsList[[1]]$pars)
@@ -183,7 +227,7 @@ collectSumStat <- function(filenm, returnGtable = F, browse=F, ncores = 12) {
         enoughHet <- RHreduction > 11/7.25}) ## univariate unadjusted / multivariate from Wawer paper
     rm(rcohsList); gc()
     ## just get # infected & # uninfected
-    contTabsSim <- mclapply(wtabSims, contTabFxn, mc.cores=ncores)
+    contTabsSim <- suppressWarnings(mclapply(wtabSims, contTabFxn, mc.cores=ncores)) ## suppressing length 1 for is.na(), not problematic
     ## Get G statistics
     gS <- mclapply(contTabsSim, gSumStat, mc.cores = ncores)
     gVals <- unlist(lapply(gS, '[',1))

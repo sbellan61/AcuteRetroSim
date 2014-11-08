@@ -880,6 +880,7 @@ sbmod.to.wdat <- function(sim, browse=F, excl.by.err = F, giveLate = T, giveProp
     ## Excluding incident couples seen serodiscordant once & then never again as in Wawer 2005?
     if(browse) browser()
     if(excl.by.err) sim <- sim[!sim$excl.by.err,]
+    if(!sum(sim$inf[sim$phase=='inc'])==0 & !sum(sim$inf[sim$phase=='prev'])==0 & !sum(sim$phase=='inc')==0) { ##otherwise just return NA
     ## Condition on Rakai sample sizes by sampling with replacement
     if(condRakai) {
         inc.wh <- which(sim$phase=='inc')
@@ -891,62 +892,65 @@ sbmod.to.wdat <- function(sim, browse=F, excl.by.err = F, giveLate = T, giveProp
                   }
         sim <- sim[resamp,]
     }
-    ## early
-    sim$inf <- factor(sim$inf, levels=c(0,1))
-    inctab <- xtabs(~inf+kk, sim, subset=phase=='inc')
-    inct <- try(data.frame(int = 1, n = sum(sim$phase=='inc'), i = inctab[2,1]))
-    if(inherits(inct, 'try-error')) {print(inctab); print(sum(sim$phase=='inc'))}
-    if(ncol(inctab)>1) {
-        for(ii in 2:min(4,ncol(inctab))) {
+        ## early
+        sim$inf <- factor(sim$inf, levels=c(0,1))
+        inctab <- xtabs(~inf+kk, sim, subset=phase=='inc')
+        inct <- try(data.frame(int = 1, n = sum(sim$phase=='inc'), i = inctab[2,1]))
+        if(inherits(inct, 'try-error')) {print(inctab); print(sum(sim$phase=='inc'))}
+        if(ncol(inctab)>1) {
+            for(ii in 2:min(4,ncol(inctab))) {
+                temp <- data.frame(int = ii,
+                                   n =  inct$n[ii-1] - inct$i[ii-1] - inctab[1,ii-1],
+                                   i = inctab[2,ii])
+                inct <- rbind(inct, temp)
+            }}
+        ## prev
+        prevtab <- xtabs(~inf+kk, sim, subset=phase=='prev')
+        prevt <- data.frame(int = 1, n = sum(sim$phase=='prev'), i = prevtab[2,1])
+        for(ii in 2:ncol(prevtab)) {
             temp <- data.frame(int = ii,
-                               n =  inct$n[ii-1] - inct$i[ii-1] - inctab[1,ii-1],
-                               i = inctab[2,ii])
-            inct <- rbind(inct, temp)
-        }}
-    ## prev
-    prevtab <- xtabs(~inf+kk, sim, subset=phase=='prev')
-    prevt <- data.frame(int = 1, n = sum(sim$phase=='prev'), i = prevtab[2,1])
-    for(ii in 2:ncol(prevtab)) {
-        temp <- data.frame(int = ii,
-                           n =  prevt$n[ii-1] - prevt$i[ii-1] - prevtab[1,ii-1],
-                           i = prevtab[2,ii])
-        prevt <- rbind(prevt, temp)
-    }
-    ## just get an unadj Pois & an omnitient Pois reg (controlling for all heterogeneity), ignoring late phase
-    ## only do if there aren't 0's in any of the inf/phase categories (neither all infected, or none infected in a phase), otherwise return NA (commented for now
-    if(simpPois) { # & sum(xtabs(~inf + phase, temprcoh$rakll)[,c('prev','inc')]==0)==0) {
-        formul.uni <- formula('inf.trunc ~ offset(log(pm.trunc)) + phase')
-        acuteRH.uni <- exp(coef(glm(formul.uni, family = "poisson", data = sim[sim$phase!='late',])))['phaseinc']
-        formul.mult <- formula('inf.trunc ~ offset(log(pm.trunc)) + phase + secp.lhet')
-        acuteRH.mult <- exp(coef(glm(formul.mult, family = "poisson", data = sim[sim$phase!='late',])))['phaseinc']
-        PoisRHs <- c(univ = acuteRH.uni, omn = acuteRH.mult)
-    }else{ PoisRHs <- c(NA,NA)}
-    if(giveLate) {
-        ## late
-        latetab <- xtabs(~inf+kk, sim, subset=phase=='late')
-        maxints <- max(sim$kkt, na.rm=T)
-        if(maxints==-Inf) maxints <- 1
-        latet <- data.frame(int = 1:1, n = 0, i = 0)
-        for(ii in 1:nrow(latet)) {
-            int <- latet$int[ii]
-            ##wh.tm <- sim$phase=='late' & (sim$kkt == int | (sim$kkt>int & sim$kk<=int))
-            ##print(head(sim[wh.tm,],20))
-            latet$n[latet$int==int] <- sum(sim$phase=='late' & (sim$kkt == int | (sim$kkt>int & sim$kk<=int)) )
-            latet$i[latet$int==int] <- sum(sim$phase=='late' & sim$kk==int)
-        }              
-        head(sim[sim$phase=='late',],10)
-        if(giveProp) {
-            inct$p <- with(inct, i/n)
-            prevt$p <- with(prevt, i/n)
-            if(giveLate) latet$p <- with(latet, i/n)
+                               n =  prevt$n[ii-1] - prevt$i[ii-1] - prevtab[1,ii-1],
+                               i = prevtab[2,ii])
+            prevt <- rbind(prevt, temp)
         }
-        return(list(inct=inct, prevt=prevt, latet= latet))
+        ## just get an unadj Pois & an omnitient Pois reg (controlling for all heterogeneity), ignoring late phase
+        ## only do if there aren't 0's in any of the inf/phase categories (neither all infected, or none infected in a phase), otherwise return NA (commented for now
+        if(simpPois) { # & sum(xtabs(~inf + phase, temprcoh$rakll)[,c('prev','inc')]==0)==0) {
+            formul.uni <- formula('inf.trunc ~ offset(log(pm.trunc)) + phase')
+            acuteRH.uni <- exp(coef(glm(formul.uni, family = "poisson", data = sim[sim$phase!='late',])))['phaseinc']
+            formul.mult <- formula('inf.trunc ~ offset(log(pm.trunc)) + phase + secp.lhet')
+            acuteRH.mult <- exp(coef(glm(formul.mult, family = "poisson", data = sim[sim$phase!='late',])))['phaseinc']
+            PoisRHs <- c(univ = acuteRH.uni, omn = acuteRH.mult)
+        }else{ PoisRHs <- c(NA,NA)}
+        if(giveLate) {
+            ## late
+            latetab <- xtabs(~inf+kk, sim, subset=phase=='late')
+            maxints <- max(sim$kkt, na.rm=T)
+            if(maxints==-Inf) maxints <- 1
+            latet <- data.frame(int = 1:1, n = 0, i = 0)
+            for(ii in 1:nrow(latet)) {
+                int <- latet$int[ii]
+                ##wh.tm <- sim$phase=='late' & (sim$kkt == int | (sim$kkt>int & sim$kk<=int))
+                ##print(head(sim[wh.tm,],20))
+                latet$n[latet$int==int] <- sum(sim$phase=='late' & (sim$kkt == int | (sim$kkt>int & sim$kk<=int)) )
+                latet$i[latet$int==int] <- sum(sim$phase=='late' & sim$kk==int)
+            }              
+            head(sim[sim$phase=='late',],10)
+            if(giveProp) {
+                inct$p <- with(inct, i/n)
+                prevt$p <- with(prevt, i/n)
+                if(giveLate) latet$p <- with(latet, i/n)
+            }
+            return(list(inct=inct, prevt=prevt, latet= latet))
+        }else{
+            if(giveProp) {
+                inct$p <- with(inct, i/n)
+                prevt$p <- with(prevt, i/n)
+            }
+            return(list(inct=inct, prevt=prevt, PoisRHs=PoisRHs))}
     }else{
-        if(giveProp) {
-            inct$p <- with(inct, i/n)
-            prevt$p <- with(prevt, i/n)
-        }
-        return(list(inct=inct, prevt=prevt, PoisRHs=PoisRHs))}
+        return(list(inct=NA, prevt=NA, PoisRHs=c(NA,NA), error='No infections in incident couples'))
+    }
 }
 
 ####################################################################################################
