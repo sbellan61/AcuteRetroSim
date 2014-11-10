@@ -13,19 +13,23 @@ pars.arr <- out.arr[,,which(in.arr[,1,2]==7),]
 hazs <- c("bmb","bfb","bme","bfe","bmp","bfp") 
 ghazs <- c('bb','be','bp') ## geometric mean hazards
 mfs <- c('bm2f','em2f','pm2f')
-logParms <- c(hazs,'acute.sc','dur.ac')
+logParms <- c(ghazs,mfs,'acute.sc','dur.ac')
 notlogParms <- c('het.gen.sd')
 gpars <- pars.arr[ghazs,,13]              # get transmission coefficients from base country
 mfratios <- pars.arr[mfs,,13]
 
 ## Parameterize by geometric mean hazard b/w genders M2F ratio to get at correlation structure from DHS
 
-## Prior on geometric pre-, extra-, and within-couple transmission parameters.  Go more up than down
+## Prior on geometric mean within-couple transmission parameters.  Go more up than down
 ## because we know we're going to need more hazard if heterogeneity is added, but no reason to need
 ## less hazard since the estimates are from a homogoneous model which can't get any more homogenous
-logGHazMeans <- log(gpars[,'50%'])
-logGHazLoBound <- log(gpars[,'50%']/5) ## 5X smaller than DHS estimates
-logGHazHiBound <- log(gpars[,'50%']*20) ## 20X bigger than DHS estimates
+logGHazLoBound <- logGHazHiBound <- logGHazMeans <- log(gpars[,'50%'])
+logGHazLoBound['bp'] <- log(gpars['bp','50%']/5) ## 5X smaller than DHS estimates
+logGHazHiBound['bp'] <- log(gpars['bp','50%']*1000) ## 1000X bigger than DHS
+## User tighter prior for pre-couple/extra-couple (can't be too big b/c couldn't have DHS data
+## results if these were substantially different
+logGHazLoBound[c('bb','be')] <- log(gpars[c('bb','be'),'50%']/5) ## 5X smaller than DHS estimates 
+logGHazHiBound[c('bb','be')] <- log(gpars[c('bb','be'),'50%']*15) ## 15X bigger than DHS estimates
 gpars[,'50%']
 exp(rbind(logGHazLoBound,logGHazHiBound))
 ## parameter estimates on log scale monthly hazard = infections/(coital acts) * (coital acts)/month
@@ -146,6 +150,34 @@ t(pars.arr[hazs,2,13]*.2) ##
 tst['97.5%',hazs]
 t(pars.arr[hazs,2,13]*20) ## all good going 5x lower & 20x higher
 
+
+sdPost <- function(pm) { ## get sd of posterior (on appropriate scale)
+    pmUnTransf <- pmatChosen
+    pmUnTransf[,logParms] <- log(pmUnTransf[,logParms])
+    return(apply(pmUnTransf, 2, sd))
+}
+
+## perturb a particle (must be done on appropriate scale). If from given, then calculute probability
+## density of perturbing to parms from 'from' for kernel in weight denominator
+perturbParticle <- function(parms, from=NULL, sds) { 
+    if(!is.null(from)) {
+        parms[logParms] <- exp(log(parms[logParms]) + runif(length(logParms), - sds[logParms], sds[logParms])) ## logged parms
+        parms[notlogParms] <- parms[notlogParms] + runif(length(notlogParms), - sds[notlogParms], sds[notlogParms]) ## others
+        return(parms)   
+    }else{
+        dprior <- parms
+        dprior[logParms] <- dunif(parms[logParms], from[logParms] - sds[logParms], from[logParms] + sds[logParms])
+        dprior[notlogParms] <- dunif(parms[notlogParms], from[notlogParms] - sds[notlogParms], from[notlogParms] + sds[notlogParms])
+        return(prod(dprior))
+    }}
+
+## weightParticles <- function(parmsChosen, browse = F) {
+##     if(browse) browser()
+##     dprior <- apply(simParmSamp(parms=parmsChosen), 1, prod)
+##     for(jj in 1:length(dprior)) {
+##         parmsChosen$weight * sapply(parmsChosen[pars], perturbParticle)
+##     }}
+
 ####################################################################################################
 ## Function that does simulation & gets wtab all at once
 retroCohSim <- function(parms=simParmSamp(1), maxN=10000, seed=1, nc=12, browse=F) {
@@ -211,20 +243,27 @@ contTabFxn <- function(x) within(x, { ## turn wtab into only having # infected &
     }else{ return(NA) }
 })
 
-collectSumStat <- function(filenm, returnGtable = F, browse=F, ncores = 12) {
+collectSumStat <- function(filenm, returnGtable = F, browse=F, ncores = 12, rmNull=T) {
     if(browse) browser()
     print(filenm)
     load(filenm)
+    ## if returning no output because of non-plausible (not enough couples in inc/prev or 0 infected
+    ## inc)
+    plausible <- !unlist(lapply(rcohsList, is.null)) 
+    rcohsList <- rcohsList[plausible]
     ## Convert to wtab
     wtabSims <- mclapply(rcohsList, function(x) sbmod.to.wdat(x$rakll, excl.by.err = T, browse=F, giveLate=F, 
                                                               condRakai=T, giveProp=T, simpPois=T), mc.cores=ncores)
-    parmsMat <- matrix(unlist(lapply(rcohsList, '[[', 'pars')), nr = length(rcohsList), nc = 9, byrow=T)
+    nCplMat <- do.call(rbind.data.frame, mclapply(rcohsList, function(x) xtabs(~phase, x$rakll)))
+    colnames(nCplMat) <- levels(rcohsList[[1]]$rakll$phase)
+    parmsMat <- matrix(unlist(lapply(rcohsList, '[[', 'pars')), nr = length(rcohsList), nc = 15, byrow=T)
     PoisRHsMat <- data.frame(matrix(unlist(lapply(wtabSims, '[[', 'PoisRHs')), nr = length(rcohsList), nc = 2, byrow=T))
     colnames(parmsMat) <- names(rcohsList[[1]]$pars)
-    colnames(PoisRHsMat) <- names(wtabSims[[1]]$PoisRHs)
+    colnames(PoisRHsMat) <- c('univ','omn')
     PoisRHsMat <- within(PoisRHsMat, {
-        RHreduction <- univ.phaseinc/omn.phaseinc
-        enoughHet <- RHreduction > 11/7.25}) ## univariate unadjusted / multivariate from Wawer paper
+        RHreduction <- univ/omn
+        enoughHet <- RHreduction > 11/7.25      ##  univariate unadjusted / multivariate from Wawer paper
+    })
     rm(rcohsList); gc()
     ## just get # infected & # uninfected
     contTabsSim <- suppressWarnings(mclapply(wtabSims, contTabFxn, mc.cores=ncores)) ## suppressing length 1 for is.na(), not problematic
@@ -232,26 +271,12 @@ collectSumStat <- function(filenm, returnGtable = F, browse=F, ncores = 12) {
     gS <- mclapply(contTabsSim, gSumStat, mc.cores = ncores)
     gVals <- unlist(lapply(gS, '[',1))
     ## Create parameter matrix
-    parmsMat <- data.frame(parmsMat, PoisRHsMat, gVals, filenm = filenm, job = 1:nrow(parmsMat))
+    parmsMat <- data.frame(parmsMat, nCplMat, PoisRHsMat, gVals, filenm = filenm, job = 1:nrow(parmsMat))
     if(returnGtable) Gtable <- lapply(gS, '[',2) else Gtable <- NA
     rm(contTabsSim, gS,gVals); gc()
     return(list(pmat=parmsMat, Gtable=Gtable))
 }
 
 
-sdPost <- function(pm) { ## get sd of posterior (on appropriate scale)
-    pmUnTransf <- pmatChosen
-    pmUnTransf[,logParms] <- log(pmUnTransf[,logParms])
-    return(apply(pmUnTransf, 2, sd))
-}
- 
-perturbParticle <- function(parms, sds) { ## perturb a particle (must be done on appropriate scale
-    parms[logParms] <- exp(log(parms[logParms]) + runif(length(logParms), - sds[logParms], sds[logParms])) ## logged parms
-    parms[notlogParms] <- parms[notlogParms] + runif(length(notlogParms), - sds[notlogParms], sds[notlogParms]) ## others
-    return(parms)                           
-}
-
-weightParticle <- function() {
-
-
-}
+## to delete a range of jobs
+## qdel echo `seq -f "%.0f" 2282389 2282404`

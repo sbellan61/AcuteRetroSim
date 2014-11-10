@@ -223,7 +223,7 @@ rak.coh.fxn <- function(output, interv = 10, max.vis = 5, start.rak=1994, end.ra
       ltfp.d <- 1 - exp(-rr.ltf.d * ltf.rt * interv) ## probability of loss to follow up in each interval (hh)
       ## Identify incident serodiscordant visits as high risk for LTF
       inc.sdc.wh <- which(apply(ts.vm, 2, function(x) sum(x[-nrow(ts.vm)]=='ss' & x[-1] %in% sdcs))==1)
-      inc.sdc.wh.tt <- apply(ts.vm[,inc.sdc.wh], 2, function(x) which(x[-nrow(ts.vm)]=='ss' & x[-1] %in% sdcs)) + 1
+      inc.sdc.wh.tt <- apply(ts.vm[,inc.sdc.wh,drop=F], 2, function(x) which(x[-nrow(ts.vm)]=='ss' & x[-1] %in% sdcs)) + 1
       ## ts.vm[,head(inc.sdc.wh)] ## couples that were seroincident
       ## head(inc.sdc.wh.tt)      ## which visit were they first serodiscordant?
       ## create ltfp matrix
@@ -876,27 +876,28 @@ ucp.lt.2 <- function(latet, dpars, browse=F) {
  
  
 ## turn SB simulation into Wawer style table
-sbmod.to.wdat <- function(sim, browse=F, excl.by.err = F, giveLate = T, giveProp = F, condRakai=F, RakSamp = c(inc = 23, prev = 161, late=51), simpPois=F) {    
+sbmod.to.wdat <- function(simorg, browse=F, excl.by.err = F, giveLate = T, giveProp = F, condRakai=F, RakSamp = c(inc = 23, prev = 161, late=51), simpPois=F) {    
     ## Excluding incident couples seen serodiscordant once & then never again as in Wawer 2005?
     if(browse) browser()
-    if(excl.by.err) sim <- sim[!sim$excl.by.err,]
+    if(excl.by.err) sim <- simorg[!simorg$excl.by.err,]
+        ## Condition on Rakai sample sizes by sampling with replacement
+        if(condRakai) {
+            inc.wh <- which(sim$phase=='inc')
+            prev.wh <- which(sim$phase=='prev')
+            if(giveLate) {prev.wh <- which(sim$phase=='prev')
+                          resamp <- c(sample(inc.wh, RakSamp['inc'], replace=T), sample(prev.wh, RakSamp['prev'], replace=T),
+                                      sample(late.wh, RakSamp['late'], replace=T))
+                      }else{ ## only inc & prev
+                          resamp <- c(sample(inc.wh, RakSamp['inc'], replace=T), sample(prev.wh, RakSamp['prev'], replace=T))
+                      }
+            sim <- sim[resamp,]
+        }
     if(!sum(sim$inf[sim$phase=='inc'])==0 & !sum(sim$inf[sim$phase=='prev'])==0 & !sum(sim$phase=='inc')==0) { ##otherwise just return NA
-    ## Condition on Rakai sample sizes by sampling with replacement
-    if(condRakai) {
-        inc.wh <- which(sim$phase=='inc')
-        prev.wh <- which(sim$phase=='prev')
-        if(giveLate) {prev.wh <- which(sim$phase=='prev')
-                      resamp <- c(sample(inc.wh, RakSamp['inc'], replace=T), sample(prev.wh, RakSamp['prev'], replace=T),sample(late.wh, RakSamp['late'], replace=T))
-                  }else{ ## only inc & prev
-                      resamp <- c(sample(inc.wh, RakSamp['inc'], replace=T), sample(prev.wh, RakSamp['prev'], replace=T))
-                  }
-        sim <- sim[resamp,]
-    }
         ## early
         sim$inf <- factor(sim$inf, levels=c(0,1))
         inctab <- xtabs(~inf+kk, sim, subset=phase=='inc')
         inct <- try(data.frame(int = 1, n = sum(sim$phase=='inc'), i = inctab[2,1]))
-        if(inherits(inct, 'try-error')) {print(inctab); print(sum(sim$phase=='inc'))}
+        if(inherits(inct, 'try-error')) {print(inctab); print(sim[sim$phase=='inc',])}
         if(ncol(inctab)>1) {
             for(ii in 2:min(4,ncol(inctab))) {
                 temp <- data.frame(int = ii,
@@ -907,12 +908,14 @@ sbmod.to.wdat <- function(sim, browse=F, excl.by.err = F, giveLate = T, giveProp
         ## prev
         prevtab <- xtabs(~inf+kk, sim, subset=phase=='prev')
         prevt <- data.frame(int = 1, n = sum(sim$phase=='prev'), i = prevtab[2,1])
-        for(ii in 2:ncol(prevtab)) {
-            temp <- data.frame(int = ii,
-                               n =  prevt$n[ii-1] - prevt$i[ii-1] - prevtab[1,ii-1],
-                               i = prevtab[2,ii])
-            prevt <- rbind(prevt, temp)
-        }
+        if(ncol(prevtab)>1) {
+            for(ii in 2:ncol(prevtab)) {
+                temp <- try(data.frame(int = ii,
+                                       n =  prevt$n[ii-1] - prevt$i[ii-1] - prevtab[1,ii-1],
+                                       i = prevtab[2,ii]))
+                if(inherits(temp, 'try-error')) print(prevt)
+                prevt <- rbind(prevt, temp)
+            }}
         ## just get an unadj Pois & an omnitient Pois reg (controlling for all heterogeneity), ignoring late phase
         ## only do if there aren't 0's in any of the inf/phase categories (neither all infected, or none infected in a phase), otherwise return NA (commented for now
         if(simpPois) { # & sum(xtabs(~inf + phase, temprcoh$rakll)[,c('prev','inc')]==0)==0) {
@@ -949,7 +952,7 @@ sbmod.to.wdat <- function(sim, browse=F, excl.by.err = F, giveLate = T, giveProp
             }
             return(list(inct=inct, prevt=prevt, PoisRHs=PoisRHs))}
     }else{
-        return(list(inct=NA, prevt=NA, PoisRHs=c(NA,NA), error='No infections in incident couples'))
+        return(list(inct=NA, prevt=NA, PoisRHs=c(univ=NA,omn=NA), error='No infections in incident couples'))
     }
 }
 
