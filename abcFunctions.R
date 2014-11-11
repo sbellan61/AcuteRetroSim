@@ -154,8 +154,16 @@ sdPost <- function(pm) { ## get sd of posterior (on appropriate scale)
     return(apply(pmUnTransf, 2, sd))
 }
 
-logtransParms <- function(parms) {
+addEHM <- function(x) within(x, EHMacute <- (x[,'acute.sc']-1)*x[,'dur.ac'])
+
+logtransParms <- function(parms,includeEHM=F) {
     Lparms <- parms
+    if(includeEHM) {
+        Lparms <- cbind(parms, addEHM(parms))
+        colnames(Lparms)[ncol(Lparms)] <- 'EHMacute'
+        Lparms[,'EHMacute'] <- sapply(Lparms[,'EHMacute'],function(x) max(x,0)) ## careful with this later
+        Lparms[,'EHMacute'] <- log(Lparms[,'EHMacute'])
+    }
     Lparms[,logParms] <- log(parms[,logParms])
     return(Lparms)
 }

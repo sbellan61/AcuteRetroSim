@@ -57,23 +57,35 @@ pmatChosen <- pmat[choice,]
 
 gtabs[nrow(pmatChosen)+0:-3] ## Look at last few Gtables to see how the worst simulations selected fare
 
+
 ## Compare prior distributions to intermediate distribution
-priorParms <- simParmSamp(10^5) ## sample prior
-sel <- c(ghazs,'acute.sc','dur.ac','het.gen.sd')
+priorParms <- addEHM(simParmSamp(4*10^4)) ## sample prior
+pmatChosen <- addEHM(pmatChosen)
+
+sel <- c(ghazs,'acute.sc','dur.ac','het.gen.sd','EHMacute')
 rgs <- apply(priorParms[,sel],2,range)
 sbpairs(pmatChosen[,sel], file.path(fig.dir, paste0('Post',batch)), do.jpeg=T, rgs=rgs)
 sbpairs(priorParms[, sel], file.path(fig.dir, 'Prior'), do.jpeg=T, rgs=rgs)
-graphics.off()
 
 ## Log scale
 rgs <- apply(logtransParms(priorParms),2,range) 
 sbpairs(logtransParms(pmatChosen[,parnms]), file.path(fig.dir, paste0('logPost',batch)), do.jpeg=T, rgs=rgs)
 sbpairs(logtransParms(priorParms), file.path(fig.dir, 'logPrior'), do.jpeg=T, rgs=rgs)
-graphics.off()
 
-## Look at CIs
-apply(logtransParms(pmatChosen[,parnms]), 2, function(x) quantile(x,c(.025,.5,.975)))
-apply(logtransParms(priorParms[,parnms]), 2, function(x) quantile(x,c(.025,.5,.975)))
+## with EHMacute
+sel <- c('acute.sc','dur.ac','EHMacute','het.gen.sd','bp')
+rgs <- apply(logtransParms(priorParms,T)[,sel],2,range)
+rgs[1,'EHMacute'] <- 0
+sbpairs(logtransParms(pmatChosen[,parnms],T)[,sel], file.path(fig.dir, paste0('logPostEHM',batch)), do.jpeg=T, rgs=rgs)
+sbpairs(logtransParms(priorParms,T)[,sel], file.path(fig.dir, 'logPriorEHM'), do.jpeg=T, rgs=rgs)
+
+## Look at CIs nonlog
+apply(pmatChosen[,parnms], 2, function(x) quantile(x,c(.025,.5,.975)))
+apply(priorParms[,parnms], 2, function(x) quantile(x,c(.025,.5,.975)))
+
+## Look at CIs log
+apply(logtransParms(pmatChosen[,parnms],T), 2, function(x) quantile(x,c(.025,.5,.975)))
+apply(logtransParms(priorParms[,parnms],T), 2, function(x) quantile(x,c(.025,.5,.975)))
 
 ## Calculate std dev to use in particle perturbations
 sds <- sdPost(pmatChosen) ## log scale
