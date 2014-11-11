@@ -1,14 +1,10 @@
-setwd('/home1/02413/sbellan/Rakai/AcuteRetroSim/')
+## Collect batch of ABC results & prepare for next batch & do some diagnostics.
 rm(list=ls()); gc()
+setwd('/home1/02413/sbellan/Rakai/AcuteRetroSim/')
 sapply(c("SimulationFunctions.R","RakFunctions.R",'abcFunctions.R'), source) # load Rakai analysis simulation functions from script
-library(parallel)
 ncores <- 12
-fig.dir <- file.path('FiguresAndTables','abcFig')
-out.dir <- file.path('results','abcSummary')
-if(!file.exists(fig.dir))      dir.create(fig.dir) # create directory if necessary
-if(!file.exists(out.dir))      dir.create(out.dir) # create directory if necessary
 batch <- 1
-in.dir <- paste0('results/abcBatch',batch)
+in.dir <- paste0('results/abcBatch',batch) ## collect results from here
 #in.dir <- 'results/abcBatch1Old5good/'
 
 fls <- list.files(in.dir, pattern='Rdata', full.names=T)
@@ -88,14 +84,4 @@ if(batch==1) pmatChosen$weight <- 1/nrow(pmatChosen) else{
 }
 save(pmatChosen, sds, file=file.path(out.dir, paste0('IntermedDistr',batch,'.Rdata'))) ## Save particles & their sds
 
-
-
-## ## Check it's working (should always have same uniform density of getting to perturbed particle from 'from' particle
-## frm <- pmatChosen[5,]; print(frm[,parnms])
-## for(jj in 1:100) {
-##     prt <- perturbParticle(frm, sds = sds, browse=F)
-##     print(perturbParticle(prt, from = frm, sds = sds))
-## }
-
-## for(ii in 1:100) {prt <- perturbParticle(pmatChosen[ii,], sds = sds)
-## sum(perturbParticle(prt, from = pmatChosen, sds = sds)>0)}
+perturbParticle

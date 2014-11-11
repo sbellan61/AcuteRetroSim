@@ -1,11 +1,16 @@
 ####################################################################################################
 ## Create simulations for first ABC sample
 ####################################################################################################
+library(parallel)
 load("data files/ds.nm.all.Rdata") ## DHS country names
 load('data files/pars.arr.ac.Rdata')   ## load hazards for each transmission route as fit to DHS data (in.arr[,,2])
 load('FiguresAndTables/VL Profile/ehms.vl.Rdata') ## VL EHM estimates for prior
-load("data files/pars.arr.ac.Rdata") ## Load pre-couple & extra-couple transmission coefficients estimated from DHS data. 
-nc <- 12                             ## cores per simulation
+load("data files/pars.arr.ac.Rdata") ## Load pre-couple & extra-couple transmission coefficients estimated from DHS data.
+out.dir <- file.path('results','abcSummary')
+fig.dir <- file.path('FiguresAndTables','abcFig')
+if(!file.exists(fig.dir))      dir.create(fig.dir) # create directory if necessary
+if(!file.exists(out.dir))      dir.create(out.dir) # create directory if necessary
+ncores <- 12                             ## cores per simulation
 vfreq <- 200 ## how often to report on results
 s.epic.ind <- s.epic.nm <- NA # not substituting epidemic curves, this will cause rcop() to use default country epidemic curves
 ## Get fitted transmission coefficients from DHS for prior
@@ -94,13 +99,6 @@ rhAcutePrior <- function(n, parms = NULL, lo = .5, hi = 200) {
 rhAcutePrior(10)
 quantile(rhAcutePrior(10^4), c(.025,.5,.975))
 
-pdf('FiguresAndTables/abcFig/RHprior.pdf',5.5,4)
-par(mar=c(5,4,1,.5), 'ps'=10)
-xs <- exp(seq(log(.5),log(500),l=500))
-ys <- rhAcutePrior(parms=xs)
-plot(xs,ys, type = 'l', lwd = 2, log='x', ylab = 'probability density', xlab=expression(RH[acute]), main = '', las = 1, bty = 'n', xlim=c(.5,500))
-graphics.off()
-
 ## uniform from 2 weeks to 8 months
 durAcutePrior <- function(n, parms = NULL, lo = .5, hi = 8) {
     if(is.null(parms[1])) {
@@ -156,18 +154,6 @@ sdPost <- function(pm) { ## get sd of posterior (on appropriate scale)
     return(apply(pmUnTransf, 2, sd))
 }
 
-weightParticles <- function(currentBatch, lastBatch, browse = F) {
-    if(browse) browser()
-    head(currentBatch[,parnms])
-    dpriors <- simParmSamp(parms=currentBatch[,parnms])
-    head(dpriors)
-    dpi <- apply(dpriors, 1, prod)
-    ## for each particle, calculate the probability it could have been gotten to from all previous
-    ## particles, weighted by their weights
-    for(jj in 1:length(dpriors)) { 
-        lastBatch$weight * sapply(parmsChosen[pars], perturbParticle)
-    }}
-
 logtransParms <- function(parms) {
     Lparms <- parms
     Lparms[,logParms] <- log(parms[,logParms])
@@ -182,19 +168,21 @@ unlogtransParms <- function(Lparms) {
 
 ## perturb a particle (must be done on appropriate scale). If from given, then calculute probability
 ## density of perturbing to parms from 'from' for kernel in weight denominator
-perturbParticle <- function(parms, from=NULL, sds, browse=F) { ## from can be a matrix, to calculate probability of getting to parms from all particles in from
-    newLparms <- Lparms <- logtransParms(parms[,parnms])
+perturbParticle <- function(parms, ## matrix of last batch of particles from which we are perturbing
+                            from=NULL, ## last batch of particles from which we are perturbing, used to calculate K() kernel PDFs for weights
+                            sds, ## std dev of last batch on appropriate transformed scale
+                            browse=F) { 
+    newLparms <- Lparms <- logtransParms(parms[,parnms,drop=F])
     if(is.null(from)) {
-        zeroPriorDensity <- T
         ii <- 1
         if(browse) browser()
-        while(zeroPriorDensity) { ## sample until a particle with nonzero prior density is found
-            newLparms <- Lparms + runif(length(parms), - sds, sds) ## others
-            ii <- ii+1
-            #if(ii>50) browser()
-            newparms <- unlogtransParms(newLparms)
-            if(prod(simParmSamp(parms=newparms))>0) zeroPriorDensity <- FALSE
+        for(pp in 1:ncol(Lparms)) { ## perturb each parameter column
+            newLparms[,pp] <- Lparms[,pp,drop=F] + runif(nrow(Lparms), - sds[pp], sds[pp]) ## others
         }
+        newparms <- unlogtransParms(newLparms)
+        PriorDensities <- simParmSamp(parms=newparms)
+        PriorDensity <- apply(PriorDensities, 1, prod)
+        newparms <- newparms[PriorDensity>0,] 
         return(newparms)   
     }else{
         Lparms <- logtransParms(as.matrix(parms[,parnms]))
@@ -204,14 +192,45 @@ perturbParticle <- function(parms, from=NULL, sds, browse=F) { ## from can be a 
         dpriorProd <- as.numeric(apply(dprior, 1, prod))
         return(dpriorProd)
     }}
+ 
+## ## Check that when perturbing and then asking for the probability of having been perturbed there
+## ## from a parameter set, that we always get the same value (since doing uniform sampling on
+## ## (-sds,+sds)
+## frm <- pmatChosen[5,]; print(frm[,parnms])
+## for(jj in 1:20) {
+##     prt <- perturbParticle(frm, sds = sds, browse=F)
+##     print(perturbParticle(prt, from = frm, sds = sds))
+## }
+
+## ## Check the number of particles from t-1 from which a perturbed particle at time t could have come
+## ## from (equivalent to K() kernel since we're doing uniform K())
+## for(ii in 1:100) {
+##     prt <- perturbParticle(pmatChosen[ii,], sds = sds)
+## #    print(sum(perturbParticle(prt, from = pmatChosen, sds = sds)>0))
+##     print(sum(pmatChosen$weight * perturbParticle(prt, from = pmatChosen, sds = sds))) ## denominator
+## } ## always at least 1 so that's good
+
+
+weightParticles <- function(currentBatch, lastBatch, browse = F) {
+    if(browse) browser()
+    head(currentBatch[,parnms])
+    dpriors <- simParmSamp(parms=currentBatch[,parnms])
+    head(dpriors)
+    dpi <- apply(dpriors, 1, prod)
+    ## for each particle, calculate the probability it could have been gotten to from all previous
+    ## particles, weighted by their weights
+    for(jj in 1:length(dpriors)) { 
+        lastBatch$weight * sapply(parmsChosen[pars], perturbParticle)
+    }}
+
 
 ####################################################################################################
 ## Function that does simulation & gets wtab all at once
-retroCohSim <- function(parms=simParmSamp(1), maxN=10000, seed=1, nc=12, browse=F) {
+retroCohSim <- function(parms=simParmSamp(1), maxN=10000, seed=1, nc=ncores, browse=F) {
     startTime <- Sys.time()
     parms <- simParmConverter(parms)
     output <- with(parms, psrun(maxN = maxN, jobnum = seed, pars = parms[hazs], save.new = T, return.ts = T, returnFileNm=F, saveFile=F, seed = seed,
-                                    acute.sc = acute.sc, dur.ac = dur.ac, het.gen=T, het.gen.sd = het.gen.sd, browse = F, nc = nc))
+                                    acute.sc = acute.sc, dur.ac = dur.ac, het.gen=T, het.gen.sd = het.gen.sd, browse = F, nc = ncores))
     cohsim <- rak.coh.fxn(output, #ts.ap = output$ts, dat = output$evout, dpars = output$rakpars,
                           ltf.prob=0.0287682072451781, 
                           rr.ltf.ff=1.5, rr.ltf.mm=1.5, rr.ltf.hh=1, rr.ltf.d=1, rr.inc.sdc=1.5,
@@ -270,7 +289,7 @@ contTabFxn <- function(x) within(x, { ## turn wtab into only having # infected &
     }else{ return(NA) }
 })
 
-collectSumStat <- function(filenm, returnGtable = F, browse=F, ncores = 12, rmNull=T) {
+collectSumStat <- function(filenm, returnGtable = F, browse=F, ncores = ncores, rmNull=T) {
     if(browse) browser()
     print(filenm)
     load(filenm)

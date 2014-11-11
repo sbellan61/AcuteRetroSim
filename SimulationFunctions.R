@@ -337,6 +337,7 @@ event.fn <- function(pars, dat, browse = F, ## transmission coefficients to use 
         ## Break couples into nc batches to split between cores. Divide between cores by couple
         ## formation date strata since early couples will always take longest.
         breaks <- rep(1:nc, length.out = nrow(dat))
+        print(paste0(nc,' cores'))
         ## Call couple loop function below cloop() in multicore
         multi.out <- mclapply(1:nc, cloop, dat = dat, breaks = breaks, vfreq = vfreq, death = death,
                               acute.sc = acute.sc, dur.ac = dur.ac, 
