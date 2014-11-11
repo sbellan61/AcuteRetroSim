@@ -150,33 +150,60 @@ t(pars.arr[hazs,2,13]*.2) ##
 tst['97.5%',hazs]
 t(pars.arr[hazs,2,13]*20) ## all good going 5x lower & 20x higher
 
-
 sdPost <- function(pm) { ## get sd of posterior (on appropriate scale)
-    pmUnTransf <- pmatChosen
+    pmUnTransf <- pm[,parnms]
     pmUnTransf[,logParms] <- log(pmUnTransf[,logParms])
     return(apply(pmUnTransf, 2, sd))
 }
 
-## perturb a particle (must be done on appropriate scale). If from given, then calculute probability
-## density of perturbing to parms from 'from' for kernel in weight denominator
-perturbParticle <- function(parms, from=NULL, sds) { 
-    if(!is.null(from)) {
-        parms[logParms] <- exp(log(parms[logParms]) + runif(length(logParms), - sds[logParms], sds[logParms])) ## logged parms
-        parms[notlogParms] <- parms[notlogParms] + runif(length(notlogParms), - sds[notlogParms], sds[notlogParms]) ## others
-        return(parms)   
-    }else{
-        dprior <- parms
-        dprior[logParms] <- dunif(parms[logParms], from[logParms] - sds[logParms], from[logParms] + sds[logParms])
-        dprior[notlogParms] <- dunif(parms[notlogParms], from[notlogParms] - sds[notlogParms], from[notlogParms] + sds[notlogParms])
-        return(prod(dprior))
+weightParticles <- function(currentBatch, lastBatch, browse = F) {
+    if(browse) browser()
+    head(currentBatch[,parnms])
+    dpriors <- simParmSamp(parms=currentBatch[,parnms])
+    head(dpriors)
+    dpi <- apply(dpriors, 1, prod)
+    ## for each particle, calculate the probability it could have been gotten to from all previous
+    ## particles, weighted by their weights
+    for(jj in 1:length(dpriors)) { 
+        lastBatch$weight * sapply(parmsChosen[pars], perturbParticle)
     }}
 
-## weightParticles <- function(parmsChosen, browse = F) {
-##     if(browse) browser()
-##     dprior <- apply(simParmSamp(parms=parmsChosen), 1, prod)
-##     for(jj in 1:length(dprior)) {
-##         parmsChosen$weight * sapply(parmsChosen[pars], perturbParticle)
-##     }}
+logtransParms <- function(parms) {
+    Lparms <- parms
+    Lparms[,logParms] <- log(parms[,logParms])
+    return(Lparms)
+}
+
+unlogtransParms <- function(Lparms) {
+    parms <- Lparms
+    parms[,logParms] <- exp(Lparms[,logParms])
+    return(parms)
+}
+
+## perturb a particle (must be done on appropriate scale). If from given, then calculute probability
+## density of perturbing to parms from 'from' for kernel in weight denominator
+perturbParticle <- function(parms, from=NULL, sds, browse=F) { ## from can be a matrix, to calculate probability of getting to parms from all particles in from
+    newLparms <- Lparms <- logtransParms(parms[,parnms])
+    if(is.null(from)) {
+        zeroPriorDensity <- T
+        ii <- 1
+        if(browse) browser()
+        while(zeroPriorDensity) { ## sample until a particle with nonzero prior density is found
+            newLparms <- Lparms + runif(length(parms), - sds, sds) ## others
+            ii <- ii+1
+            #if(ii>50) browser()
+            newparms <- unlogtransParms(newLparms)
+            if(prod(simParmSamp(parms=newparms))>0) zeroPriorDensity <- FALSE
+        }
+        return(newparms)   
+    }else{
+        Lparms <- logtransParms(as.matrix(parms[,parnms]))
+        dprior <- Lfrom <- logtransParms(as.matrix(from[,parnms]))
+        if(browse) browser()
+        for(pp in 1:length(parms)) dprior[,pp] <- dunif(Lparms[,pp], Lfrom[,pp] - sds[pp], Lfrom[,pp] + sds[pp])
+        dpriorProd <- as.numeric(apply(dprior, 1, prod))
+        return(dpriorProd)
+    }}
 
 ####################################################################################################
 ## Function that does simulation & gets wtab all at once
