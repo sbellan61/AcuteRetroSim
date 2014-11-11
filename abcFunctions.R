@@ -29,7 +29,7 @@ logGHazHiBound['bp'] <- log(gpars['bp','50%']*1000) ## 1000X bigger than DHS
 ## User tighter prior for pre-couple/extra-couple (can't be too big b/c couldn't have DHS data
 ## results if these were substantially different
 logGHazLoBound[c('bb','be')] <- log(gpars[c('bb','be'),'50%']/5) ## 5X smaller than DHS estimates 
-logGHazHiBound[c('bb','be')] <- log(gpars[c('bb','be'),'50%']*15) ## 15X bigger than DHS estimates
+logGHazHiBound[c('bb','be')] <- log(gpars[c('bb','be'),'50%']*10) ## 15X bigger than DHS estimates
 gpars[,'50%']
 exp(rbind(logGHazLoBound,logGHazHiBound))
 ## parameter estimates on log scale monthly hazard = infections/(coital acts) * (coital acts)/month
@@ -255,7 +255,7 @@ collectSumStat <- function(filenm, returnGtable = F, browse=F, ncores = 12, rmNu
     wtabSims <- mclapply(rcohsList, function(x) sbmod.to.wdat(x$rakll, excl.by.err = T, browse=F, giveLate=F, 
                                                               condRakai=T, giveProp=T, simpPois=T), mc.cores=ncores)
     nCplMat <- do.call(rbind.data.frame, mclapply(rcohsList, function(x) xtabs(~phase, x$rakll)))
-    colnames(nCplMat) <- levels(rcohsList[[1]]$rakll$phase)
+    colnames(nCplMat) <- c('prev','inc','late')
     parmsMat <- matrix(unlist(lapply(rcohsList, '[[', 'pars')), nr = length(rcohsList), nc = 15, byrow=T)
     PoisRHsMat <- data.frame(matrix(unlist(lapply(wtabSims, '[[', 'PoisRHs')), nr = length(rcohsList), nc = 2, byrow=T))
     colnames(parmsMat) <- names(rcohsList[[1]]$pars)

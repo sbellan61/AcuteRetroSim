@@ -9,15 +9,14 @@ if(!file.exists(fig.dir))      dir.create(fig.dir) # create directory if necessa
 if(!file.exists(out.dir))      dir.create(out.dir) # create directory if necessary
 batch <- 1
 in.dir <- paste0('results/abcBatch',batch)
-in.dir <- 'results/abcBatch1Old5good/'
+#in.dir <- 'results/abcBatch1Old5good/'
 
 fls <- list.files(in.dir, pattern='Rdata', full.names=T)
-tst <- collectSumStat(fls[2], browse=F, returnGtable=T, ncores=1)
-##pmatLs <- lapply(fls, collectSumStat, returnGtable=T) ## not enough mem to do more than a few cores
+## tst <- collectSumStat(fls[16], browse=T, returnGtable=T, ncores=1)
+## pmatLs <- lapply(fls, collectSumStat, returnGtable=T) ## not enough mem to do more than a few cores
 
 ## ncores goes to collectSumStat, use each core to load rather
 pmatLs <- mclapply(fls, collectSumStat, returnGtable=T, mc.cores=12, ncores = 1)
-unique(do.call(colnames, lapply(pmatLs, '[[', 'pmat')))
 pmat <- do.call(rbind.data.frame, lapply(pmatLs, '[[', 'pmat'))
 gtabs <- do.call(c, lapply(pmatLs, '[[', 'Gtable'))
 ord <- order(pmat$gVals)
@@ -29,7 +28,6 @@ nrow(pmat)
 sum(duplicated(pmat[,parnms])) ## make sure we have unique parm draws
 
 ## Look at Gtables for the best ones to make sure they seem to be good matchest
-sel <- c('acute.sc','dur.ac','het.gen.sd','gVals')
 head(pmat[,c('acute.sc','dur.ac','het.gen.sd','enoughHet','inc','prev','gVals')],10)
 gtabs[1]
 
@@ -40,16 +38,23 @@ pdf(file.path(fig.dir, 'hist gval.pdf'))
 hist(pmat$gVals, breaks = 0:max(pmat$gVals+1), col = 'black', xlab = 'G stat', main='')
 graphics.off()
 
+sbpairs(pmat[,c('bb','inc')], file.path(fig.dir, paste0('bbInc',batch)), do.jpeg=T)
+sbpairs(pmat[,c('be','inc')], file.path(fig.dir, paste0('beInc',batch)), do.jpeg=T)
+sbpairs(pmat[,c('bb','prev')], file.path(fig.dir, paste0('bbPrev',batch)), do.jpeg=T)
+sbpairs(pmat[,c('be','prev')], file.path(fig.dir, paste0('bePrev',batch)), do.jpeg=T)
+
 qchisq(.95, 7) ## based on having 6-8ish gVal comparisons each of which is approximately chisq distr
 nrow(pmat)
-cutf <- 4 ## above cannot deal with small sample sizes, so let's be conservative
+cutf <- 15 ## above cannot deal with small sample sizes, so let's be conservative
 sum(pmat$gVals<cutf)
-rightSizeNinc <- with(pmat, Ninc > 20 & Ninc < 80)
-rightSizeNprev <- with(pmat, Nprev > 100 & Nprev < 500)
-pmatChosen <- pmat[with(pmat, gVals<cutf & enoughHet),]
-                                        #pmatChosen <- pmat[with(pmat, gVals<cutf & enoughHet & rightSizeNinc & rightSizeNprev),]
+rightSizeNinc <- with(pmat, inc > 20 & inc < 80)
+rightSizeNprev <- with(pmat, prev > 100 & prev < 500)
+choice <- with(pmat, gVals<cutf & enoughHet & rightSizeNinc & rightSizeNprev)
+sum(choice)
+pmatChosen <- pmat[choice,]
 head(pmatChosen)
 ## Look at last few Gtables
+gtabs[1:3]
 gtabs[nrow(pmatChosen)+0:-3]
 
 priorParms <- simParmSamp(10^5)
@@ -64,10 +69,12 @@ graphics.off()
 
 logsel <- c(paste0('log',ghazs), 'logacute.sc','logdur.ac','het.gen.sd')
 rgs <- apply(priorParms[,logsel],2,range)
-sbpairs(pmat[with(pmat, gVals<cutf & enoughHet), logsel], file.path(fig.dir, paste0('logPost',batch)), do.jpeg=T, rgs=rgs)
+sbpairs(pmatChosen[,logsel], file.path(fig.dir, paste0('logPost',batch)), do.jpeg=T, rgs=rgs)
 sbpairs(priorParms[, logsel], file.path(fig.dir, 'logPrior'), do.jpeg=T, rgs=rgs)
 graphics.off()
 
+apply(pmatChosen[,logsel], 2, range)
+apply(pmat[,logsel], 2, range)
 
 logsel <- c(paste0('log',ghazs), 'logacute.sc','logdur.ac','het.gen.sd')
 sdPost <- function(pm) { ## get sd of posterior (on appropriate scale)
