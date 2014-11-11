@@ -226,11 +226,11 @@ weightParticles <- function(currentBatch, lastBatch, browse = F) {
 
 ####################################################################################################
 ## Function that does simulation & gets wtab all at once
-retroCohSim <- function(parms=simParmSamp(1), maxN=10000, seed=1, nc=ncores, browse=F) {
+retroCohSim <- function(parms=simParmSamp(1), maxN=10000, seed=1, nc=12, browse=F) {
     startTime <- Sys.time()
     parms <- simParmConverter(parms)
     output <- with(parms, psrun(maxN = maxN, jobnum = seed, pars = parms[hazs], save.new = T, return.ts = T, returnFileNm=F, saveFile=F, seed = seed,
-                                    acute.sc = acute.sc, dur.ac = dur.ac, het.gen=T, het.gen.sd = het.gen.sd, browse = F, nc = ncores))
+                                    acute.sc = acute.sc, dur.ac = dur.ac, het.gen=T, het.gen.sd = het.gen.sd, browse = F, nc = 12))
     cohsim <- rak.coh.fxn(output, #ts.ap = output$ts, dat = output$evout, dpars = output$rakpars,
                           ltf.prob=0.0287682072451781, 
                           rr.ltf.ff=1.5, rr.ltf.mm=1.5, rr.ltf.hh=1, rr.ltf.d=1, rr.inc.sdc=1.5,

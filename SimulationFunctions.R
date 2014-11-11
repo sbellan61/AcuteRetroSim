@@ -343,7 +343,7 @@ event.fn <- function(pars, dat, browse = F, ## transmission coefficients to use 
                               acute.sc = acute.sc, dur.ac = dur.ac, 
                               late.sc = late.sc, dur.lt = dur.lt,
                               aids.sc = aids.sc, dur.aids = dur.aids,
-                              pars = hpars, subst = subst, browse=F)
+                              pars = hpars, subst = subst, browse=F, mc.cores=nc)
         print(multi.out[which(lapply(multi.out, class)=='try-error')]) ## print any errors
         ## ##################################################
         ## Combine mclapply output from each core back into data frame
@@ -739,7 +739,7 @@ ts.fxn <- function(dat, nc = 12, verbose = T, vfreq = 500, return.ts = F, browse
     uid.brk <- dat$uid[order(breaks)]
     ## use tsloop within each core
     multi.out <- mclapply(1:nc, tsloop, dat = dat, breaks = breaks, start = start, end = end, verbose = verbose, vfreq = vfreq,
-                          dur.ac=dur.ac, dur.lt=dur.lt, dur.aids=dur.aids)
+                          dur.ac=dur.ac, dur.lt=dur.lt, dur.aids=dur.aids, mc.cores=nc)
     print(multi.out[which(lapply(multi.out, class)=='try-error')]) ## print any errors
     ## combine back into data frame
     tss <- multi.out[[1]][['tss']]              ## each is a list(ts = ts, tss = tss) object

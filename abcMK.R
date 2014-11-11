@@ -14,7 +14,8 @@ for(jj in 1:12) { ## separate batches into smaller ones so they start on queue f
     ## ####################################################################
     to.do <- (jj-1)*25 + 1:25
     for(ii in to.do) {
-        cmd <- paste("R CMD BATCH '--no-restore --no-save --args batch.dir=\"", batchdirnm, "\" seed=", ii, "' ABCsimStarter.R ", file.path(batchdirnm, "routs", paste0('abc', ii, ".Rout")), sep='')
+        cmd <- paste("R CMD BATCH '--no-restore --no-save --args batch.dir=\"", batchdirnm, "\" seed=", ii, " batch=", batch,
+                     "' ABCsimStarter.R ", file.path(batchdirnm, "routs", paste0('abc', ii, ".Rout")), sep='')
         cat(cmd)               # add command
         cat('\n')              # add new line
     }

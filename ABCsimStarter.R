@@ -10,18 +10,19 @@ if(length(args)>0)  {## Then cycle through each element of the list and evaluate
         eval(parse(text=args[[i]]))
     }  }else{ 
         seed <- 1; batch.dir <- file.path('results','testDir')
-        batch <- 1
+        batch <- 2
         ncores <- 12
         if(Sys.info()['nodename']=='stevebemacbook3') setwd('~/Documents/R Repos/AcuteRetroSim/') else setwd('/home1/02413/sbellan/Rakai/AcuteRetroSim/')
     }
 sapply(c("SimulationFunctions.R","RakFunctions.R",'abcFunctions.R'), source) # load Rakai analysis simulation functions from script
 set.seed(seed)
 SimMinutes <- 12*60 ## minutes to simulate for
-maxN <- 500#4785 ## Rakai couple population (from Porter et al. 2004), seems like this is size from which retrospective cohort was identified
+maxN <- 4785 ## Rakai couple population (from Porter et al. 2004), seems like this is size from which retrospective cohort was identified
 
 if(batch==1) {
     simParms <- simParmSamp(SimMinutes*20) ## each sim takes a minute, so this is conservatively large number of samples
 }else{
+    print(paste('perturbing batch',batch-1,'to create batch',batch))
     load(file.path(out.dir, paste0('IntermedDistr',batch-1,'.Rdata'))) ## load last batch
     lastParticleSamp <- pmatChosen[sample(1:nrow(pmatChosen), SimMinutes*100, prob = pmatChosen$weight, replace=T),parnms] ## sample according to weights
     simParms <- perturbParticle(lastParticleSamp, sds = sds, browse=F) ## perturb particles
@@ -32,6 +33,11 @@ if(batch==1) {
         rm(pmatChosen,sds,lastParticleSamp); gc()
     }
 }
+
+## prr <- logtransParms(simParmSamp(10^4))
+## rgs <- apply(prr, 2, range)
+## sbpairs(logtransParms(simParms), file.path(fig.dir, 'Pert9'), do.jpeg=T, rgs=rgs)
+## sbpairs(prr, file.path(fig.dir, 'Prior9'), do.jpeg=T, rgs=rgs)
 
 print(paste('seed is', seed))
 
