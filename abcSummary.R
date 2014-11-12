@@ -92,7 +92,7 @@ apply(logtransParms(pmatChosen[,parnms],T), 2, function(x) quantile(x,c(.025,.5,
 apply(logtransParms(priorParms[,parnms],T), 2, function(x) quantile(x,c(.025,.5,.975)))
 
 ## Calculate std dev to use in particle perturbations
-sds <- sdPost(pmatChosen) ## log scale
+sdsNew <- sdPost(pmatChosen) ## log scale
 
 ## Weight particles
 if(batch==1) {
@@ -101,9 +101,9 @@ if(batch==1) {
     pmatCNew <- pmatChosen ## new batch output
     load(file = file.path(out.dir,paste0('IntermedDistr',batch-1,'.Rdata')))
     pmatCOld <- pmatChosen ## last batch output
-    pmatCNew$weight <- weightParticles(pmatCNew,pmatCOld, browse=F)
+    pmatCNew$weight <- weightParticles(pmatCNew,pmatCOld, sdsUse = sdsNew, browse=F)
     pmatCNew$weight <- pmatCNew$weight/sum(pmatCNew$weight)
 }
+pmatChosen <- pmatCNew
+sds <- sdsNew ## kept name as New to avoid loading over it above
 save(pmatChosen, sds, file=file.path(out.dir, paste0('IntermedDistr',batch,'.Rdata'))) ## Save particles & their sds
-
-perturbParticle

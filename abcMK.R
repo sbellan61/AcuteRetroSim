@@ -2,7 +2,7 @@
 ## create a control file to send to the cluster
 ## ####################################################################
 setwd('/home1/02413/sbellan/Rakai/AcuteRetroSim/')
-batch <- 2
+batch <- 3
 
 batchdirnm <- file.path('results',paste0('abcBatch',batch))
 if(!file.exists(batchdirnm))      dir.create(batchdirnm) # create directory if necessary

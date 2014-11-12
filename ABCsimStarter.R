@@ -10,7 +10,7 @@ if(length(args)>0)  {## Then cycle through each element of the list and evaluate
         eval(parse(text=args[[i]]))
     }  }else{ 
         seed <- 1; batch.dir <- file.path('results','testDir')
-        batch <- 2
+        batch <- 3
         ncores <- 12
         if(Sys.info()['nodename']=='stevebemacbook3') setwd('~/Documents/R Repos/AcuteRetroSim/') else setwd('/home1/02413/sbellan/Rakai/AcuteRetroSim/')
     }

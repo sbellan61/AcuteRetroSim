@@ -220,7 +220,7 @@ perturbParticle <- function(parms, ## matrix of last batch of particles from whi
 ##     print(sum(pmatChosen$weight * perturbParticle(prt, from = pmatChosen, sds = sds))) ## denominator
 ## } ## always at least 1 so that's good
 
-weightParticles <- function(currentBatch, lastBatch, browse = F) {
+weightParticles <- function(currentBatch, lastBatch, sdsUse, browse = F) {
     if(browse) browser()
     dpriors <- simParmSamp(parms=currentBatch[,parnms])
     numerator <- apply(dpriors, 1, prod)
@@ -228,7 +228,7 @@ weightParticles <- function(currentBatch, lastBatch, browse = F) {
     ## for each particle, calculate the probability it could have been gotten to from all previous
     ## particles, weighted by their weights
     for(jj in 1:length(numerator)) { 
-        Ks <- perturbParticle(currentBatch[jj,], from = lastBatch, sds = sds, browse=F)
+        Ks <- perturbParticle(currentBatch[jj,], from = lastBatch, sds = sdsUse, browse=F)
         denominator[jj] <- sum(lastBatch$weight * Ks)
     }}
 
