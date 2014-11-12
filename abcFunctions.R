@@ -196,11 +196,13 @@ perturbParticle <- function(parms, ## matrix of last batch of particles from whi
         Lparms <- logtransParms(as.matrix(parms[,parnms]))
         dprior <- Lfrom <- logtransParms(as.matrix(from[,parnms]))
         if(browse) browser()
-        for(pp in 1:length(parms)) dprior[,pp] <- dunif(Lparms[,pp], Lfrom[,pp] - sds[pp], Lfrom[,pp] + sds[pp])
+        for(pp in 1:length(Lparms)) {
+            dprior[,pp] <- dunif(Lparms[,pp], Lfrom[,pp] - sds[pp], Lfrom[,pp] + sds[pp])
+        }
         dpriorProd <- as.numeric(apply(dprior, 1, prod))
         return(dpriorProd)
     }}
- 
+
 ## ## Check that when perturbing and then asking for the probability of having been perturbed there
 ## ## from a parameter set, that we always get the same value (since doing uniform sampling on
 ## ## (-sds,+sds)
@@ -218,17 +220,16 @@ perturbParticle <- function(parms, ## matrix of last batch of particles from whi
 ##     print(sum(pmatChosen$weight * perturbParticle(prt, from = pmatChosen, sds = sds))) ## denominator
 ## } ## always at least 1 so that's good
 
-
 weightParticles <- function(currentBatch, lastBatch, browse = F) {
     if(browse) browser()
-    head(currentBatch[,parnms])
     dpriors <- simParmSamp(parms=currentBatch[,parnms])
-    head(dpriors)
-    dpi <- apply(dpriors, 1, prod)
+    numerator <- apply(dpriors, 1, prod)
+    denominator <- rep(NA,length(numerator))
     ## for each particle, calculate the probability it could have been gotten to from all previous
     ## particles, weighted by their weights
-    for(jj in 1:length(dpriors)) { 
-        lastBatch$weight * sapply(parmsChosen[pars], perturbParticle)
+    for(jj in 1:length(numerator)) { 
+        Ks <- perturbParticle(currentBatch[jj,], from = lastBatch, sds = sds, browse=F)
+        denominator[jj] <- sum(lastBatch$weight * Ks)
     }}
 
 

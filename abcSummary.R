@@ -3,7 +3,7 @@ rm(list=ls()); gc()
 setwd('/home1/02413/sbellan/Rakai/AcuteRetroSim/')
 sapply(c("SimulationFunctions.R","RakFunctions.R",'abcFunctions.R'), source) # load Rakai analysis simulation functions from script
 ncores <- 12
-batch <- 1
+batch <- 2
 in.dir <- paste0('results/abcBatch',batch) ## collect results from here
 #in.dir <- 'results/abcBatch1Old5good/'
 
@@ -19,9 +19,9 @@ ord <- order(pmat$gVals)
 pmat <- pmat[ord,]
 gtabs <- gtabs[ord]
 pmat <- within(pmat, {for(ll in logParms) assign(paste0('log',ll), log(get(ll))); rm(ll)})
-save(gtabs,pmat, pmatLs, file = file.path(out.dir,paste0('pmatLs',batch,'.Rdata')))
 nrow(pmat)
 sum(duplicated(pmat[,parnms])) ## make sure we have unique parm draws
+save(gtabs,pmat, pmatLs, file = file.path(out.dir,paste0('pmatLs',batch,'.Rdata')))
 
 ## Look at Gtables for the best ones to make sure they seem to be good matchest
 head(pmat[,c('acute.sc','dur.ac','het.gen.sd','enoughHet','inc','prev','gVals')],10)
@@ -46,17 +46,21 @@ sbpairs(pmat[,c('bp','prev')], file.path(fig.dir, paste0('bpPrev',batch)), do.jp
 
 ## Select intermediate distribution based on threshold criteria
 qchisq(.95, 7) ## based on having 6-8ish gVal comparisons each of which is approximately chisq distr
-cutfs <- c(15,8,5,2,1) ## cutoffs for each batch
+cutfs <- c(15,8,4,2,1) ## cutoffs for each batch
+nprevsMin <- c(100,120,140,140,140)
+nprevsMax <- c(500,300,200,200,200)
+nincsMin <- c(20,23,23,23,23)
+nincsMax <- c(80,60,60,60,60)
 cutf <- cutfs[batch]
 print(paste0(round(mean(pmat$gVals<cutf)*100),'% of simulations pass threshold criteria'))
-rightSizeNinc <- with(pmat, inc > 20 & inc < 80)
-rightSizeNprev <- with(pmat, prev > 100 & prev < 500)
+rightSizeNinc <- with(pmat, inc > nincsMin[batch] & inc < nincsMax[batch])
+rightSizeNprev <- with(pmat, prev > nprevsMin[batch] & prev < nprevsMax[batch])
 choice <- with(pmat, gVals<cutf & enoughHet & rightSizeNinc & rightSizeNprev)
 print(paste0(round(mean(choice)*100),'% of simulations pass threshold criteria with # of couples restrictions'))
+print(sum(choice))
 pmatChosen <- pmat[choice,]
 
 gtabs[nrow(pmatChosen)+0:-3] ## Look at last few Gtables to see how the worst simulations selected fare
-
 
 ## Compare prior distributions to intermediate distribution
 priorParms <- addEHM(simParmSamp(4*10^4)) ## sample prior
@@ -91,8 +95,14 @@ apply(logtransParms(priorParms[,parnms],T), 2, function(x) quantile(x,c(.025,.5,
 sds <- sdPost(pmatChosen) ## log scale
 
 ## Weight particles
-if(batch==1) pmatChosen$weight <- 1/nrow(pmatChosen) else{
-    pmatChosen$weight <- weightParticles(pmatChosen,pmatChosen, T)
+if(batch==1) {
+    pmatChosen$weight <- 1/nrow(pmatChosen) 
+}else{
+    pmatCNew <- pmatChosen ## new batch output
+    load(file = file.path(out.dir,paste0('IntermedDistr',batch-1,'.Rdata')))
+    pmatCOld <- pmatChosen ## last batch output
+    pmatCNew$weight <- weightParticles(pmatCNew,pmatCOld, browse=F)
+    pmatCNew$weight <- pmatCNew$weight/sum(pmatCNew$weight)
 }
 save(pmatChosen, sds, file=file.path(out.dir, paste0('IntermedDistr',batch,'.Rdata'))) ## Save particles & their sds
 
