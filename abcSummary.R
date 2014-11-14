@@ -5,11 +5,9 @@ sapply(c("SimulationFunctions.R","RakFunctions.R",'abcFunctions.R'), source) # l
 ncores <- 12
 batch <- 3
 in.dir <- paste0('results/abcBatch',batch) ## collect results from here
-#in.dir <- 'results/abcBatch1Old5good/'
 
 fls <- list.files(in.dir, pattern='Rdata', full.names=T)
-## tst <- collectSumStat(fls[1], browse=F, returnGtable=T, ncores=1)
-## pmatLs <- lapply(fls, collectSumStat, returnGtable=T) ## not enough mem to do more than a few cores
+## tst <- collectSumStat(fls[1], browse=F, returnGtable=T, ncores=1) ## help with debugging, collect one result
 
 ## Collect results and put them in a matrix and a list of Wawer-type tables
 pmatLs <- mclapply(fls, collectSumStat, returnGtable=T, mc.cores=12, ncores = 1)
@@ -125,53 +123,4 @@ if(batch==1) {
 }
 pmatChosen <- pmatCNew
 sds <- sdsNew ## kept name as New to avoid loading over it above
-save(pmatChosen, sds, file=file.path(out.dir, paste0('IntermedDistr',batch,'.Rdata'))) ## Save particles & their sds
-
-## correlation changing?
-## bigger sample size
-## other parameters weird?
-
-####################################################################################################
-## Further explorations
-show <- c("acute.sc", "dur.ac",'EHMacute', "het.gen.sd",'univ','omn')
-hihi <- with(pmatChosen, which(EHMacute > 60 & het.gen.sd > 2.5))
-lolo <- with(pmatChosen, which(EHMacute < 5 & het.gen.sd < 1.5))
-length(hihi)
-length(lolo)
-gtabs[hihi[1:3]]
-mean(unlist(lapply(gtabs[hihi], function(x) x[[1]][1,3,1]))) ## mean # infected in Inc interval 1 from hihi
-mean(unlist(lapply(gtabs[lolo], function(x) x[[1]][1,3,1]))) ## mean # infected in Inc interval 1 from lolo
-#pmatChosen[hihi,show]
-
-## subset of hihi/lolo
-sel <- c('acute.sc','dur.ac','EHMacute','het.gen.sd','univ')
-#sel <- c('acute.sc','dur.ac','EHMacute','het.gen.sd',mfs)
-tst <- logtransParms(pmatChosen[,parnms],T)
-tst <- cbind(tst, univ=pmatChosen$univ)
-rgs <- apply(tst[,sel],2,range)
-rgs[1,'EHMacute'] <- 0
-hihi <- with(pmatChosen, which(EHMacute > 50 & het.gen.sd > 2))
-lolo <- with(pmatChosen, which(EHMacute < 5 & het.gen.sd < 1.5))
-sbpairs(tst[hihi,sel], file.path(fig.dir, 'logPostEHM', paste0('hihilogPostEHM',batch)), do.jpeg=T, rgs=rgs)
-sbpairs(tst[lolo,sel], file.path(fig.dir, 'logPostEHM', paste0('lolologPostEHM',batch)), do.jpeg=T, rgs=rgs)
-sbpairs(tst[,sel], file.path(fig.dir, 'logPostEHM', paste0('alllogPostEHM',batch)), do.jpeg=T, rgs=rgs)
-
-
-pdf(file.path(fig.dir, paste0('explore hihi',batch,'.pdf')))
-with(pmatChosen[hihi,], plot(acute.sc, dur.ac))
-with(pmatChosen[hihi,], plot(log(acute.sc), log(dur.ac)))
-graphics.off()
-
-hihi <- with(pmatChosen, which(EHMacute > 60 & het.gen.sd > 2.5))
-lolo <- with(pmatChosen, which(EHMacute < 5 & het.gen.sd < 1.5))
-mean(pmatChosen[hihi,c(parnms,'gVals','EHMacute','univ')]$univ)
-mean(pmatChosen[lolo,c(parnms,'gVals','EHMacute','univ')]$univ)
-
-temprcoh <- retroCohSim(parms = pmatChosen[hihi[2],parnms], seed = 1, maxN=5*10^4, browse=F, nc = ncores)
-names(temprcoh)
-
-gtabs[hihi]
-gtabs[lolo]
-
-rownames(pmatChosen)[hihi]
-pmatLs
+save(pmatChosen, sds, gtabs, file=file.path(out.dir, paste0('IntermedDistr',batch,'.Rdata'))) ## Save particles & their sds
