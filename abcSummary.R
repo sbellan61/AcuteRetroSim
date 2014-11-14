@@ -3,7 +3,7 @@ rm(list=ls()); gc()
 setwd('/home1/02413/sbellan/Rakai/AcuteRetroSim/')
 sapply(c("SimulationFunctions.R","RakFunctions.R",'abcFunctions.R'), source) # load Rakai analysis simulation functions from script
 ncores <- 12
-batch <- 2
+batch <- 3
 in.dir <- paste0('results/abcBatch',batch) ## collect results from here
 #in.dir <- 'results/abcBatch1Old5good/'
 
@@ -28,7 +28,9 @@ save(gtabs,pmat, pmatLs, file = file.path(out.dir,paste0('pmatLs',batch,'.Rdata'
 head(pmat[,c('acute.sc','dur.ac','het.gen.sd','enoughHet','inc','prev','gVals')],10)
 gtabs[1]
 ## load(file = file.path(out.dir,paste0('pmatLs',batch,'.Rdata')))
-pmat <- pmat[!is.na(pmat$gVals),]
+excludeNA <- !is.na(pmat$gVals)
+pmat <- pmat[excludeNA,]
+gtabs <- gtabs[excludeNA]
 
 ## Histogram of g value statistics
 pdf(file.path(fig.dir, 'hist gval', paste0('hist gval',batch,'.pdf')))
@@ -44,11 +46,12 @@ sbpairs(pmat[,c('bb','prev')], file.path(bdir, paste0('bbPrev',batch)), do.jpeg=
 sbpairs(pmat[,c('be','prev')], file.path(bdir, paste0('bePrev',batch)), do.jpeg=T)
 sbpairs(pmat[,c('bp','prev')], file.path(bdir, paste0('bpPrev',batch)), do.jpeg=T)
 
+batch <- 3
 ## Select intermediate distribution based on threshold criteria
-cutfs <- c(15,15,8,5,3) ## cutoffs for each batch
+cutfs <- c(15,15,10,5,3) ## cutoffs for each batch
 cutf <- cutfs[batch]
 ## Match G stats
-print(paste0(round(mean(pmat$gVals<cutf)*100),'% of simulations pass threshold criteria'))
+print(paste0(round(mean(pmat$gVals<cutf)*100),'% of simulations pass G statistic threshold criteria'))
 ## Match number of couples
 nprevsMin <- c(100,110,120,120,120)
 nprevsMax <- c(500,400,300,300,300)
@@ -69,40 +72,42 @@ rightRHuniv <- with(pmat, univ > RHunivMin[batch] & univ < RHunivMax[batch])
 sum(rightRHuniv)
 ## Combine criteria
 choice <- with(pmat, gVals<cutf & enoughHet & rightSizeNinc & rightSizeNprev & rightRHuniv & rightPrevHaz)
-print(paste0(round(mean(choice)*100),'% of simulations pass threshold criteria with # of couples restrictions'))
+print(paste0(round(mean(choice)*100),'% of simulations pass all threshold criteria'))
 print(sum(choice))
 
 pmatChosen <- pmat[choice,]
+gtabs <- gtabs[choice]
 tail(pmatChosen,3)
 head(pmatChosen,3)
-gtabs[nrow(pmatChosen)+0:-3] ## Look at last few Gtables to see how the worst simulations selected fare
-
-## Compare prior distributions to intermediate distribution
+gtabs[nrow(pmatChosen)] ## Look at last few Gtables to see how the worst simulations selected fare
 priorParms <- addEHM(simParmSamp(4*10^4)) ## sample prior
 pmatChosen <- addEHM(pmatChosen)
 
+## Look at CIs nonlog
+apply(pmatChosen[,c(parnms,'EHMacute')], 2, function(x) quantile(x,c(.025,.5,.975)))
+apply(priorParms[,c(parnms,'EHMacute')], 2, function(x) quantile(x,c(.025,.5,.975)))
+with(pmatChosen, cor.test(EHMacute, het.gen.sd))
+
+## Compare prior distributions to intermediate distribution
+if(batch==1) { ##Plot Priors for comparison (call it Post0 to make name switching easy)
+    sbpairs(priorParms[, sel], file.path(fig.dir, 'Post', 'Post0'), do.jpeg=T, rgs=rgs) ## Post0 = Prior
+    sbpairs(logtransParms(priorParms), file.path(fig.dir, 'logPost', 'logPost0'), do.jpeg=T, rgs=rgs)
+    sbpairs(logtransParms(priorParms,T)[,sel], file.path(fig.dir,  'logPostEHM', 'logPostEHM0'), do.jpeg=T, rgs=rgs)
+}
+
+## Plot intermediate distribution
+## Untransformed
 sel <- c(ghazs,'acute.sc','dur.ac','het.gen.sd','EHMacute')
 rgs <- apply(priorParms[,sel],2,range)
 sbpairs(pmatChosen[,sel], file.path(fig.dir, 'Post', paste0('Post',batch)), do.jpeg=T, rgs=rgs)
-#sbpairs(priorParms[, sel], file.path(fig.dir, 'Post', 'Post0'), do.jpeg=T, rgs=rgs) ## Post0 = Prior
-
 ## Log scale
 rgs <- apply(logtransParms(priorParms),2,range) 
 sbpairs(logtransParms(pmatChosen[,parnms]), file.path(fig.dir, 'logPost', paste0('logPost',batch)), do.jpeg=T, rgs=rgs)
-#sbpairs(logtransParms(priorParms), file.path(fig.dir, 'logPost', 'logPost0'), do.jpeg=T, rgs=rgs)
-
 ## with EHMacute
 sel <- c('acute.sc','dur.ac','EHMacute','het.gen.sd','bp')
 rgs <- apply(logtransParms(priorParms,T)[,sel],2,range)
 rgs[1,'EHMacute'] <- 0
 sbpairs(logtransParms(pmatChosen[,parnms],T)[,sel], file.path(fig.dir, 'logPostEHM', paste0('logPostEHM',batch)), do.jpeg=T, rgs=rgs)
-## sbpairs(logtransParms(priorParms,T)[,sel], file.path(fig.dir,  'logPostEHM', 'logPostEHM0'), do.jpeg=T, rgs=rgs)
-
-## Look at CIs nonlog
-apply(pmatChosen[,c(parnms,'EHMacute')], 2, function(x) quantile(x,c(.025,.5,.975)))
-apply(priorParms[,c(parnms,'EHMacute')], 2, function(x) quantile(x,c(.025,.5,.975)))
-
-with(pmatChosen, cor.test(EHMacute, het.gen.sd))
 
 ## Calculate std dev to use in particle perturbations
 sdsNew <- sdPost(pmatChosen) ## log scale
