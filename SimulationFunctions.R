@@ -1913,7 +1913,7 @@ rcop <- function(country,          ## country to simulate
   }
 
 ## Plot posterior pairwise-correlations & histograms to compare distributions
-sbpairs <- function(dat, file.nm, width = 10, height = 10,
+sbpairs <- function(dat, file.nm, width = 10, height = 10, logaxes=NA,
                     rgs = NA,           ## ranges
                     yrg = NA,
                     breaks = NA,

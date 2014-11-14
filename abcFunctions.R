@@ -230,8 +230,9 @@ weightParticles <- function(currentBatch, lastBatch, sdsUse, browse = F) {
     for(jj in 1:length(numerator)) { 
         Ks <- perturbParticle(currentBatch[jj,], from = lastBatch, sds = sdsUse, browse=F)
         denominator[jj] <- sum(lastBatch$weight * Ks)
-    }}
-
+    }
+    return(numerator/denominator)
+}
 
 ####################################################################################################
 ## Function that does simulation & gets wtab all at once
@@ -309,6 +310,9 @@ collectSumStat <- function(filenm, returnGtable = F, browse=F, ncores = ncores, 
     ## Convert to wtab
     wtabSims <- mclapply(rcohsList, function(x) sbmod.to.wdat(x$rakll, excl.by.err = T, browse=F, giveLate=F, 
                                                               condRakai=T, giveProp=T, simpPois=T), mc.cores=ncores)
+
+    prevHazs <- unlist(lapply(wtabSims, function(x) if(is.null(x$error)) with(x$prevt, sum(i)/sum(n)) else NA))
+
     nCplMat <- do.call(rbind.data.frame, mclapply(rcohsList, function(x) xtabs(~phase, x$rakll)))
     colnames(nCplMat) <- c('prev','inc','late')
     parmsMat <- matrix(unlist(lapply(rcohsList, '[[', 'pars')), nr = length(rcohsList), nc = 15, byrow=T)
@@ -326,7 +330,8 @@ collectSumStat <- function(filenm, returnGtable = F, browse=F, ncores = ncores, 
     gS <- mclapply(contTabsSim, gSumStat, mc.cores = ncores)
     gVals <- unlist(lapply(gS, '[',1))
     ## Create parameter matrix
-    parmsMat <- data.frame(parmsMat, nCplMat, PoisRHsMat, gVals, filenm = filenm, job = 1:nrow(parmsMat))
+    parmsMat <- data.frame(parmsMat, nCplMat, prevHazs, PoisRHsMat, gVals, 
+                           filenm = filenm, job = 1:nrow(parmsMat))
     if(returnGtable) Gtable <- lapply(gS, '[',2) else Gtable <- NA
     rm(contTabsSim, gS,gVals); gc()
     return(list(pmat=parmsMat, Gtable=Gtable))
