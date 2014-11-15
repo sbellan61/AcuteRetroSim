@@ -7,7 +7,7 @@ load(file='results/RakAcute/wf.Rdata') ## big file, stored outside of git repo
 load(file = file.path('results','HollingsworthAn','RealExclbyErr','workspace.Rdata')) ## fit to real data
 names(fout)
 outdir <- file.path('FiguresAndTables','UgandaFitSummaries') ## incase workspace load changed it
-finalbatch <- 3 ## final abc batch to use as posterior
+finalbatch <- 4 ## final abc batch to use as posterior
 abcdir <- 'results/abcSummary'
 load(file=file.path(abcdir, paste0('IntermedDistr',finalbatch,'.Rdata'))) ## Load last distribution (already filtered)
 
@@ -135,48 +135,50 @@ for(do.log in 0:1) {
 library(plyr); library(data.table); library(abind); library(multicore); library(emdbook);library(coda); library(plotrix)
 
 ## Get 95% posterior contour using volume of points in that region
-test <- HPDregionplot(pmatChosen, vars = c('logacute.sc','logdur.ac'), prob = c(.95), lims = c(-1.5,10,-2,11), n = 28, h = c(1,1),
+test <- HPDregionplot(pmatChosen, vars = c('logacute.sc','logdur.ac'), prob = c(.95), lims = c(-1.5,10,-2,11), n = 27, h = c(.3,.1),
                       bty = 'n', xlab = expression(RH['acute']), ylab = 'acute phase duration (months)')
 graphics.off()
-
 ####################################################################################################
 ## Figure 1. Show EHM diagram and RH[acute]/d[acute] collinearity plot with MCMC posteriors from refit of Holl Mod.
-pdf(file.path(outdir,'Figure SX - fitted RHacute dacute.pdf'), w = 3.27, h = 3)
-par('ps'=10)
-layout(matrix(c(1:2),1,2), w = c(1,.3))
+for(ff in 1:2) {
+    if(ff==1) pdf(file.path(outdir,'Figure SX - fitted RHacute dacute.pdf'), w = 3.27, h = 3)
+    if(ff==2) png(file.path(outdir,'Figure SX - fitted RHacute dacute.png'), w = 3.27, h = 3, units='in',res=200)
+    par('ps'=10)
+    layout(matrix(c(1:2),1,2), w = c(1,.3))
 ##################################################
-## contour plot of EHM
-par(mar=c(4,4,.3,0))
-xs <- seq(-1,7.2, by = .05) ##log(seq(0.1,8, by = 1))
-ys <- seq(-2.4,2.7, by = .05) ##log(seq(0.1, 11, by = .5))
-levels <- c(0,2,5,10,25,50,70,100,200,500,1000,10000,10^5)
-cols <- colorRampPalette(c('purple','orange','red'))(length(levels)-1)
-blevels <- c(-25,-10,-2,0)
-bcols <- colorRampPalette(c('dark green','purple'))(length(blevels))
-cols <- c(bcols[-length(bcols)], cols)
-levels <- c(blevels[-length(blevels)],levels)
-image(xs, ys, outer(exp(xs)-1,exp(ys)), breaks = levels, xlim = c(-1,6.2), ylim = c(-2.4,2.6), mgp = c(3,0,0),
-               col = cols, axes = F, xlab = expression(paste(RH['acute'])), ylab = expression(d[acute]))
-xts <- c(1:9, seq(10, 90, by = 10), seq(100, 500, by = 100))
-xsh <- c(1,10,100)
-xls <- xts
-xls[!xls %in% xsh] <- NA
-axis(1, at = log(xts), lab = xls)
-yts <- c(seq(.1,.9, by = .1),1:10)
-ysh <- c(.1,1,10)
-yls <- yts
-yls[!yls %in% ysh] <- NA
-axis(2, at = log(yts), lab = yls, las = 2)
-#lines(test[[1]]$x, test[[1]]$y)
-with(pmatChosen, points(log(acute.sc), log(dur.ac), cex = .3, col = 'black', pch = 16))
-## text(log(meds['acute.sc']), log(meds['dur.ac']), 'median', pos=1, cex=ct)
-## with(data.frame(outtab), axis(1, at = log(acute.sc[c(1,3)]), lab = NA, line = -1.5))
-## with(data.frame(outtab), axis(2, at = log(dur.ac[c(1,3)]), lab = NA, line = -2)) 
-## Palette legend
-par(mar=rep(0,4), cex.lab = ct, cex.axis = ct, cex.main = ct)
-plot(0,0,type="n",axes=F, xlim = c(-.1,.2), ylim = c(-.1,.9), xlab = '', ylab = '')
-color.legend(.09,.1,.15,.8, levels, rect.col = cols, gradient = "y", cex = ct*.8)
-text(.025, .8, expression(paste(EHM['acute'])), pos = 3, cex = ct*1.2)
+    ## contour plot of EHM
+    par(mar=c(4,4,.3,0))
+    xs <- seq(-1,7.2, by = .05) ##log(seq(0.1,8, by = 1))
+    ys <- seq(-2.4,2.7, by = .05) ##log(seq(0.1, 11, by = .5))
+    levels <- c(0,2,5,10,25,50,70,100,200,500,1000,10000,10^5)
+    cols <- colorRampPalette(c('purple','orange','red'))(length(levels)-1)
+    blevels <- c(-25,-10,-2,0)
+    bcols <- colorRampPalette(c('dark green','purple'))(length(blevels))
+    cols <- c(bcols[-length(bcols)], cols)
+    levels <- c(blevels[-length(blevels)],levels)
+    image(xs, ys, outer(exp(xs)-1,exp(ys)), breaks = levels, xlim = c(-1,6.2), ylim = c(-2.4,2.6), mgp = c(3,0,0),
+          col = cols, axes = F, xlab = expression(paste(RH['acute'])), ylab = expression(d[acute]))
+    xts <- c(1:9, seq(10, 90, by = 10), seq(100, 500, by = 100))
+    xsh <- c(1,10,100)
+    xls <- xts
+    xls[!xls %in% xsh] <- NA
+    axis(1, at = log(xts), lab = xls)
+    yts <- c(seq(.1,.9, by = .1),1:10)
+    ysh <- c(.1,1,10)
+    yls <- yts
+    yls[!yls %in% ysh] <- NA
+    axis(2, at = log(yts), lab = yls, las = 2)
+                                        #lines(test[[1]]$x, test[[1]]$y)
+    with(pmatChosen, points(log(acute.sc), log(dur.ac), cex = .3, col = 'black', pch = 16))
+    ## text(log(meds['acute.sc']), log(meds['dur.ac']), 'median', pos=1, cex=ct)
+    ## with(data.frame(outtab), axis(1, at = log(acute.sc[c(1,3)]), lab = NA, line = -1.5))
+    ## with(data.frame(outtab), axis(2, at = log(dur.ac[c(1,3)]), lab = NA, line = -2)) 
+    ## Palette legend
+    par(mar=rep(0,4))
+    plot(0,0,type="n",axes=F, xlim = c(-.1,.2), ylim = c(-.1,.9), xlab = '', ylab = '')
+    color.legend(.09,.1,.15,.8, levels, rect.col = cols, gradient = "y", cex = .8)
+    text(.025, .8, expression(paste(EHM['acute'])), pos = 3, cex = 1.2)
+}
 graphics.off()
 ####################################################################################################
 

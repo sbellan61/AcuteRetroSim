@@ -7,14 +7,31 @@ setwd('/home1/02413/sbellan/Rakai/AcuteRetroSim/')
 sapply(c("SimulationFunctions.R","RakFunctions.R",'abcFunctions.R'), source) # load Rakai analysis simulation functions from script
 ncores <- 12
 finalbatch <- 4
-parsDo <- c('EHMacute','het.gen.sd','acute.sc','dur.ac','bp')
-logDo <- c(F,F,T,T,T)
-nmsDo <- expression(EHM[acute], sigma[lambda], RH[acute], d[acute], lambda)
+
+transfEHM <- TRUE
+parsDo <- c('acute.sc','dur.ac','EHMacute','bp','het.gen.sd')
+logDo <- c(T,T,F,T,F) ## which variables to show on log scale
+flatPriors <- c(T,T,F,T,T) ## which variables have flat priors
+nmsDo <- expression( RH[acute], d[acute],EHM[acute],lambda, sigma[lambda] ) ## variable names
 npars <- length(parsDo)
 cols <- rainbow(npars)
-distrNms <- c('Prior', paste0('Intermediate ', 1:(finalbatch-1)), 'Posterior')
-xlims <- list(EHMacute=c(0,100), het.gen.sd=c(0,3), acute.sc=c(.5,200), dur.ac=c(.5,10), 
-              bp = exp(c(logGHazLoBound['bp'], logGHazHiBound['bp'])))
+distrNms <- c('Prior', paste0('Intermediate ', 1:(finalbatch-1)), 'Posterior') ## distribution names
+xlims <- list(acute.sc=c(.5,200), dur.ac=c(.5,10), EHMacute=c(-5,100,500), 
+              bp = exp(c(logGHazLoBound['bp'], logGHazHiBound['bp'])),het.gen.sd=c(0,3))
+xticks <- list(acute.sc=c(.2,1,5,10,50,100,200), dur.ac=c(.5,1:10), EHMacute=c(-5,1,2,5,10,20,50,100,200,500), 
+               bp = signif(exp(seq(logGHazLoBound['bp'], logGHazHiBound['bp'], l = 5)),2), het.gen.sd=seq(0,3,by=.5))
+flatDens <- list(rhAcutePrior(parms = 5), durAcutePrior(parms=3),EHMacute=NA, 
+                 bp = logGHazPrior(parms=logGHazPrior(1))[3], het.gen.sd = hetGenSDPrior(parms=2))
+logxticks <- xticks
+for(ii in which(logDo)) logxticks[[ii]] <- log(xticks[[ii]])
+
+rgs <- list(acute.sc=c(.5,200), dur.ac=c(.5,8), EHMacute=c(-5,500), bp=exp(c(logGHazLoBound[3],  logGHazHiBound[3])), het.gen.sd=c(0,3))
+for(ii in which(logDo)) rgs[[ii]] <- log(rgs[[ii]])
+if(transfEHM) {
+    rgs[['EHMacute']] <-  log(rgs[['EHMacute']]+10)
+    ehmticks <- log(xticks[['EHMacute']]+10)
+    xlims[['EHMacute']] <- log(xlims[['EHMacute']]+10)
+}                
 
 pmc0 <- addEHM(simParmSamp(4*10^4)) ## sample prior distribution
 pmc0 <- within(pmc0, {for(ll in logParms) assign(paste0('log',ll), log(get(ll))); rm(ll)}) ## add log variables to priors
@@ -23,69 +40,61 @@ for(bb in 1:finalbatch) { ## load all batches as pmc1, ..., pmcN
     assign(paste0('pmc',bb), pmatChosen) ## pmc = parameter matrix chosen from ABC, number indicates ABC batch (intermediate distribution)
 }
 
-rgs <- apply(pmc0[,parsDo], 2, range)
-
-## Show approach from prior to posterior through intermediate distributions for EHMacute, het.gen.sd,
-pdf(file.path(fig.dir, 'posterior approach.pdf'), w = 6.83, h=8)
-par(mfrow=c(3,2), lwd=2, bty='n')
-for(pp in 1:npars) for(bb in 0:finalbatch) {
-    if(bb==0) {
-        plot(get(paste0('Dens',parsDo[pp],bb)), xlab=nmsDo[pp], log=ifelse(logDo[pp],'x',''), ylab = 'density', 
-             col=cols[bb+1], ylim = c(0,get(paste0('Max',parsDo[pp]))), las = 1, main = '', xlim=xlims[[pp]])
-    }else{
-        lines(get(paste0('Dens',parsDo[pp],bb)), col = cols[bb+1])
-    }
-    if(pp==1)legend('topright', distrNms, col = cols, lwd = 2, bty = 'n')
-}
-graphics.off()
-
-
 for(bb in 0:finalbatch) for(ii in 1:npars)  {
     pp <- parsDo[ii]
-    temp <- with(get(paste0('pmc',bb)), density(get(pp), from = rgs[1,pp], to = rgs[2,pp]))
-    if(logDo[ii]) temphist <- with(get(paste0('pmc',bb)), hist(log(get(pp)), plot=F, breaks = 20))
-    if(!logDo[ii]) temphist <- with(get(paste0('pmc',bb)), hist(get(pp), plot=F, breaks = 20))
+    tempPmc <- get(paste0('pmc',bb))
+    if(logDo[ii]) {
+        temp <- with(tempPmc, density(log(get(pp)), from = rgs[[pp]][1], to = rgs[[pp]][2]))
+    }else{
+        temp <- with(tempPmc, density(get(pp), from = rgs[[pp]][1], to = rgs[[pp]][2]))
+    }
+    if(transfEHM & pp=='EHMacute') temp <- with(tempPmc, density(log(get(pp)+10), from = rgs[[pp]][1], to = rgs[[pp]][2]))
     assign(paste0('Dens',pp,bb), temp)
-    assign(paste0('Hist',pp,bb), temphist)
     if(bb==0) assign(paste0('Max',pp), max(temp$y)) else assign(paste0('Max',pp), max(temp$y, get(paste0('Max',pp))))
 }
 
 ## Show approach from prior to posterior through intermediate distributions for EHMacute, het.gen.sd,
-pdf(file.path(fig.dir, 'posterior approach hist.pdf'), w = 6.83, h=8)
-par(mfrow=c(3,2), lwd=2, bty='n')
-for(pp in 1:npars) {
-    for(bb in 0:finalbatch) {
-        temphist <- get(paste0('Hist',parsDo[pp],bb))
+for(ff in 1:2) {
+    if(ff==11) pdf(file.path(fig.dir, 'posterior approach.pdf'), w = 6.83, h=5) else{
+        png(file.path(fig.dir, 'posterior approach.png'), w = 6.83, h=5, units='in',res=200)}
+    par(mfrow=c(2,3), lwd=2, bty='n', mar = c(5,4,2,.5),'ps'=12)
+    for(pp in 1:npars) for(bb in 0:finalbatch) {
+        tempDens <- get(paste0('Dens',parsDo[pp],bb))
         if(bb==0) {
-            if(logDo[pp]) xs <- exp(temphist$mids) else xs <- temphist$mids
-            plot(xs, temphist$density, xlab=nmsDo[pp], log=ifelse(logDo[pp],'x',''), ylab = 'density', 
-                 col=cols[bb+1], ylim = c(0,get(paste0('Max',parsDo[pp]))), las = 1, main = '', xlim=xlims[[pp]])
+            plot(tempDens, xlab=nmsDo[pp], ylab = 'density', xlim = rgs[[pp]], type = ifelse(flatPriors[pp],'n','l'),
+                 col=cols[bb+1], ylim = c(0,get(paste0('Max',parsDo[pp]))), las = 1, main = paste0('(',LETTERS[pp],')'), xaxt='n')
+            if(flatPriors[pp]) segments(rgs[[pp]][1], flatDens[[pp]],rgs[[pp]][2], flatDens[[pp]], col = cols[bb+1])
+            if(logDo[pp]) axis(1, at = logxticks[[pp]], label = xticks[[pp]]) else{
+                if(transfEHM & parsDo[pp]=='EHMacute') axis(1, at = ehmticks, label=xticks[[pp]]) else axis(1, at = xticks[[pp]]) 
+            }
         }else{
-            if(logDo[pp]) xs <- exp(temphist$mids) else xs <- temphist$mids
-            lines(xs, temphist$density, col = cols[bb+1])
+            lines(tempDens, col = cols[bb+1])
         }
-        if(pp==1)legend('topright', distrNms, col = cols, lwd = 2, bty = 'n')
-    }}
-graphics.off()
-
-
-## Show approach from prior to posterior through intermediate distributions for EHMacute, het.gen.sd,
-pdf(file.path(fig.dir, 'posterior approach hist.pdf'), w = 6.83, h=8)
-par(mfrow=c(3,2), lwd=2, bty='n')
-for(pp in 1:npars) {#for(bb in 0:finalbatch) {
-hist(
+    }
+    par(mar=rep(2,4))
+    plot(0,0, type = 'n', bty ='n', axes=F)
+    legend('topright', distrNms, col = cols, lwd = 2, bty = 'n')
 }
 graphics.off()
 
-pdf(file.path(fig.dir, 'posterior approach hist.pdf'), w = 6.83, h=8)
-        with(Histhet.gen.sd0, plot(mids, density, xlab=nmsDo[pp], log=ifelse(logDo[pp],'x',''), ylab = 'density', 
-                            col=cols[bb], ylim = c(0,get(paste0('Max',parsDo[pp]))), las = 1, main = '', xlim=xlims[[pp]]))
-#hist(pmc0$het.gen.sd)
-graphics.off()
+## Table of proportion of couples by interval from final distribution
+load(file=file.path(out.dir, paste0('IntermedDistr',finalbatch,'.Rdata'))) ## Load last distribution (already filtered)
+propFromWtab <- function(x)  x[[1]][,3,]  / apply(x[[1]][,3:4,],c(1,3),sum)
+WpropsRl <- signif(with(wtab.rl, cbind(with(inct, i/n), with(prevt, i/n))),2)
+Wprops <- lapply(gtabs, propFromWtab)
+Wprops <- array(unlist(Wprops), dim=c(4,2,length(Wprops)))
+WpropsMed <- signif(apply(Wprops, 1:2, function(x) quantile(x, .5, na.rm=T)),2)
+WpropsLCI <- signif(apply(Wprops, 1:2, function(x) quantile(x, .025, na.rm=T)),2)
+WpropsUCI <- signif(apply(Wprops, 1:2, function(x) quantile(x, .975, na.rm=T)),2)
+
+cistrg <- function(med,lci,uci) paste0(med, ' (',lci,', ',uci,')')
+WtabFit <- data.frame(WawInc=WpropsRl[,1], PostInc=cistrg(WpropsMed[,1],WpropsLCI[,1],WpropsUCI[,1]), 
+                      WawInc=WpropsRl[,2], PostInc=cistrg(WpropsMed[,2],WpropsLCI[,2],WpropsUCI[,2]))
+write.csv(WtabFit, file.path(fig.dir, 'Fit to proportions in Wawer table.csv'))
 
 
+## Table of RHacute & dacute values for future modeling work
 
 ## Look at CIs nonlog
 apply(pmatChosen[,c(parnms,'EHMacute')], 2, function(x) quantile(x,c(.025,.5,.975)))
-apply(priorParms[,c(parnms,'EHMacute')], 2, function(x) quantile(x,c(.025,.5,.975)))
 with(pmatChosen, cor.test(EHMacute, het.gen.sd))

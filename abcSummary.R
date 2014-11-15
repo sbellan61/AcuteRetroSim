@@ -61,13 +61,13 @@ rightSizeNprev <- with(pmat, prev > nprevsMin[batch] & prev < nprevsMax[batch])
 sum(rightSizeNinc & rightSizeNprev)
 ## Match prevalent couple hazards
 WawPrevHaz <- with(wtab.rl$prevt, sum(i)/sum(n)) ## .0843
-prevHazMin <- WawPrevHaz*c(.01, .7,.8,rep(.85,4))
-prevHazMax <- WawPrevHaz/c(.01, .7,.8, rep(.85,4))
+prevHazMin <- WawPrevHaz*c(.01, .7,.8,.85)
+prevHazMax <- WawPrevHaz/c(.01, .7,.8, .85)
 rightPrevHaz <- with(pmat, prevHazs > prevHazMin[batch] & prevHazs < prevHazMax[batch])
 sum(rightPrevHaz)
 ## Match incident to prevalent couple hazard ratios
-RHunivMin <- c(0,11*c(.7,.8,.85)) ## Wawer univariate RH was 11, so try to hone in on this too
-RHunivMax <- c(Inf,11/c(.7,.8,.85)) ## Wawer univariate RH was 11, so try to hone in on this too
+RHunivMin <- c(0,11*c(.7,.8,.83)) ## Wawer univariate RH was 11, so try to hone in on this too
+RHunivMax <- c(Inf,11/c(.7,.8,.83)) ## Wawer univariate RH was 11, so try to hone in on this too
 rightRHuniv <- with(pmat, univ > RHunivMin[batch] & univ < RHunivMax[batch])
 sum(rightRHuniv)
 ## Combine criteria
@@ -111,6 +111,7 @@ sbpairs(logtransParms(pmatChosen[,parnms],T)[,sel], file.path(fig.dir, 'logPostE
 
 ## Calculate std dev to use in particle perturbations
 sdsNew <- sdPost(pmatChosen) ## log scale
+gtabsNew <- gtabs
 
 ## Weight particles
 if(batch==1) {
@@ -125,5 +126,6 @@ if(batch==1) {
 }
 pmatChosen <- pmatCNew
 sds <- sdsNew ## kept name as New to avoid loading over it above
+gtabs <- gtabsNew
 save(pmatChosen, sds, gtabs, file=file.path(out.dir, paste0('IntermedDistr',batch,'.Rdata'))) ## Save particles & their sds to results directory
 save(pmatChosen, sds, gtabs, file=file.path('abcSummary', paste0('IntermedDistr',batch,'.Rdata'))) ## Save particles & their sds to local directory in repository
