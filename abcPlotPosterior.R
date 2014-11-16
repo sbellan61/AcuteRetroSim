@@ -54,11 +54,13 @@ for(bb in 0:finalbatch) for(ii in 1:npars)  {
 }
 
 ## Show approach from prior to posterior through intermediate distributions for EHMacute, het.gen.sd,
+toDo <- 1:npars
+#toDo <- (1:npars)[-3]
 for(ff in 1:2) {
-    if(ff==11) pdf(file.path(fig.dir, 'posterior approach.pdf'), w = 6.83, h=5) else{
-        png(file.path(fig.dir, 'posterior approach.png'), w = 6.83, h=5, units='in',res=200)}
+    if(ff==11) pdf(file.path(fig.dir, 'posterior approach EHM.pdf'), w = 6.83, h=5) else{
+        png(file.path(fig.dir, 'posterior approach EHM.png'), w = 6.83, h=5, units='in',res=200)}
     par(mfrow=c(2,3), lwd=2, bty='n', mar = c(5,4,2,.5),'ps'=12)
-    for(pp in 1:npars) for(bb in 0:finalbatch) {
+    for(pp in toDo) for(bb in 0:finalbatch) {
         tempDens <- get(paste0('Dens',parsDo[pp],bb))
         if(bb==0) {
             plot(tempDens, xlab=nmsDo[pp], ylab = 'density', xlim = rgs[[pp]], type = ifelse(flatPriors[pp],'n','l'),
@@ -77,6 +79,40 @@ for(ff in 1:2) {
 }
 graphics.off()
 
+
+## Without EHMacute
+toDo <- (1:npars)[-3]
+for(ff in 1:2) {
+    if(ff==11) pdf(file.path(fig.dir, 'posterior approach.pdf'), w = 6.83, h=5) else{
+        png(file.path(fig.dir, 'posterior approach.png'), w = 6.83, h=5, units='in',res=200)}
+    par(mfrow=c(2,2), lwd=2, bty='n', mar = c(5,4,2,.5),'ps'=12)
+    for(ipp in 1:length(toDo)) for(bb in 0:finalbatch) {
+        pp <- toDo[ipp]
+        tempDens <- get(paste0('Dens',parsDo[pp],bb))
+        if(bb==0) {
+            plot(tempDens, xlab=nmsDo[pp], ylab = 'density', xlim = rgs[[pp]], type = ifelse(flatPriors[pp],'n','l'),
+                 col=cols[bb+1], ylim = c(0,get(paste0('Max',parsDo[pp]))), las = 1, main = paste0('(',LETTERS[ipp],')'), xaxt='n')
+            if(flatPriors[pp]) segments(rgs[[pp]][1], flatDens[[pp]],rgs[[pp]][2], flatDens[[pp]], col = cols[bb+1])
+            if(logDo[pp]) axis(1, at = logxticks[[pp]], label = xticks[[pp]]) else{
+                if(transfEHM & parsDo[pp]=='EHMacute') axis(1, at = ehmticks, label=xticks[[pp]]) else axis(1, at = xticks[[pp]]) 
+            }
+        }else{
+            lines(tempDens, col = cols[bb+1])
+        }
+    }
+    if(ipp==4) legend('topleft', distrNms, col = cols, lwd = 2, bty = 'n', cex = .8)
+}
+graphics.off()
+
+## CI convergence
+
+for(bb in 0:finalbatch) {
+    tempArr <- apply(get(paste0('pmc',bb))[,c('EHMacute','acute.sc','dur.ac','het.gen.sd','bp')],
+                     2, function(x) quantile(x,c(.025,.5,.975)))
+    if(bb==0) ciArr <- tempArr else ciArr <- abind(ciArr,tempArr, along=3)
+}
+ciArr[,'EHMacute',]
+
 ## Table of proportion of couples by interval from final distribution
 load(file=file.path(out.dir, paste0('IntermedDistr',finalbatch,'.Rdata'))) ## Load last distribution (already filtered)
 propFromWtab <- function(x)  x[[1]][,3,]  / apply(x[[1]][,3:4,],c(1,3),sum)
@@ -91,7 +127,6 @@ cistrg <- function(med,lci,uci) paste0(med, ' (',lci,', ',uci,')')
 WtabFit <- data.frame(WawInc=WpropsRl[,1], PostInc=cistrg(WpropsMed[,1],WpropsLCI[,1],WpropsUCI[,1]), 
                       WawInc=WpropsRl[,2], PostInc=cistrg(WpropsMed[,2],WpropsLCI[,2],WpropsUCI[,2]))
 write.csv(WtabFit, file.path(fig.dir, 'Fit to proportions in Wawer table.csv'))
-
 
 ## Table of RHacute & dacute values for future modeling work
 
