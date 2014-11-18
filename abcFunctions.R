@@ -286,8 +286,17 @@ gSumStat <- function(wtab) { ## compare wtab to wtab.rl
         }
         prevG[is.nan(prevG)] <- 0
         Gtable <- abind(cbind(contTabsRl$inct, wtab$inct, incG), cbind(contTabsRl$prevt, wtab$prevt, prevG),  along = 3)
-        return(list(Gval = sum(incG,prevG, na.rm=T), Gtable))
+        gtab <- cbind(incG,prevG)
+        return(list(Gval = sum(gtab,na.rm=T), Gtable))
     }else{    return(list(Gval = NA, Gtable=NA)) }
+}
+
+step <- 1
+reweightG <- function(x, Gweights=cbind(rep(1,4),rep(1,4))) {
+step <<- step+1
+print(x[[1]])
+    x[[1]][,'prevG',] <- try(x[[1]][,'prevG',]*Gweights)
+    return(x)
 }
 
 contTabFxn <- function(x) within(x, { ## turn wtab into only having # infected & # uninfected
@@ -310,7 +319,6 @@ collectSumStat <- function(filenm, returnGtable = F, browse=F, ncores = ncores, 
     ## Convert to wtab
     wtabSims <- mclapply(rcohsList, function(x) sbmod.to.wdat(x$rakll, excl.by.err = T, browse=F, giveLate=F, 
                                                               condRakai=T, giveProp=T, simpPois=T), mc.cores=ncores)
-
     prevHazs <- unlist(lapply(wtabSims, function(x) if(is.null(x$error)) with(x$prevt, sum(i)/sum(n)) else NA))
 
     nCplMat <- do.call(rbind.data.frame, mclapply(rcohsList, function(x) xtabs(~phase, x$rakll)))
@@ -327,7 +335,7 @@ collectSumStat <- function(filenm, returnGtable = F, browse=F, ncores = ncores, 
     ## just get # infected & # uninfected
     contTabsSim <- suppressWarnings(mclapply(wtabSims, contTabFxn, mc.cores=ncores)) ## suppressing length 1 for is.na(), not problematic
     ## Get G statistics
-    gS <- mclapply(contTabsSim, gSumStat, mc.cores = ncores)
+    gS <- mclapply(contTabsSim, gSumStat, mc.cores = ncores, Gweights=Gweights)
     gVals <- unlist(lapply(gS, '[',1))
     ## Create parameter matrix
     parmsMat <- data.frame(parmsMat, nCplMat, prevHazs, PoisRHsMat, gVals, 

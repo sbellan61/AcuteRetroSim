@@ -3,17 +3,19 @@ rm(list=ls()); gc()
 setwd('/home1/02413/sbellan/Rakai/AcuteRetroSim/')
 sapply(c("SimulationFunctions.R","RakFunctions.R",'abcFunctions.R'), source) # load Rakai analysis simulation functions from script
 ncores <- 12
-batch <- 4
+batch <- 5
 in.dir <- paste0('results/abcBatch',batch) ## collect results from here (not in repo, too big)
 
 fls <- list.files(in.dir, pattern='Rdata', full.names=T)
 ## tst <- collectSumStat(fls[1], browse=F, returnGtable=T, ncores=1) ## help with debugging, collect one result
 
 ## Collect results and put them in a matrix and a list of Wawer-type tables
-pmatLs <- mclapply(fls, collectSumStat, returnGtable=T, mc.cores=12, ncores = 1)
+notZeroSize <- file.info(fls)$size!=0
+pmatLs <- mclapply(fls[notZeroSize], collectSumStat, returnGtable=T, mc.cores=12, ncores = 1)
 save(pmatLs, file = file.path(out.dir,paste0('pmatLs',batch,'.Rdata')))
 pmat <- do.call(rbind.data.frame, lapply(pmatLs, '[[', 'pmat'))
 gtabs <- do.call(c, lapply(pmatLs, '[[', 'Gtable'))
+gtabs <- reweight(gtabs)
 ord <- order(pmat$gVals)
 pmat <- pmat[ord,]
 gtabs <- gtabs[ord]
@@ -25,6 +27,7 @@ save(gtabs,pmat, pmatLs, file = file.path(out.dir,paste0('pmatLs',batch,'.Rdata'
 ## Look at Gtables for the best ones to make sure they seem to be good matchest
 head(pmat[,c('acute.sc','dur.ac','het.gen.sd','enoughHet','inc','prev','gVals')],10)
 gtabs[1]
+
 ## load(file = file.path(out.dir,paste0('pmatLs',batch,'.Rdata')))
 excludeNA <- !is.na(pmat$gVals)
 pmat <- pmat[excludeNA,]
@@ -44,6 +47,12 @@ sbpairs(pmat[,c('bb','prev')], file.path(bdir, paste0('bbPrev',batch)), do.jpeg=
 sbpairs(pmat[,c('be','prev')], file.path(bdir, paste0('bePrev',batch)), do.jpeg=T)
 sbpairs(pmat[,c('bp','prev')], file.path(bdir, paste0('bpPrev',batch)), do.jpeg=T)
 
+gtabsWt <- lapply(gtabs, reweightG, Gweights=cbind(c(10,1,1,1),c(3,1,1,1)))
+print(step)
+gtabs[1]
+gtabsWt[1]
+
+reweightG(gtabs[3], Gweights=cbind(c(10,1,1,1),c(3,1,1,1)))
 
 ## Select intermediate distribution based on threshold criteria
 qchisq(.95,8) ## for 8 df, < 15 suggests simulation & data are not significantly different. We'll be slightly more conservative.
@@ -61,13 +70,13 @@ rightSizeNprev <- with(pmat, prev > nprevsMin[batch] & prev < nprevsMax[batch])
 sum(rightSizeNinc & rightSizeNprev)
 ## Match prevalent couple hazards
 WawPrevHaz <- with(wtab.rl$prevt, sum(i)/sum(n)) ## .0843
-prevHazMin <- WawPrevHaz*c(.01, .7,.8,.85)
-prevHazMax <- WawPrevHaz/c(.01, .7,.8, .85)
+prevHazMin <- WawPrevHaz*c(.01, .7,.8,.85,.87)
+prevHazMax <- WawPrevHaz/c(.01, .7,.8, .85,.87)
 rightPrevHaz <- with(pmat, prevHazs > prevHazMin[batch] & prevHazs < prevHazMax[batch])
 sum(rightPrevHaz)
 ## Match incident to prevalent couple hazard ratios
-RHunivMin <- c(0,11*c(.7,.8,.83)) ## Wawer univariate RH was 11, so try to hone in on this too
-RHunivMax <- c(Inf,11/c(.7,.8,.83)) ## Wawer univariate RH was 11, so try to hone in on this too
+RHunivMin <- c(0,11*c(.7,.8,.83,.86)) ## Wawer univariate RH was 11, so try to hone in on this too
+RHunivMax <- c(Inf,11/c(.7,.8,.83,.86)) ## Wawer univariate RH was 11, so try to hone in on this too
 rightRHuniv <- with(pmat, univ > RHunivMin[batch] & univ < RHunivMax[batch])
 sum(rightRHuniv)
 ## Combine criteria
@@ -87,6 +96,31 @@ pmatChosen <- addEHM(pmatChosen)
 apply(pmatChosen[,c(parnms,'EHMacute')], 2, function(x) quantile(x,c(.025,.5,.975)))
 # apply(priorParms[,c(parnms,'EHMacute')], 2, function(x) quantile(x,c(.025,.5,.975)))
 with(pmatChosen, cor.test(EHMacute, het.gen.sd))
+
+####################################################################################################
+propFromWtab <- function(x)  x[[1]][,3,]  / apply(x[[1]][,3:4,],c(1,3),sum)
+WpropsRl <- signif(with(wtab.rl, cbind(with(inct, i/n), with(prevt, i/n))),2)
+Wprops <- lapply(gtabs, propFromWtab)
+Wprops <- array(unlist(Wprops), dim=c(4,2,length(Wprops)))
+WpropsMed <- signif(apply(Wprops, 1:2, function(x) quantile(x, .5, na.rm=T)),2)
+WpropsLCI <- signif(apply(Wprops, 1:2, function(x) quantile(x, .025, na.rm=T)),2)
+WpropsUCI <- signif(apply(Wprops, 1:2, function(x) quantile(x, .975, na.rm=T)),2)
+cistrg <- function(med,lci,uci) paste0(med, ' (',lci,', ',uci,')')
+WtabFit <- data.frame(WawInc=WpropsRl[,1], PostInc=cistrg(WpropsMed[,1],WpropsLCI[,1],WpropsUCI[,1]), 
+                      WawInc=WpropsRl[,2], PostInc=cistrg(WpropsMed[,2],WpropsLCI[,2],WpropsUCI[,2]))
+write.csv(WtabFit, file.path(fig.dir, 'Fit to proportions in Wawer table.csv'))
+WtabFit
+for(ff in 1:2) {
+    if(ff==1) pdf(file.path(fig.dir, 'GoF.pdf'), w = 6.83, h=5) else{
+        png(file.path(fig.dir, 'GoF.png'), w = 6.83, h=5,units='in',res=200) }
+    par(mfrow=c(4,2), mar = c(2,2,0,.5))
+    for(ii in 1:4) for(jj in 1:2) {
+        hist(Wprops[ii,jj,], xlab = 'proportion seroconverting', col = 'black', main = '', xlim=c(0,1))
+        abline(v=WpropsRl[ii,jj], col = 'red')
+    }
+graphics.off()
+}
+####################################################################################################
 
 ## Compare prior distributions to intermediate distribution
 if(batch==1) { ##Plot Priors for comparison (call it Post0 to make name switching easy)
