@@ -54,7 +54,7 @@ par(mar=c(10,4,.5,.5), mgp = c(2.4,1,0),'ps'=12)
 ##################################################
 xmax <- 100
 ymax <- ceiling(max(tab1[to.do,-1],na.rm=T)/50)*50
-plot(0,0, type = 'n', xlab = '', ylab = xlab, bty = 'n',
+plot(0,0, type = 'n', xlab = '', ylab = '', bty = 'n',
      main = '', xlim = c(1,length(to.do)), ylim = c(0,ymax), axes=F)
 axis(1, 1:length(to.do), lab = tab1[to.do,'study'], las = 2)
 axis(2, seq(0,ymax, by = 50), las = 2)

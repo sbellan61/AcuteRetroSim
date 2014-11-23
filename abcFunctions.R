@@ -291,13 +291,12 @@ gSumStat <- function(wtab) { ## compare wtab to wtab.rl
     }else{    return(list(Gval = NA, Gtable=NA)) }
 }
 
-step <- 1
 reweightG <- function(x, Gweights=cbind(rep(1,4),rep(1,4))) {
-step <<- step+1
-print(x[[1]])
     x[[1]][,'prevG',] <- try(x[[1]][,'prevG',]*Gweights)
     return(x)
 }
+
+sumGs <- function(x) sum(x[[1]][,'prevG',], na.rm=T)
 
 contTabFxn <- function(x) within(x, { ## turn wtab into only having # infected & # uninfected
     if(!is.na(as.vector(inct)[1])) {
@@ -335,7 +334,7 @@ collectSumStat <- function(filenm, returnGtable = F, browse=F, ncores = ncores, 
     ## just get # infected & # uninfected
     contTabsSim <- suppressWarnings(mclapply(wtabSims, contTabFxn, mc.cores=ncores)) ## suppressing length 1 for is.na(), not problematic
     ## Get G statistics
-    gS <- mclapply(contTabsSim, gSumStat, mc.cores = ncores, Gweights=Gweights)
+    gS <- mclapply(contTabsSim, gSumStat, mc.cores = ncores)
     gVals <- unlist(lapply(gS, '[',1))
     ## Create parameter matrix
     parmsMat <- data.frame(parmsMat, nCplMat, prevHazs, PoisRHsMat, gVals, 

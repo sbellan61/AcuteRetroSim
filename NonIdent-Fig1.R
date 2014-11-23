@@ -1,6 +1,7 @@
 library(plyr); library(data.table); library(abind); library(multicore); library(emdbook);library(coda); library(plotrix)
 rm(list=ls(all=T)); gc()
 setwd('/home1/02413/sbellan/Rakai/AcuteRetroSim/')
+source('RakFunctions.R')
 ####################################################################################################
 ## Show that duration & infectivity of acute phase are not identifiable
 ## Create Figure 1.
@@ -18,64 +19,111 @@ apply(fout$exposts[,c('acute.sc','dur.ac')], 2, function(x) quantile(x, c(.025,.
 
 outdir <- file.path('FiguresAndTables','HollingsworthAn')
 if(!file.exists(outdir)) dir.create(outdir)
+quants <- function(dat) apply(dat, 2, function(x) quantile(x, c(.025,.5,.975)))
 
-## Get 95% posterior contour using volume of points in that region
+## Get 95% posterior contour using volume of points in that region. USING 90% because HPD tends to
+## overshoot a bit, true values for EHMacute CI's given in text
 HollCont <- HPDregionplot(fmcmc, vars = c('acute.sc','dur.ac'), prob = c(.95), lims = c(-1.5,10,-2,11), #n = 28, h = c(1,.08),
                       bty = 'n', xlab = expression(RH['acute']), ylab = 'acute phase duration (months)')
+
 graphics.off()
+
+HollXY <- with(HollCont[[1]], cbind(x=x,y=y))
+HollXY <- rbind(HollXY, tail(HollXY,1))
+mean(point.in.polygon(fmcmc[,'acute.sc'],fmcmc[,'dur.ac'],HollXY[,'x'], HollXY[,'y']))
+
+####################################################################################################
+## ABC-SMC results
+####################################################################################################
+abcdir <- 'results/abcSummary'
+finalbatch <- 5
+ABCoutdir <- 'FiguresAndTables/abcFig'
+load(file=file.path(abcdir, paste0('IntermedDistr',finalbatch,'.Rdata'))) ## Load last distribution (already filtered)
+## Get 95% posterior contour using volume of points in that region, .89 chosen based on point.in.polygon below and to visually match the true EHMacute quantile (which has 95% upper bound of 63, so contour can't go over the 70 color boundary
+abcCont <- HPDregionplot(pmatChosen, vars = c('logacute.sc','logdur.ac'), prob = c(.87), lims = c(-1.5,10,-2,11), n = 28, h =c(.8,1),# h = c(.3,.1),
+                      bty = 'n', xlab = expression(RH['acute']), ylab = 'acute phase duration (months)')
+abcCIs <- log(quants(pmatChosen[,c('acute.sc','dur.ac')]))
+abcEHM <- quants(pmatChosen[,'EHMacute',drop=F])
+graphics.off()
+
+abcXY <- with(abcCont[[1]], cbind(x=x,y=y))
+abcXY <- rbind(abcXY, tail(abcXY,1))
+mean(point.in.polygon(pmatChosen$logacute.sc,pmatChosen$logdur.ac,abcXY[,'x'], abcXY[,'y']))
+
+## Contour/image plot settings
+xs <- seq(-1,7.2, by = .05) ##log(seq(0.1,8, by = 1))
+ys <- seq(-2.4,2.7, by = .05) ##log(seq(0.1, 11, by = .5))
+levels <- c(-10,-2,0,2,10,20,50,100,200,500,1000,10000,10^5)
+cols <- colorRampPalette(c('dark blue','purple','orange','red'))(length(levels)-1)
+## blevels <- c(-25,-10,-2,0)
+## bcols <- colorRampPalette(c('dark green','purple'))(length(blevels)-1)
+## cols <- c(bcols[-length(bcols)], cols)
+## levels <- c(blevels[-length(blevels)],levels)
+mar1 <- c(4,2,2.5,1)
+mar2 <- c(4,5,2.5,0)
+options("scipen"=999)
+col.ac <- 'brown'
+col.ch <- 'black'
+col.lt <- gray(.3)
+col.aids <- gray(.6)
+xlab1 <- expression(RH[acute])
+ylab1 <- expression(d[acute])
+xlab2 <- 'relative infectivity of acute phase vs. chronic phase'
+ylab2 <- 'acute phase duration in months'
+
+drawHazProf <- function(yt, acute.sc = 101, dur.ac = .75, examnum = 1, lab=T) {
+    polygon(c(0,dur.ac,dur.ac,0), yt + c(0,0,acute.sc,acute.sc), col = col.ac, border=NA) ## acute
+    polygon(c(100,110,110,100), yt + c(0,0,7,7),col = col.lt, border=NA) ## late
+    polygon(c(0,110,110,0), yt + c(0,0,1,1), col = col.ch, border=NA) ## chronic
+    segments(110,yt,120,yt, lty = 3, col = col.aids)
+    points(-8,yt+5, pch = 21, cex = 2.5)
+    points(-8,yt+5, pch = as.character(examnum))
+    if(lab) {
+        text(1.5, yt + 12, bquote(RH[acute]==paste(.(acute.sc), ' for ', .(dur.ac), ' months')),pos = 4, col = col.ac)
+    }}
+
+hazLabs <- function(yt=30)  {   text(5,yt, 'acute', col = col.ac, pos=1)
+                                text(60,yt, 'chronic', col = col.ch, pos=1)
+                                text(103,yt, 'late', col = col.lt, pos=1)
+                                text(118,yt, 'AIDS', col = col.aids, pos=1)}
 
 ####################################################################################################
 ## Figure 1. Show EHM diagram and RH[acute]/d[acute] collinearity plot with MCMC posteriors from refit of Holl Mod.
-for(ff in 1:2) {
-    if(ff==1) pdf(file.path(outdir,'Figure 1 - EHM diagram and RH_ac d_ac collinearity.pdf'), w = 6.83, h = 2.7)
-    if(ff==2) png(file.path(outdir,'Figure 1 - EHM diagram and RH_ac d_ac collinearity.png'), w = 6.83, h = 2.7, units='in',res=200)
-    ct <- 1
-    par(cex.lab = ct, cex.axis = ct, cex.main = ct)
-    layout(matrix(c(1:3),1,3), w = c(.8,1,.3))
-##################################################
+
+showpts <- FALSE
+for(ff in 1:3) {
+    if(ff==1) pdf(file.path(ABCoutdir,'Figure 1 - EHM diagram and RH_ac d_ac collinearity.pdf'), w = 6.83, h = 5)
+    if(ff==2) png(file.path(ABCoutdir,'Figure 1 - EHM diagram and RH_ac d_ac collinearity.png'), w = 6.83, h = 5, units='in',res=200)
+    if(ff==3) png(file.path(ABCoutdir,'Figure 1 - EHM diagram and RH_ac d_ac collinearity.tiff'), w = 6.83, h = 5, units='in',res=300)
+    par('ps'=12)
+    layout(t(matrix(c(1:2,4,1,3,4),3,2)), w = c(.8,1,.3))
+    ## ################################################
     ## conceptual diagram
-    par(mar= c(4,.5,1,1))
-    plot(0,0, type = 'n', xlim = c(-5,125), ylim = c(0, 250), bty = 'n', axes=F, xlab='years since infection',ylab='')
+    par(mar=mar1)
+    plot(0,0, type = 'n', xlim = c(-10,125), ylim = c(0, 600), bty = 'n', axes=F, xlab='', ylab='')
+    title(main='(A)')
+    title(xlab='years since infection', mgp = c(2.5,0,0))
+    title(ylab='hazard profile', mgp=c(.5,1,0))
     axis(1, at = seq(0,120, by = 12), 0:10)
-    mtext('relative hazard (vs chronic phase)', side = 2, line = -.5, adj = .5, cex = .7)
-    ## example 1
-    ##axis(1, at = c(0,.5,110,120), pos = 0)
-    yt <- 0
-    polygon(c(0,.75,.75,0), yt + c(0,0,101,101), col = gray(.4), border=NA) ## acute
-    polygon(c(100,110,110,100), yt + c(0,0,7,7),col = gray(.6), border=NA) ## late
-    polygon(c(0,110,110,0), yt + c(0,0,1,1), col = gray(.3), border=NA) ## chronic
-    segments(110,yt,120,yt, lty = 3)
-    ## example 2
-    ##axis(1, at = c(0,2,110,120), pos = yt)
-    yt <- 170
-    polygon(c(0,3,3,0), yt +c(0,0,26,26), col = gray(.4), border=NA) ## acute
-    polygon(c(100,110,110,100), yt +c(0,0,7,7),col = gray(.6), border=NA) ## late
-    polygon(c(0,110,110,0), yt +c(0,0,1,1), col = gray(.3), border=NA) ## chronic
-    segments(110,yt,120,yt, lty = 3)
-    ## example 3
-    ##axis(1, at = c(0,2,110,120), pos = yt)
-    yt <- 215
-    polygon(c(0,5,5,0), yt + c(0,0,16,16), col = gray(.4), border=NA) ## acute
-    polygon(c(100,110,110,100), yt + c(0,0,7,7),col = gray(.6), border=NA) ## late
-    polygon(c(0,110,110,0), yt + c(0,0,1,1), col = gray(.3), border=NA) ## chronic
-    segments(110,yt,120,yt, lty = 3)
-##################################################
-    ## contour plot of EHM
-    xs <- seq(-1,7.2, by = .05) ##log(seq(0.1,8, by = 1))
-    ys <- seq(-2.4,2.7, by = .05) ##log(seq(0.1, 11, by = .5))
-    levels <- c(0,2,5,10,25,50,70,100,200,500,1000,10000,10^5)
-    cols <- colorRampPalette(c('purple','orange','red'))(length(levels)-1)
-    blevels <- c(-25,-10,-2,0)
-    bcols <- colorRampPalette(c('dark green','purple'))(length(blevels))
-    cols <- c(bcols[-length(bcols)], cols)
-    levels <- c(blevels[-length(blevels)],levels)
-    par(mar=c(4,4,.3,0))
-    ## xs <- seq(-.3,7.2, by = .05) ##log(seq(0.1,8, by = 1))
-    ## ys <- seq(-2.4,2.7, by = .05) ##log(seq(0.1, 11, by = .5))
-    ## levels <- c(0,2,5,10,25,50,70,100,200,500,1000,10000,10^5)
-    ## cols <- colorRampPalette(c('purple','orange','red'))(length(levels)-1)
-    image(xs, ys, outer(exp(xs)-1,exp(ys)), breaks = levels, c(-1,6.2), ylim = c(-2.4,2.6), mgp = c(3,0,0),
-          col = cols, axes = F, xlab = expression(paste(RH['acute'])), ylab = expression(d[acute]))
+    ## hazard profiles
+    drawHazProf(600, 16, 5,1)
+    drawHazProf(500, 26, 3,2)
+    drawHazProf(400, 42, 1.5,3)
+    hazLabs(390)
+  #  drawHazProf(400, 42, 1.5,3)
+    rhmn <- signif(exp(abcCIs['50%','acute.sc']),2)
+    dmn <- signif(exp(abcCIs['50%','dur.ac']),2)
+    drawHazProf(100, rhmn, dmn,4)
+    hazLabs(90)
+
+    ## ################################################
+    ## contour plot of EHM from Hollingsworth et al. variable hazard survival model refit with MCMC
+    par(mar=mar2)
+    image(xs, ys, outer(exp(xs)-1,exp(ys)), breaks = levels, xlim = c(-1,6.2), ylim = c(-2.4,2.6), mgp = c(3,0,0),
+          col = cols, axes = F, xlab='',ylab=ylab2)
+    if(showpts) with(fout$posts, points(acute.sc, dur.ac, pch=16, cex = .4, col = gray(.6)))
+    title(main='(B)')
+    title(xlab=xlab2, mgp=c(2,0,0))
     xts <- c(1:9, seq(10, 90, by = 10), seq(100, 500, by = 100))
     xsh <- c(1,10,100)
     xls <- xts
@@ -87,22 +135,44 @@ for(ff in 1:2) {
     yls[!yls %in% ysh] <- NA
     axis(2, at = log(yts), lab = yls, las = 2)
     lines(HollCont[[1]]$x, HollCont[[1]]$y)
-                                        #points(fout$posts$acute.sc, fout$posts$dur.ac, cex = .3)
-    points(log(outtab[4,'acute.sc']), log(outtab[4,'dur.ac']), pch = 15)#, col = 'points')
-    ## text(log(outtab[4,'acute.sc']), log(outtab[4,'dur.ac']), 'Hollingsworth', pos=3, cex=ct)
-    points(log(meds['acute.sc']), log(meds['dur.ac']), pch = 19)#, col = 'points')
-    ## text(log(meds['acute.sc']), log(meds['dur.ac']), 'median', pos=1, cex=ct)
-    ## with(data.frame(outtab), axis(1, at = log(acute.sc[c(1,3)]), lab = NA, line = -1.5))
-    ## with(data.frame(outtab), axis(2, at = log(dur.ac[c(1,3)]), lab = NA, line = -2)) 
-    with(data.frame(outtab), arrows(log(acute.sc[c(1)]), log(.2), log(acute.sc[c(3)]), log(.2), len = .05, angle = 90, code = 3))
-    with(data.frame(outtab), arrows(log(5), log(dur.ac[c(1)]), log(5), log(dur.ac[c(3)]), len = .05, angle = 90, code = 3))
+    text(log(38), log(5.8),  '95% contour', pos = 4, srt=-45)
+    points(log(c(101,26,16)),log(c(.75,3,5)), pch=as.character(3:1))
+    points(log(c(101,26,16)),log(c(.75,3,5)), pch = 21, cex = 2.5)
+    text(log(outtab['50%','acute.sc']), log(.14), '95% CI', pos = 3)
+    text(log(4), log(outtab['50%','dur.ac']),  '95% CI', pos = 2, srt=90)
+    with(data.frame(outtab), arrows(log(acute.sc[c(1)]), log(.15), log(acute.sc[c(3)]), log(.15), len = .05, angle = 90, code = 3))
+    with(data.frame(outtab), arrows(log(4), log(dur.ac[c(1)]), log(4), log(dur.ac[c(3)]), len = .05, angle = 90, code = 3))
+
+    ## contour plot of EHM from Bellan et al. couple transmission model fit with ABC SMC
+    par(mar=mar2)
+    image(xs, ys, outer(exp(xs)-1,exp(ys)), breaks = levels, xlim = c(-1,6.2), ylim = c(-2.4,2.6), mgp = c(3,0,0),
+          col = cols, axes = F, xlab='', ylab=ylab2)
+    if(showpts) with(pmatChosen, points(logacute.sc, logdur.ac, pch=16, cex = .4, col = gray(.6)))
+    title(main='(C)')
+    title(xlab=xlab2, mgp=c(2,0,0))
+    points(abcCIs['50%','acute.sc'], abcCIs['50%','dur.ac'], pch = as.character(4))
+    points(abcCIs['50%','acute.sc'], abcCIs['50%','dur.ac'], pch = 21, cex = 2.5)
+    xts <- c(1:9, seq(10, 90, by = 10), seq(100, 500, by = 100))
+    xsh <- c(1,10,100)
+    xls <- xts
+    xls[!xls %in% xsh] <- NA
+    axis(1, at = log(xts), lab = xls)
+    yts <- c(seq(.1,.9, by = .1),1:10)
+    ysh <- c(.1,1,10)
+    yls <- yts
+    yls[!yls %in% ysh] <- NA
+    axis(2, at = log(yts), lab = yls, las = 2)
+    lines(abcCont[[1]]$x, abcCont[[1]]$y) #
+    arrows(abcCIs['2.5%','acute.sc'], log(.2), abcCIs['97.5%','acute.sc'], log(.2), len = .05, angle = 90, code = 3)
+    arrows(log(.45), abcCIs['2.5%','dur.ac'], log(.45), abcCIs['97.5%','dur.ac'], len = .05, angle = 90, code = 3)
     ## Palette legend
-    par(mar=rep(0,4), cex.lab = ct, cex.axis = ct, cex.main = ct)
+    par(mar=rep(0,4))
     plot(0,0,type="n",axes=F, xlim = c(-.1,.2), ylim = c(-.1,.9), xlab = '', ylab = '')
-    color.legend(.09,.1,.15,.8, levels, rect.col = cols, gradient = "y", cex = ct*.8)
-    text(.025, .8, expression(paste(EHM['acute'])), pos = 3, cex = ct*1.2)
+    sbcolor.legend(.09,.1,.15,.8, levels[levels<=1000], rect.col = cols[levels<=1000], gradient = "y", cex = .8, browse=F)
+    text(.025, .85, expression(paste(EHM['acute'])), pos = 3, cex = 1.2)
     dev.off()
 }
+ 
 ####################################################################################################
 
 ####################################################################################################
@@ -251,65 +321,6 @@ color.legend(.09,.1,.15,.8, ticks, rect.col = cols, gradient = "y", cex = ct)
 text(.025, .8, expression(paste(EHM['late'+'AIDS'])), pos = 3, cex = ct)
 graphics.off()
 
-
-####################################################################################################
-## ABC-SMC results
-####################################################################################################
-abcdir <- 'results/abcSummary'
-finalbatch <- 5
-ABCoutdir <- 'FiguresAndTables/abcFig'
-load(file=file.path(abcdir, paste0('IntermedDistr',finalbatch,'.Rdata'))) ## Load last distribution (already filtered)
-## Get 95% posterior contour using volume of points in that region
-abcCont <- HPDregionplot(pmatChosen, vars = c('logacute.sc','logdur.ac'), prob = c(.95), lims = c(-1.5,10,-2,11), n = 33,# h = c(.3,.1),
-                      bty = 'n', xlab = expression(RH['acute']), ylab = 'acute phase duration (months)')
-graphics.off()
-
-####################################################################################################
-## Figure 6. Show EHM, RH, d plot with contours
-for(ff in 1:2) {
-    if(ff==1) pdf(file.path(ABCoutdir,'Figure SX - fitted RHacute dacute.pdf'), w = 3.27, h = 3)
-    if(ff==2) png(file.path(ABCoutdir,'Figure SX - fitted RHacute dacute.png'), w = 3.27, h = 3, units='in',res=200)
-    par('ps'=10)
-    layout(matrix(c(1:2),1,2), w = c(1,.35))
-##################################################
-    ## contour plot of EHM
-    par(mar=c(3,3,.3,0))
-    xs <- seq(-1,7.2, by = .05) ##log(seq(0.1,8, by = 1))
-    ys <- seq(-2.4,2.7, by = .05) ##log(seq(0.1, 11, by = .5))
-    levels <- c(0,2,5,10,25,50,70,100,200,500,1000,10000,10^5)
-    cols <- colorRampPalette(c('purple','orange','red'))(length(levels)-1)
-    blevels <- c(-25,-10,-2,0)
-    bcols <- colorRampPalette(c('dark green','purple'))(length(blevels))
-    cols <- c(bcols[-length(bcols)], cols)
-    levels <- c(blevels[-length(blevels)],levels)
-    image(xs, ys, outer(exp(xs)-1,exp(ys)), breaks = levels, xlim = c(-1,6.2), ylim = c(-2.4,2.6), mgp = c(3,0,0),
-          col = cols, axes = F)#, xlab = expression(paste(RH['acute'])), ylab = expression(d[acute]))
-    mtext(expression(paste(RH['acute'])), side = 1, line = 2)
-    mtext(expression(d[acute]), side = 2, line = 2)
-    xts <- c(1:9, seq(10, 90, by = 10), seq(100, 500, by = 100))
-    xsh <- c(1,10,100)
-    xls <- xts
-    xls[!xls %in% xsh] <- NA
-    axis(1, at = log(xts), lab = xls)
-    yts <- c(seq(.1,.9, by = .1),1:10)
-    ysh <- c(.1,1,10)
-    yls <- yts
-    yls[!yls %in% ysh] <- NA
-    axis(2, at = log(yts), lab = yls, las = 2)
-    lines(abcCont[[1]]$x, abcCont[[1]]$y) #
-    lines(HollCont[[1]]$x, HollCont[[1]]$y, lty = 2, col = gray(.3)) #
-    # with(pmatChosen, points(log(acute.sc), log(dur.ac), cex = .3, col = 'black', pch = 16))
-    ## text(log(meds['acute.sc']), log(meds['dur.ac']), 'median', pos=1, cex=ct)
-    ## with(data.frame(outtab), axis(1, at = log(acute.sc[c(1,3)]), lab = NA, line = -1.5))
-    ## with(data.frame(outtab), axis(2, at = log(dur.ac[c(1,3)]), lab = NA, line = -2)) 
-    ## Palette legend
-    par(mar=rep(0,4))
-    plot(0,0,type="n",axes=F, xlim = c(-.1,.2), ylim = c(-.1,.9), xlab = '', ylab = '')
-    color.legend(.09,.1,.15,.8, levels, rect.col = cols, gradient = "y", cex = .7)
-    text(.025, .8, expression(paste(EHM['acute'])), pos = 3, cex = 1.2)
-}
-graphics.off()
-####################################################################################################
 
 
 ## pdf(file.path(outdir,'Figure SX - fitted RHacute dacute.pdf'), w = 4, h = 4)

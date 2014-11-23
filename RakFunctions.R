@@ -1303,3 +1303,37 @@ wtab.rlp <- within(wtab.rl, {
     latet$ni <- with(latet, n-i)
 })
 contTabsRl <- lapply(wtab.rlp, '[', c('i','ni'))
+
+sbcolor.legend <- function (xl, yb, xr, yt, legend, rect.col, cex = 1, align = "lt", gradient = "x", ..., browse=F) {
+    oldcex <- par("cex")
+    par(xpd = TRUE, cex = cex)
+    if(browse) browser()
+    gradient.rect(xl, yb, xr, yt, col = rect.col, nslices = length(rect.col)+1, 
+                  gradient = gradient)
+    if (gradient == "x") {
+        xsqueeze <- (xr - xl)/(2 * length(rect.col))
+        textx <- seq(xl + xsqueeze, xr - xsqueeze, length.out = length(legend))
+        if (match(align, "rb", 0)) {
+            texty <- yb - 0.2 * strheight("O")
+            textadj <- c(0.5, 1)
+        }
+        else {
+            texty <- yt + 0.2 * strheight("O")
+            textadj <- c(0.5, 0)
+        }
+    }
+    else {
+        ysqueeze <- (yt - yb)/(2 * length(rect.col))
+        texty <- seq(yb, yt, length.out = length(legend)+1)
+        if (match(align, "rb", 0)) {
+            textx <- xr + 0.2 * strwidth("O")
+            textadj <- c(0, 0.5)
+        }
+        else {
+            textx <- xl - 0.2 * strwidth("O")
+            textadj <- c(1, 0.5)
+        }
+    }
+    text(textx, texty[-length(texty)], labels = legend, adj = textadj, ...)
+    par(xpd = FALSE, cex = oldcex)
+}

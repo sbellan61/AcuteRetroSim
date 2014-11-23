@@ -114,6 +114,19 @@ for(bb in 0:finalbatch) {
 }
 ciArr[,'EHMacute',] ## still shrinking in batch 3->4
 ciArr ## still shrinking in batch 3->4
+for(bb in 0:finalbatch) write.csv(ciArr[,,bb], file.path(fig.dir, paste0('ciArr',bb,'.csv')))
+ciArr[,'bp',6]*12
+
+## Get median transmission rates (i.e. mean on log scale) for paper
+hazpost <- get(paste0('pmc',finalbatch))[,c('bp','het.gen.sd')]
+hazpost <- within(hazpost, {
+    medianbp <- bp / exp(het.gen.sd^2 / 2) ## mean logbp is median bp
+    annualMedian_bp <- medianbp*12
+    annualMean_bp <- bp*12
+    bp025 <- exp(qnorm(.025,0,2))*annualMedian_bp
+    bp975 <- exp(qnorm(.975,0,2))*annualMedian_bp
+})
+apply(hazpost, 2, function(x) quantile(x, c(.025,.5,.975)))
 
 finalbatch <- 5
 ## Table of proportion of couples by interval from final distribution
@@ -132,14 +145,18 @@ write.csv(WtabFit, file.path(fig.dir, 'Fit to proportions in Wawer table.csv'))
 WtabFit
 
 for(ff in 1:2) {
-    if(ff==1) pdf(file.path(fig.dir, 'GoF.pdf'), w = 6.83, h=5) else{
-        png(file.path(fig.dir, 'GoF.png'), w = 6.83, h=5,units='in',res=200) }
-    par(mfrow=c(4,2), mar = c(2,2,0,.5))
-    for(ii in 1:4) for(jj in 1:2) {
-        hist(Wprops[ii,jj,], xlab = 'proportion seroconverting', col = 'black', main = '')
+    if(ff==1) pdf(file.path(fig.dir, 'GoF.pdf'), w = 3.5, h=5.5) else{
+              png(file.path(fig.dir, 'GoF.png'), w = 3.5, h=5.5,units='in',res=200) }
+    par(mfcol=c(4,2), mar = c(2,2,2,.5), oma = c(3,3,0,0), 'ps'=10)
+    for(jj in 1:2) for(ii in 1:4) {
+        main <- ifelse(ii==1, c('incident couples','prevalent couples')[jj], '')
+        hist(Wprops[ii,jj,], breaks = ifelse(jj==1&ii==2,5,10), xlab = '', col = 'black', main = main, yaxt='n', xlim = c(0,1))
         abline(v=WpropsRl[ii,jj], col = 'red')
+        if(jj==1) mtext(paste0('interval',ii) ,2, 3)
     }
-graphics.off()
+    mtext('proportion seroconverting',1, 1, outer=T)
+    mtext('frequency',2, -1, outer=T)
+    graphics.off()
 }
 
 ## Table of RHacute & dacute values for future modeling work
@@ -155,4 +172,4 @@ for(bb in 1:finalbatch) {
     numSims[bb] <- sum(unlist(lapply(pmatLs, function(x) nrow(x$pmat))))
 }
 numSims
-sum(numSims)*1.2/60
+sum(numSims)*1.2/60/24
