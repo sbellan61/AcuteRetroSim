@@ -3,6 +3,8 @@
 ## Hollingsworth et al. 2008 performed to estimate the relative infectivity of the acute phase to
 ## the chronic phase.
 
+quants <- function(dat) apply(dat, 2, function(x) quantile(x, c(.025,.5,.975)))
+
 ## Calculate hazard ratios for acute, chronic, late & aids phases from data
 empir.arh <- function(dat, ts, start.rak = 1994, end.rak = 1999, browse = F)
   {
@@ -1304,10 +1306,9 @@ wtab.rlp <- within(wtab.rl, {
 })
 contTabsRl <- lapply(wtab.rlp, '[', c('i','ni'))
 
-sbcolor.legend <- function (xl, yb, xr, yt, legend, rect.col, cex = 1, align = "lt", gradient = "x", ..., browse=F) {
+sbcolor.legend <- function (xl, yb, xr, yt, legend, legseq=NULL, rect.col, cex = 1, align = "lt", gradient = "x", ..., browse=F) {
     oldcex <- par("cex")
     par(xpd = TRUE, cex = cex)
-    if(browse) browser()
     gradient.rect(xl, yb, xr, yt, col = rect.col, nslices = length(rect.col)+1, 
                   gradient = gradient)
     if (gradient == "x") {
@@ -1323,6 +1324,7 @@ sbcolor.legend <- function (xl, yb, xr, yt, legend, rect.col, cex = 1, align = "
         }
     }
     else {
+        if(browse) browser()
         ysqueeze <- (yt - yb)/(2 * length(rect.col))
         texty <- seq(yb, yt, length.out = length(legend)+1)
         if (match(align, "rb", 0)) {
@@ -1333,7 +1335,12 @@ sbcolor.legend <- function (xl, yb, xr, yt, legend, rect.col, cex = 1, align = "
             textx <- xl - 0.2 * strwidth("O")
             textadj <- c(1, 0.5)
         }
+        if(!is.null(legseq)) {
+            sel <- sapply(legseq, function(x) which.min(abs(legend-x)))
+            texty <- texty[sel]
+            legend <- legseq
+        }else{ texty <- texty[-length(texty)]}
     }
-    text(textx, texty[-length(texty)], labels = legend, adj = textadj, ...)
+    text(textx, texty, labels = legend, adj = textadj, ...)
     par(xpd = FALSE, cex = oldcex)
 }

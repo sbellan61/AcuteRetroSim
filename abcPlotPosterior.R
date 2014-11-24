@@ -108,8 +108,7 @@ graphics.off()
 
 ## CI convergence
 for(bb in 0:finalbatch) {
-    tempArr <- apply(get(paste0('pmc',bb))[,c('EHMacute','acute.sc','dur.ac','het.gen.sd','bp')],
-                     2, function(x) quantile(x,c(.025,.5,.975)))
+    tempArr <- quants(get(paste0('pmc',bb))[,c('EHMacute','acute.sc','dur.ac','het.gen.sd','bp')])
     if(bb==0) ciArr <- tempArr else ciArr <- abind(ciArr,tempArr, along=3)
 }
 ciArr[,'EHMacute',] ## still shrinking in batch 3->4
@@ -118,15 +117,27 @@ for(bb in 0:finalbatch) write.csv(ciArr[,,bb], file.path(fig.dir, paste0('ciArr'
 ciArr[,'bp',6]*12
 
 ## Get median transmission rates (i.e. mean on log scale) for paper
-hazpost <- get(paste0('pmc',finalbatch))[,c('bp','het.gen.sd')]
+hazpost <- get(paste0('pmc',finalbatch))
 hazpost <- within(hazpost, {
     medianbp <- bp / exp(het.gen.sd^2 / 2) ## mean logbp is median bp
     annualMedian_bp <- medianbp*12
+    annualMedian_bpAcute <- annualMedian_bp*acute.sc
     annualMean_bp <- bp*12
     bp025 <- exp(qnorm(.025,0,2))*annualMedian_bp
     bp975 <- exp(qnorm(.975,0,2))*annualMedian_bp
 })
-apply(hazpost, 2, function(x) quantile(x, c(.025,.5,.975)))
+quants(hazpost[,c('bp','het.gen.sd','logbp','medianbp','annualMedian_bp','annualMean_bp','annualMedian_bpAcute')])
+
+varsGiven <- c(paste0('log',ghazs), paste0('log',mfs), 'logacute.sc','logdur.ac','het.gen.sd','medianbp','annualMedian_bp','annualMean_bp')
+posteriorABCSMC <- hazpost[,varsGiven]
+toReplace <- c('logacute.sc','logdur.ac','het.gen.sd','medianbp','annualMedian_bp','annualMean_bp')
+colnames(posteriorABCSMC)[colnames(posteriorABCSMC) %in% toReplace] <- c('logRHacute','logDacute','sigma_hazard','median_lambda','annual_median_lambda', 'annual_mean_lambda')
+head(posteriorABCSMC)
+save(posteriorABCSMC, file=file.path(out.dir, 'Data File S1.Rdata'))
+
+png(file.path(fig.dir, 'lambda vs sigma.png'), w = 4.5, h=5.5, units='in', res = 200) 
+smoothScatter(hazpost$annualMedian_bp, hazpost$het.gen.sd)
+dev.off()
 
 finalbatch <- 5
 ## Table of proportion of couples by interval from final distribution
@@ -173,3 +184,4 @@ for(bb in 1:finalbatch) {
 }
 numSims
 sum(numSims)*1.2/60/24
+

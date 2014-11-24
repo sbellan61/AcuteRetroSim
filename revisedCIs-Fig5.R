@@ -73,15 +73,16 @@ graphics.off()
 
 
 ## Literature estimate table
+fexsum['50%','ehm.ac'] <- 73 ## Use Hollingsworth's point estimate with our CI's (since they didn't provide them)
 tab1 <- rbind(ehms.vl[-1], c(20.9, 50.2,102), c(11.9, 36.3, 96), wexsum, fexsum[,'ehm.ac'], c(NA, (30.3-1)*4.8, NA), c(NA, 238, NA))
 tab1 <- data.frame(study = NA, tab1)
 colnames(tab1)[-1] <- c('lci','med','uci')
-tab1$study <- c('viral load estimate', 'Wawer et al. (unadjusted)',
-                'Wawer et al. (coital acts)', 'Wawer et al. (full model)',
-                'Hollingsworth et al.', 'Powers et al.',
-                'Rasmussen et al.')
+tab1$study <- c('viral load estimate', 'Unadjusted Poisson Regression',
+                'Coital-Rate Adjusted Poisson Regression', 'Adjusted Poisson Regression',
+                'Variable Hazard Survival Analysis', 'Fit to Epidemic Curve',
+                'Phylodynamic Model')
 
-tab1 <- rbind(tab1, c('Bellan et al. Rakai re-estimate', quantile(pmatChosen$EHMacute, c(.025,.5,.975))))
+tab1 <- rbind(tab1, c('Couple Transmission Model', quantile(pmatChosen$EHMacute, c(.025,.5,.975))))
 tab1 <- tab1[c(1,8,2:7),]
 tab1[,-1] <- apply(tab1[,-1], 2, as.numeric)
 tab1[,-1] <- signif(tab1[,-1],2)

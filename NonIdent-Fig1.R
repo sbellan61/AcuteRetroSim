@@ -19,7 +19,6 @@ apply(fout$exposts[,c('acute.sc','dur.ac')], 2, function(x) quantile(x, c(.025,.
 
 outdir <- file.path('FiguresAndTables','HollingsworthAn')
 if(!file.exists(outdir)) dir.create(outdir)
-quants <- function(dat) apply(dat, 2, function(x) quantile(x, c(.025,.5,.975)))
 
 ## Get 95% posterior contour using volume of points in that region. USING 90% because HPD tends to
 ## overshoot a bit, true values for EHMacute CI's given in text
@@ -50,27 +49,6 @@ abcXY <- with(abcCont[[1]], cbind(x=x,y=y))
 abcXY <- rbind(abcXY, tail(abcXY,1))
 mean(point.in.polygon(pmatChosen$logacute.sc,pmatChosen$logdur.ac,abcXY[,'x'], abcXY[,'y']))
 
-## Contour/image plot settings
-xs <- seq(-1,7.2, by = .05) ##log(seq(0.1,8, by = 1))
-ys <- seq(-2.4,2.7, by = .05) ##log(seq(0.1, 11, by = .5))
-levels <- c(-10,-2,0,2,10,20,50,100,200,500,1000,10000,10^5)
-cols <- colorRampPalette(c('dark blue','purple','orange','red'))(length(levels)-1)
-## blevels <- c(-25,-10,-2,0)
-## bcols <- colorRampPalette(c('dark green','purple'))(length(blevels)-1)
-## cols <- c(bcols[-length(bcols)], cols)
-## levels <- c(blevels[-length(blevels)],levels)
-mar1 <- c(4,2,2.5,1)
-mar2 <- c(4,5,2.5,0)
-options("scipen"=999)
-col.ac <- 'brown'
-col.ch <- 'black'
-col.lt <- gray(.3)
-col.aids <- gray(.6)
-xlab1 <- expression(RH[acute])
-ylab1 <- expression(d[acute])
-xlab2 <- 'relative infectivity of acute phase vs. chronic phase'
-ylab2 <- 'acute phase duration in months'
-
 drawHazProf <- function(yt, acute.sc = 101, dur.ac = .75, examnum = 1, lab=T) {
     polygon(c(0,dur.ac,dur.ac,0), yt + c(0,0,acute.sc,acute.sc), col = col.ac, border=NA) ## acute
     polygon(c(100,110,110,100), yt + c(0,0,7,7),col = col.lt, border=NA) ## late
@@ -86,6 +64,39 @@ hazLabs <- function(yt=30)  {   text(5,yt, 'acute', col = col.ac, pos=1)
                                 text(60,yt, 'chronic', col = col.ch, pos=1)
                                 text(103,yt, 'late', col = col.lt, pos=1)
                                 text(118,yt, 'AIDS', col = col.aids, pos=1)}
+
+## Contour/image plot settings
+xs <- seq(-1,7.2, by = .05) ##log(seq(0.1,8, by = 1))
+ys <- seq(-2.4,2.7, by = .05) ##log(seq(0.1, 11, by = .5))
+zs <- outer(exp(xs)-1,exp(ys))
+range(zs)
+which(zs==min(zs),T)
+zs[1,103]
+ys[103]
+levels <- c(-10,-2,0,2,10,20,50,100,200,500,1000,10000,10^5)
+trfxn <- function(x) log(x+10)
+utrfxn <- function(x) exp(x)-10
+levels <- utrfxn(seq(trfxn(min(zs)),trfxn(max(zs)), l = 20))
+levels[which.min(abs(levels))] <- 0
+levels <- c(-10, levels[levels>=0])
+levels <- round(levels, -1)
+levels <- c(-10,0,10,20,40,70,130,250,500,1000,2000,4000,7000,13000,20000)
+cols <- colorRampPalette(c('skyblue2','purple','orange','red'))(length(levels)-1)
+## blevels <- c(-25,-10,-2,0)
+## bcols <- colorRampPalette(c('dark green','purple'))(length(blevels)-1)
+## cols <- c(bcols[-length(bcols)], cols)
+## levels <- c(blevels[-length(blevels)],levels)
+mar1 <- c(4,2,2.5,1)
+mar2 <- c(4,5,2.5,0)
+options("scipen"=999)
+col.ac <- 'brown'
+col.ch <- 'black'
+col.lt <- gray(.3)
+col.aids <- gray(.6)
+xlab1 <- expression(RH[acute])
+ylab1 <- expression(d[acute])
+xlab2 <- 'relative infectivity of acute phase vs. chronic phase'
+ylab2 <- 'acute phase duration in months'
 
 ####################################################################################################
 ## Figure 1. Show EHM diagram and RH[acute]/d[acute] collinearity plot with MCMC posteriors from refit of Holl Mod.
@@ -107,9 +118,9 @@ for(ff in 1:3) {
     axis(1, at = seq(0,120, by = 12), 0:10)
     ## hazard profiles
     drawHazProf(600, 16, 5,1)
-    drawHazProf(500, 26, 3,2)
-    drawHazProf(400, 42, 1.5,3)
-    hazLabs(390)
+    drawHazProf(510, 26, 3,2)
+    drawHazProf(370, 101, .75,3)
+    hazLabs(360)
   #  drawHazProf(400, 42, 1.5,3)
     rhmn <- signif(exp(abcCIs['50%','acute.sc']),2)
     dmn <- signif(exp(abcCIs['50%','dur.ac']),2)
@@ -119,7 +130,7 @@ for(ff in 1:3) {
     ## ################################################
     ## contour plot of EHM from Hollingsworth et al. variable hazard survival model refit with MCMC
     par(mar=mar2)
-    image(xs, ys, outer(exp(xs)-1,exp(ys)), breaks = levels, xlim = c(-1,6.2), ylim = c(-2.4,2.6), mgp = c(3,0,0),
+    image(xs, ys, zs, breaks = levels, xlim = c(-1,6.2), ylim = c(-2.4,2.6), mgp = c(3,0,0),
           col = cols, axes = F, xlab='',ylab=ylab2)
     if(showpts) with(fout$posts, points(acute.sc, dur.ac, pch=16, cex = .4, col = gray(.6)))
     title(main='(B)')
@@ -145,7 +156,7 @@ for(ff in 1:3) {
 
     ## contour plot of EHM from Bellan et al. couple transmission model fit with ABC SMC
     par(mar=mar2)
-    image(xs, ys, outer(exp(xs)-1,exp(ys)), breaks = levels, xlim = c(-1,6.2), ylim = c(-2.4,2.6), mgp = c(3,0,0),
+    image(xs, ys, zs, breaks = levels, xlim = c(-1,6.2), ylim = c(-2.4,2.6), mgp = c(3,0,0),
           col = cols, axes = F, xlab='', ylab=ylab2)
     if(showpts) with(pmatChosen, points(logacute.sc, logdur.ac, pch=16, cex = .4, col = gray(.6)))
     title(main='(C)')
@@ -168,11 +179,13 @@ for(ff in 1:3) {
     ## Palette legend
     par(mar=rep(0,4))
     plot(0,0,type="n",axes=F, xlim = c(-.1,.2), ylim = c(-.1,.9), xlab = '', ylab = '')
-    sbcolor.legend(.09,.1,.15,.8, levels[levels<=1000], rect.col = cols[levels<=1000], gradient = "y", cex = .8, browse=F)
+    legseq <- levels[levels<=1000] # c(0,10,20,40,70,130,240,1000)
+    show <- levels<=1000 #& levels > -5
+    sbcolor.legend(.09,.1,.15,.8, legend=levels[show], legseq=legseq, rect.col = cols[show], gradient = "y", cex = .8, browse=F)
     text(.025, .85, expression(paste(EHM['acute'])), pos = 3, cex = 1.2)
     dev.off()
 }
- 
+
 ####################################################################################################
 
 ####################################################################################################
