@@ -1,4 +1,4 @@
-library(plyr); library(data.table); library(abind); library(multicore); library(emdbook);library(coda); library(plotrix)
+library(plyr); library(data.table); library(abind); library(multicore); library(emdbook);library(coda); library(plotrix); library(sp)
 rm(list=ls(all=T)); gc()
 setwd('/home1/02413/sbellan/Rakai/AcuteRetroSim/')
 source('RakFunctions.R')
@@ -105,14 +105,14 @@ showpts <- FALSE
 for(ff in 1:3) {
     if(ff==1) pdf(file.path(ABCoutdir,'Figure 1 - EHM diagram and RH_ac d_ac collinearity.pdf'), w = 6.83, h = 5)
     if(ff==2) png(file.path(ABCoutdir,'Figure 1 - EHM diagram and RH_ac d_ac collinearity.png'), w = 6.83, h = 5, units='in',res=200)
-    if(ff==3) png(file.path(ABCoutdir,'Figure 1 - EHM diagram and RH_ac d_ac collinearity.tiff'), w = 6.83, h = 5, units='in',res=300)
+    if(ff==3) tiff(file.path(ABCoutdir,'Figure 1 - EHM diagram and RH_ac d_ac collinearity.tiff'), w = 6.83, h = 5, units='in',res=300)
     par('ps'=12)
-    layout(t(matrix(c(1:2,4,1,3,4),3,2)), w = c(.8,1,.3))
+    layout(t(matrix(c(1:2,4,1,3,4),3,2)), w = c(.8,1,.27))
     ## ################################################
     ## conceptual diagram
     par(mar=mar1)
     plot(0,0, type = 'n', xlim = c(-10,125), ylim = c(0, 600), bty = 'n', axes=F, xlab='', ylab='')
-    title(main='(A)')
+    title(main='A', adj = 0)
     title(xlab='years since infection', mgp = c(2.5,0,0))
     title(ylab='hazard profile', mgp=c(.5,1,0))
     axis(1, at = seq(0,120, by = 12), 0:10)
@@ -133,7 +133,7 @@ for(ff in 1:3) {
     image(xs, ys, zs, breaks = levels, xlim = c(-1,6.2), ylim = c(-2.4,2.6), mgp = c(3,0,0),
           col = cols, axes = F, xlab='',ylab=ylab2)
     if(showpts) with(fout$posts, points(acute.sc, dur.ac, pch=16, cex = .4, col = gray(.6)))
-    title(main='(B)')
+    title(main='B', adj = 0)
     title(xlab=xlab2, mgp=c(2,0,0))
     xts <- c(1:9, seq(10, 90, by = 10), seq(100, 500, by = 100))
     xsh <- c(1,10,100)
@@ -159,7 +159,7 @@ for(ff in 1:3) {
     image(xs, ys, zs, breaks = levels, xlim = c(-1,6.2), ylim = c(-2.4,2.6), mgp = c(3,0,0),
           col = cols, axes = F, xlab='', ylab=ylab2)
     if(showpts) with(pmatChosen, points(logacute.sc, logdur.ac, pch=16, cex = .4, col = gray(.6)))
-    title(main='(C)')
+    title(main='C', adj = 0)
     title(xlab=xlab2, mgp=c(2,0,0))
     points(abcCIs['50%','acute.sc'], abcCIs['50%','dur.ac'], pch = as.character(4))
     points(abcCIs['50%','acute.sc'], abcCIs['50%','dur.ac'], pch = 21, cex = 2.5)

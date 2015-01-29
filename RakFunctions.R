@@ -881,7 +881,7 @@ ucp.lt.2 <- function(latet, dpars, browse=F) {
 sbmod.to.wdat <- function(simorg, browse=F, excl.by.err = F, giveLate = T, giveProp = F, condRakai=F, RakSamp = c(inc = 23, prev = 161, late=51), simpPois=F) {    
     ## Excluding incident couples seen serodiscordant once & then never again as in Wawer 2005?
     if(browse) browser()
-    if(excl.by.err) sim <- simorg[!simorg$excl.by.err,]
+    if(excl.by.err) sim <- simorg[!simorg$excl.by.err,] else sim <- simorg
         ## Condition on Rakai sample sizes by sampling with replacement
         if(condRakai) {
             inc.wh <- which(sim$phase=='inc')

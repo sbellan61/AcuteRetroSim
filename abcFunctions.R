@@ -307,6 +307,15 @@ contTabFxn <- function(x) within(x, { ## turn wtab into only having # infected &
     }else{ return(NA) }
 })
 
+propExcluded <- function(x) with(x, { ## proportion excluded from simulated couples (not conditioning on Rakai sample size)
+    incSDCtotal <- sbmod.to.wdat(rakll, excl.by.err=F, condRakai=F, giveLate=F)$inct[1,'n']
+    incSDCincl <- sbmod.to.wdat(rakll, excl.by.err=T, condRakai=F, giveLate=F)$inct[1,'n']
+    propExcl <- (incSDCtotal-incSDCincl)/incSDCtotal
+    return(propExcl)
+})
+
+numExcluded <- function(propEx) 23 / (1-propEx) - 23 ## based on that proportion from the total, how many were excluded to get down to 23
+
 collectSumStat <- function(filenm, returnGtable = F, browse=F, ncores = ncores, rmNull=T) {
     if(browse) browser()
     print(filenm)
@@ -315,11 +324,14 @@ collectSumStat <- function(filenm, returnGtable = F, browse=F, ncores = ncores, 
     ## inc)
     plausible <- !unlist(lapply(rcohsList, is.null)) 
     rcohsList <- rcohsList[plausible]
+    ## Proportion seroincident excluded in ABC-SMC fits
+    propExcl <- unlist(mclapply(rcohsList, propExcluded, mc.cores = ncores))    
+    wtabSims <- mclapply(rcohsList, function(x) sbmod.to.wdat(x$rakll, excl.by.err = T, browse=F, giveLate=F, 
+                                                              condRakai=T, giveProp=T, simpPois=T), mc.cores=ncores)
     ## Convert to wtab
     wtabSims <- mclapply(rcohsList, function(x) sbmod.to.wdat(x$rakll, excl.by.err = T, browse=F, giveLate=F, 
                                                               condRakai=T, giveProp=T, simpPois=T), mc.cores=ncores)
     prevHazs <- unlist(lapply(wtabSims, function(x) if(is.null(x$error)) with(x$prevt, sum(i)/sum(n)) else NA))
-
     nCplMat <- do.call(rbind.data.frame, mclapply(rcohsList, function(x) xtabs(~phase, x$rakll)))
     colnames(nCplMat) <- c('prev','inc','late')
     parmsMat <- matrix(unlist(lapply(rcohsList, '[[', 'pars')), nr = length(rcohsList), nc = 15, byrow=T)
@@ -337,7 +349,7 @@ collectSumStat <- function(filenm, returnGtable = F, browse=F, ncores = ncores, 
     gS <- mclapply(contTabsSim, gSumStat, mc.cores = ncores)
     gVals <- unlist(lapply(gS, '[',1))
     ## Create parameter matrix
-    parmsMat <- data.frame(parmsMat, nCplMat, prevHazs, PoisRHsMat, gVals, 
+    parmsMat <- data.frame(parmsMat, nCplMat, prevHazs, PoisRHsMat, gVals, propExcl = propExcl,
                            filenm = filenm, job = 1:nrow(parmsMat))
     if(returnGtable) Gtable <- lapply(gS, '[',2) else Gtable <- NA
     rm(contTabsSim, gS,gVals); gc()

@@ -2,8 +2,31 @@ library(mnormt);library(coda); library(stats4);library(plyr)#library(lme4)
 rm(list=ls(all=TRUE))
 source('SimulationFunctions.R')                   # load simulation functions
 source('RakFunctions.R')                   # load simulation functions
+source('abcFunctions.R')                   # 
 load(file.path('results','RakAcute','blocks.Rdata')) ## these are country-acute phase specific blocks
 outdir <- file.path('FiguresAndTables/UgandaFitSummaries')
+
+## Take this from ABC-SMC fits
+batch <- 5
+load(file=file.path(out.dir, paste0('IntermedDistr',batch,'.Rdata'))) ## Load last distribution (already filtered)
+pmatChosen$numExcluded <- numExcluded(pmatChosen$propExcl)
+
+exclSummary <- signif(rbind(quantile(pmatChosen$propExcl, c(.025,.5,.975), na.rm=T),
+                     quantile(pmatChosen$numExcluded, c(.025,.5,.975), na.rm=T)),3)
+rownames(exclSummary) <- c('proportion excluded', '# excluded')
+write.csv(exclSummary, file.path(outdir, 'excluded Summary.csv'))
+
+pdf(file.path(outdir, "Incident SD couples excluded distribution (ABC-SMC fit).pdf"),
+    w = 3.27, h = 5)
+par('ps'=12, mar = c(4,4,1.5,.5), mfrow = c(2,1))
+plot(1, 1, bty='n', xlab = expression(EHM[acute]), ylab = 'proportion excluded',
+     xlim = c(-10, 100), ylim = c(0, .7), type = 'n', las = 1)#, log='x')
+    with(as.data.frame(pmatChosen), points(EHMacute, propExcl, pch = 16, cex = .7))
+title('A', adj = 0)
+abline(h=.47, col = 'red')
+    with(as.data.frame(pmatChosen), hist(numExcluded, breaks = 0:max(numExcluded+1), col='black',main='', xlab = '# excluded', ylab = 'frequency'))
+title('B', adj = 0)
+dev.off()
 
 fls <- list.files("results/RakAcute/UgandaFits/fitouts", full.names=T)
 fls.sh <- list.files("results/RakAcute/UgandaFits/fitouts")
