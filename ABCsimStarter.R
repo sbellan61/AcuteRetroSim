@@ -34,11 +34,6 @@ if(batch==1) {
     }
 }
 
-## prr <- logtransParms(simParmSamp(10^4))
-## rgs <- apply(prr, 2, range)
-## sbpairs(logtransParms(simParms), file.path(fig.dir, 'Pert9'), do.jpeg=T, rgs=rgs)
-## sbpairs(prr, file.path(fig.dir, 'Prior9'), do.jpeg=T, rgs=rgs)
-
 print(paste('seed is', seed))
 
 startTime <- Sys.time()
@@ -59,17 +54,3 @@ while(timeTaken < SimMinutes) { ##
 }
 
 save(rcohsList, file = file.path(batch.dir, paste0('rcohsList-',seed,'.Rdata')))
-
-## head(temprcoh$rakll)
-## temprcoh$rakll <- within(temprcoh$rakll, {inf[phase=='inc'] <- 0})
-## wt <- sbmod.to.wdat(temprcoh$rakll, simpPois=T, browse=F, condRakai=T, giveLate=F)
-## wt
-## ct <- contTabFxn(wt)
-## gS <- gSumStat(ct)
-
-## duplicated(do.call(rbind.data.frame, lapply(rcohsList, '[[','pars')))
-## lapply(rcohsList, function(x) sbmod.to.wdat(x$rakll, excl.by.err = T, browse=F, giveLate=F, condRakai=T, giveProp=T))
-## sbmod.to.wdat(rcohsList[[1]]$rakll, excl.by.err = T, browse=F, giveLate=F, condRakai=F, giveProp=T)
-## sapply(c("SimulationFunctions.R","RakFunctions.R",'abcFunctions.R'), source) # load Rakai analysis simulation functions from script
-## temprcoh <- retroCohSim(parms = simParmSamp(1), seed = seed, maxN=1200, browse=F)
-## sbmod.to.wdat(temprcoh$rakll, excl.by.err = T, browse=F, simpPois=T, giveLate=F, condRakai=T, giveProp=T)

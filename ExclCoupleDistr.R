@@ -29,6 +29,7 @@ abline(h=.47, col = 'red')
 title('B', adj = 0)
 dev.off()
 
+## Also from simulation fits
 fls <- list.files("results/RakAcute/UgandaFits/fitouts", full.names=T)
 fls.sh <- list.files("results/RakAcute/UgandaFits/fitouts")
 jobnums <- as.numeric(sapply(fls.sh, function(x) strsplit(x, '-')[[1]][2]))

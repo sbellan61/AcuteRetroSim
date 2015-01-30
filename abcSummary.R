@@ -1,4 +1,7 @@
+####################################################################################################
 ## Collect batch of ABC results & prepare for next batch & do some diagnostics.
+## Steve Bellan, 2014, steve.bellan@gmail.com
+####################################################################################################
 rm(list=ls()); gc()
 setwd('/home1/02413/sbellan/Rakai/AcuteRetroSim/')
 sapply(c("SimulationFunctions.R","RakFunctions.R",'abcFunctions.R'), source) # load Rakai analysis simulation functions from script

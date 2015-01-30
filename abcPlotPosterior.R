@@ -1,7 +1,7 @@
 ####################################################################################################
 ## Plot posterior results of ABC for manuscript
+## Steve Bellan, 2014, steve.bellan@gmail.com
 ####################################################################################################
-## Collect batch of ABC results & prepare for next batch & do some diagnostics.
 rm(list=ls()); gc()
 setwd('/home1/02413/sbellan/Rakai/AcuteRetroSim/')
 sapply(c("SimulationFunctions.R","RakFunctions.R",'abcFunctions.R'), source) # load Rakai analysis simulation functions from script
