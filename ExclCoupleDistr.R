@@ -11,8 +11,9 @@ batch <- 5
 load(file=file.path(out.dir, paste0('IntermedDistr',batch,'.Rdata'))) ## Load last distribution (already filtered)
 pmatChosen$numExcluded <- numExcluded(pmatChosen$propExcl)
 
-exclSummary <- signif(rbind(quantile(pmatChosen$propExcl, c(.025,.5,.975), na.rm=T),
-                     quantile(pmatChosen$numExcluded, c(.025,.5,.975), na.rm=T)),3)
+exclSummary <- signif(rbind(
+    100*c(mean = mean(pmatChosen$propExcl), quantile(pmatChosen$propExcl, c(.025,.5,.975), na.rm=T)),
+    c(mean = mean(pmatChosen$numExcluded), quantile(pmatChosen$numExcluded, c(.025,.5,.975), na.rm=T))),3)
 rownames(exclSummary) <- c('proportion excluded', '# excluded')
 write.csv(exclSummary, file.path(outdir, 'excluded Summary.csv'))
 
