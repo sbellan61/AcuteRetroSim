@@ -146,11 +146,11 @@ for(ff in 1:3) {
     yls[!yls %in% ysh] <- NA
     axis(2, at = log(yts), lab = yls, las = 2)
     lines(HollCont[[1]]$x, HollCont[[1]]$y)
-    text(log(38), log(5.8),  '95% contour', pos = 4, srt=-45)
+    text(log(38), log(5.8),  '95% credible contour', pos = 4, srt=-45)
     points(log(c(101,26,16)),log(c(.75,3,5)), pch=as.character(3:1))
     points(log(c(101,26,16)),log(c(.75,3,5)), pch = 21, cex = 2.5)
-    text(log(outtab['50%','acute.sc']), log(.14), '95% CI', pos = 3)
-    text(log(4), log(outtab['50%','dur.ac']),  '95% CI', pos = 2, srt=90)
+    text(log(outtab['50%','acute.sc']), log(.14), '95% CrI', pos = 3)
+    text(log(4), log(outtab['50%','dur.ac']),  '95% CrI', pos = 2, srt=90)
     with(data.frame(outtab), arrows(log(acute.sc[c(1)]), log(.15), log(acute.sc[c(3)]), log(.15), len = .05, angle = 90, code = 3))
     with(data.frame(outtab), arrows(log(4), log(dur.ac[c(1)]), log(4), log(dur.ac[c(3)]), len = .05, angle = 90, code = 3))
 
