@@ -33,7 +33,7 @@ mean(point.in.polygon(fmcmc[,'acute.sc'],fmcmc[,'dur.ac'],HollXY[,'x'], HollXY[,
 ####################################################################################################
 ## ABC-SMC results
 ####################################################################################################
-abcdir <- 'results/abcSummary'
+abcdir <- 'abcSummary'
 finalbatch <- 5
 ABCoutdir <- 'FiguresAndTables/abcFig'
 load(file=file.path(abcdir, paste0('IntermedDistr',finalbatch,'.Rdata'))) ## Load last distribution (already filtered)
@@ -105,6 +105,7 @@ for(ff in 1:3) {
     if(ff==1) pdf(file.path(ABCoutdir,'Figure 1 - EHM diagram and RH_ac d_ac collinearity.pdf'), w = 6.83, h = 5)
     if(ff==2) png(file.path(ABCoutdir,'Figure 1 - EHM diagram and RH_ac d_ac collinearity.png'), w = 6.83, h = 5, units='in',res=200)
     if(ff==3) tiff(file.path(ABCoutdir,'Figure 1 - EHM diagram and RH_ac d_ac collinearity.tiff'), w = 6.83, h = 5, units='in',res=300)
+
     par('ps'=12)
     layout(t(matrix(c(1:2,4,1,3,4),3,2)), w = c(.8,1,.27))
     ## ################################################
@@ -182,6 +183,7 @@ for(ff in 1:3) {
     show <- levels<=1000 #& levels > -5
     sbcolor.legend(.09,.1,.15,.8, legend=levels[show], legseq=legseq, rect.col = cols[show], gradient = "y", cex = .8, browse=F)
     text(.025, .85, expression(paste(EHM['acute'])), pos = 3, cex = 1.2)
+
     dev.off()
 }
 
